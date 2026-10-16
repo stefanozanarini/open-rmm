@@ -1,0 +1,135 @@
+// Package config loads the agent configuration.
+//
+// Sources, from lowest to highest precedence:
+//  1. the JSON file (agent.json),
+//  2. on Windows, HKLM\SOFTWARE\open-rmm (written by the MSI),
+//  3. on Windows, HKLM\SOFTWARE\Policies\open-rmm (written by GPO).
+//
+// Values set by policy cannot be changed by the console: they are the local
+// guard rails described in the architecture document (§6.4).
+package config
+
+import (
+	"crypto/ed25519"
+	"crypto/x509"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/open-rmm/internal/signing"
+)
+
+// Config is the effective agent configuration.
+type Config struct {
+	// Server is host:port of the agents endpoint, e.g. agent.example.com:443.
+	Server string `json:"server"`
+	// RootCAFile or RootCAPEM holds the pinned open-rmm root certificate.
+	RootCAFile string `json:"root_ca_file,omitempty"`
+	RootCAPEM  string `json:"root_ca_pem,omitempty"`
+	// EnrollToken is used only until the agent has an identity.
+	EnrollToken string `json:"enroll_token,omitempty"`
+	// JobSigningKeys lists the trusted job signing public keys ("ed25519:...").
+	JobSigningKeys []string `json:"job_signing_keys,omitempty"`
+	// DataDir holds keys, certificates and state.
+	DataDir string `json:"data_dir,omitempty"`
+	// AllowAdHocScripts is a local policy; default true (architecture §6.4).
+	AllowAdHocScripts *bool `json:"allow_adhoc_scripts,omitempty"`
+
+	root *x509.Certificate
+	keys *signing.Keyring
+}
+
+// Load reads the file at path (which may be missing when the registry
+// provides everything) and overlays OS-specific sources.
+func Load(path string) (*Config, error) {
+	c := &Config{}
+	if path != "" {
+		data, err := os.ReadFile(path)
+		switch {
+		case err == nil:
+			dec := json.NewDecoder(strings.NewReader(string(data)))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(c); err != nil {
+				return nil, fmt.Errorf("parse %s: %w", path, err)
+			}
+			if c.RootCAFile != "" && !filepath.IsAbs(c.RootCAFile) {
+				c.RootCAFile = filepath.Join(filepath.Dir(path), c.RootCAFile)
+			}
+		case errors.Is(err, os.ErrNotExist):
+		default:
+			return nil, err
+		}
+	}
+	if err := overlayOS(c); err != nil {
+		return nil, err
+	}
+	if c.DataDir == "" {
+		c.DataDir = DefaultDataDir()
+	}
+	return c, c.validate()
+}
+
+func (c *Config) validate() error {
+	host, port, err := net.SplitHostPort(c.Server)
+	if err != nil || host == "" {
+		return fmt.Errorf("server must be host:port, got %q", c.Server)
+	}
+	if p, err := strconv.Atoi(port); err != nil || p < 1 || p > 65535 {
+		return fmt.Errorf("invalid server port %q", port)
+	}
+	pemData := []byte(c.RootCAPEM)
+	if len(pemData) == 0 {
+		if c.RootCAFile == "" {
+			return errors.New("the pinned root CA is required (root_ca_file or root_ca_pem)")
+		}
+		pemData, err = os.ReadFile(c.RootCAFile)
+		if err != nil {
+			return fmt.Errorf("read root CA: %w", err)
+		}
+	}
+	certs, err := pki.ParseCertsPEM(pemData)
+	if err != nil {
+		return fmt.Errorf("root CA: %w", err)
+	}
+	if len(certs) != 1 || !certs[0].IsCA {
+		return errors.New("root CA must be exactly one CA certificate")
+	}
+	c.root = certs[0]
+	c.keys = signing.NewKeyring()
+	for _, s := range c.JobSigningKeys {
+		pub, err := signing.ParsePublicKey(s)
+		if err != nil {
+			return fmt.Errorf("job signing key: %w", err)
+		}
+		if _, err := c.keys.Add(ed25519.PublicKey(pub), signing.DomainJob); err != nil {
+			return err
+		}
+	}
+	if !filepath.IsAbs(c.DataDir) {
+		return errors.New("data_dir must be an absolute path")
+	}
+	return nil
+}
+
+// ServerName returns the host part of Server, used for TLS verification.
+func (c *Config) ServerName() string {
+	h, _, _ := net.SplitHostPort(c.Server)
+	return h
+}
+
+// RootCA returns the pinned root certificate.
+func (c *Config) RootCA() *x509.Certificate { return c.root }
+
+// JobKeyring returns the trusted job signing keys.
+func (c *Config) JobKeyring() *signing.Keyring { return c.keys }
+
+// AdHocScriptsAllowed reports the effective local policy.
+func (c *Config) AdHocScriptsAllowed() bool {
+	return c.AllowAdHocScripts == nil || *c.AllowAdHocScripts
+}

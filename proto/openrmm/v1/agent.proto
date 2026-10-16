@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package openrmm.v1;
+
+option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
+
+// EnrollmentService is the only RPC reachable without a client certificate.
+// An agent exchanges a single-use enrollment token and a locally generated
+// CSR for its client certificate.
+service EnrollmentService {
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+}
+
+// AgentService requires a valid agent client certificate (mTLS).
+service AgentService {
+  // Connect is the long-lived stream opened by the agent. The console never
+  // opens connections towards endpoints: every command travels on this stream.
+  rpc Connect(stream AgentMessage) returns (stream ConsoleMessage);
+}
+
+message HostInfo {
+  string hostname = 1;
+  string os = 2;          // runtime.GOOS
+  string os_version = 3;
+  string arch = 4;        // runtime.GOARCH
+  string agent_version = 5;
+  string machine_id = 6;  // stable OS machine identifier, used to spot re-enrollments
+}
+
+message EnrollRequest {
+  string token = 1;
+  bytes csr_der = 2;
+  HostInfo host = 3;
+}
+
+message EnrollResponse {
+  string tenant_id = 1;
+  string agent_id = 2;
+  bytes certificate_der = 3;
+  // Intermediate certificates, leaf issuer first. Excludes the pinned root.
+  repeated bytes chain_der = 4;
+}
+
+message AgentMessage {
+  oneof msg {
+    Hello hello = 1;
+    Heartbeat heartbeat = 2;
+    JobUpdate job_update = 3;
+  }
+}
+
+message ConsoleMessage {
+  oneof msg {
+    HelloAck hello_ack = 1;
+    SignedEnvelope job = 2;
+  }
+}
+
+message Hello {
+  HostInfo host = 1;
+}
+
+message HelloAck {
+  int32 heartbeat_interval_seconds = 1;
+}
+
+message Heartbeat {
+  int64 sent_at_unix_ms = 1;
+}
+
+// SignedEnvelope carries a serialized payload and an Ed25519 signature over
+// it. The payload is signed as opaque bytes, so no canonical re-encoding is
+// ever needed to verify it.
+message SignedEnvelope {
+  string key_id = 1;
+  bytes payload = 2;
+  bytes signature = 3;
+}
+
+// Job is the payload of a SignedEnvelope sent to an agent.
+message Job {
+  string job_id = 1;
+  string tenant_id = 2;
+  string agent_id = 3;
+  string module = 4;
+  string module_version = 5;
+  bytes module_sha256 = 6;
+  string action = 7;
+  bytes params_json = 8;
+  int64 not_before_unix = 9;
+  int64 expires_unix = 10;
+  bytes nonce = 11;
+}
+
+message JobUpdate {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_ACCEPTED = 1;
+    STATE_REJECTED = 2;
+    STATE_RUNNING = 3;
+    STATE_SUCCEEDED = 4;
+    STATE_FAILED = 5;
+  }
+  string job_id = 1;
+  State state = 2;
+  bytes result_json = 3;
+  string error = 4;
+}

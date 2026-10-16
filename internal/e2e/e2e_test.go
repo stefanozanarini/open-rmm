@@ -1,0 +1,366 @@
+// Package e2e runs a real gateway (TLS on a local port, in-memory store)
+// against the real agent client.
+package e2e
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"log/slog"
+	"net"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
+
+	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/open-rmm/internal/agent/client"
+	"github.com/stefanozanarini/open-rmm/internal/agent/config"
+	"github.com/stefanozanarini/open-rmm/internal/agent/identity"
+	"github.com/stefanozanarini/open-rmm/internal/console/audit"
+	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
+	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/open-rmm/internal/tlsconf"
+)
+
+type env struct {
+	root   *pki.CA
+	ca     *pki.CA
+	store  *store.Memory
+	gw     *gateway.Server
+	addr   string
+	tenant string
+}
+
+func quietLog() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+}
+
+func start(t *testing.T) *env {
+	t.Helper()
+	now := time.Now()
+	root, err := pki.NewRootCA("root", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := pki.NewIntermediateCA(root, "agents", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv, srvKey, err := ca.IssueServer([]string{"localhost"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := store.NewMemory()
+	tenant := ids.NewUUID()
+	if err := st.CreateTenant(context.Background(), store.Tenant{ID: tenant, Name: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	gw, err := gateway.New(gateway.Config{Store: st, AgentsCA: ca, Logger: quietLog(), HeartbeatInterval: 10 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gs := gw.GRPCServer(tlsconf.Server(srv, []*x509.Certificate{ca.Cert}, srvKey, ca.Cert))
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go gs.Serve(lis)
+	t.Cleanup(gs.Stop)
+	_, port, _ := net.SplitHostPort(lis.Addr().String())
+	return &env{root: root, ca: ca, store: st, gw: gw, addr: "localhost:" + port, tenant: tenant}
+}
+
+func (e *env) token(t *testing.T, maxUses int) string {
+	t.Helper()
+	secret := ids.NewSecret(32)
+	if err := e.store.CreateEnrollmentToken(context.Background(), store.EnrollmentToken{
+		ID: ids.NewUUID(), TenantID: e.tenant, MaxUses: maxUses, ExpiresAt: time.Now().Add(time.Hour),
+	}, store.HashToken(secret)); err != nil {
+		t.Fatal(err)
+	}
+	return secret
+}
+
+func (e *env) agentConfig(t *testing.T, token string) *config.Config {
+	t.Helper()
+	dir := t.TempDir()
+	rootFile := filepath.Join(dir, "root-ca.crt")
+	if err := os.WriteFile(rootFile, pki.EncodeCertPEM(e.root.Cert), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfgFile := filepath.Join(dir, "agent.json")
+	data := `{"server":"` + e.addr + `","root_ca_file":"root-ca.crt","enroll_token":"` + token +
+		`","data_dir":"` + filepath.Join(dir, "data") + `"}`
+	if err := os.WriteFile(cfgFile, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(cfgFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+// runAgent starts the agent and waits for its first successful connection.
+func runAgent(t *testing.T, cfg *config.Config) context.CancelFunc {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	connected := make(chan struct{}, 1)
+	c := client.New(cfg, "test", quietLog())
+	c.OnConnected = func() {
+		select {
+		case connected <- struct{}{}:
+		default:
+		}
+	}
+	done := make(chan struct{})
+	go func() { c.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+	select {
+	case <-connected:
+	case <-time.After(10 * time.Second):
+		t.Fatal("agent did not connect")
+	}
+	return cancel
+}
+
+func TestEnrollConnectAndReconnect(t *testing.T) {
+	e := start(t)
+	cfg := e.agentConfig(t, e.token(t, 1))
+	stop := runAgent(t, cfg)
+
+	agents, _ := e.store.ListAgents(context.Background(), e.tenant)
+	if len(agents) != 1 {
+		t.Fatalf("got %d agents", len(agents))
+	}
+	a := agents[0]
+	if a.LastSeenAt == nil || a.Host.Hostname == "" || a.Host.AgentVersion != "test" {
+		t.Fatalf("agent not updated on hello: %+v", a)
+	}
+	waitFor(t, func() bool { return e.gw.ConnectedAgents() == 1 })
+	stop()
+
+	// A restarted agent reuses its identity: the single-use token is spent,
+	// so reconnecting proves the stored certificate works.
+	runAgent(t, cfg)
+	agents, _ = e.store.ListAgents(context.Background(), e.tenant)
+	if len(agents) != 1 {
+		t.Fatalf("restart created a new agent: %d agents", len(agents))
+	}
+
+	events, _ := e.store.ListAudit(context.Background(), e.tenant)
+	if len(events) != 1 || events[0].Action != "agent.enrolled" {
+		t.Fatalf("audit = %+v", events)
+	}
+	if err := audit.VerifyChain(events); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSpentTokenIsRefused(t *testing.T) {
+	e := start(t)
+	tok := e.token(t, 1)
+	runAgent(t, e.agentConfig(t, tok))
+	conn := dialNoCert(t, e)
+	_, err := openrmmv1.NewEnrollmentServiceClient(conn).Enroll(context.Background(), enrollReq(t, tok))
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("second enrollment: %v", err)
+	}
+}
+
+func TestAgentServiceRequiresCertificate(t *testing.T) {
+	e := start(t)
+	conn := dialNoCert(t, e)
+	stream, err := openrmmv1.NewAgentServiceClient(conn).Connect(context.Background())
+	if err == nil {
+		_, err = stream.Recv()
+	}
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("connect without certificate: %v", err)
+	}
+}
+
+func TestRevokedAgentIsRefused(t *testing.T) {
+	e := start(t)
+	cfg := e.agentConfig(t, e.token(t, 1))
+	stop := runAgent(t, cfg)
+	stop()
+	agents, _ := e.store.ListAgents(context.Background(), e.tenant)
+	if err := e.store.SetAgentStatus(context.Background(), e.tenant, agents[0].ID, store.AgentRevoked); err != nil {
+		t.Fatal(err)
+	}
+	if err := connectOnce(t, e, cfg); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("revoked agent: %v", err)
+	}
+}
+
+func TestRevocationClosesOpenSession(t *testing.T) {
+	restore := gateway.SetCheckIntervalForTest(0)
+	defer restore()
+	e := start(t)
+	cfg := e.agentConfig(t, e.token(t, 1))
+	id := enrollOnly(t, e, cfg)
+	conn, err := grpc.NewClient(cfg.Server, grpc.WithTransportCredentials(credentials.NewTLS(
+		tlsconf.Client(cfg.ServerName(), cfg.RootCA(), id.Cert, id.Chain, id.Key))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	stream, err := openrmmv1.NewAgentServiceClient(conn).Connect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream.Send(&openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_Hello{Hello: &openrmmv1.Hello{Host: &openrmmv1.HostInfo{Hostname: "pc"}}}})
+	if _, err := stream.Recv(); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.store.SetAgentStatus(context.Background(), e.tenant, id.AgentID, store.AgentRevoked); err != nil {
+		t.Fatal(err)
+	}
+	stream.Send(&openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_Heartbeat{Heartbeat: &openrmmv1.Heartbeat{}}})
+	if _, err := stream.Recv(); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("session of revoked agent: %v", err)
+	}
+}
+
+// enrollOnly enrolls with the configured token and stores the identity.
+func enrollOnly(t *testing.T, e *env, cfg *config.Config) *identity.Identity {
+	t.Helper()
+	key, _ := identity.NewKey()
+	csr, _ := identity.CSR(key, "pc")
+	resp, err := openrmmv1.NewEnrollmentServiceClient(dialNoCert(t, e)).Enroll(context.Background(),
+		&openrmmv1.EnrollRequest{Token: cfg.EnrollToken, CsrDer: csr, Host: &openrmmv1.HostInfo{Hostname: "pc"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert, err := x509.ParseCertificate(resp.GetCertificateDer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, _ := x509.ParseCertificate(resp.GetChainDer()[0])
+	return &identity.Identity{TenantID: resp.GetTenantId(), AgentID: resp.GetAgentId(), Key: key, Cert: cert, Chain: []*x509.Certificate{chain}}
+}
+
+func TestForeignCertificateIsRefused(t *testing.T) {
+	e := start(t)
+	// A certificate with a valid-looking identity from a different CA.
+	otherRoot, _ := pki.NewRootCA("other", time.Now())
+	otherCA, _ := pki.NewIntermediateCA(otherRoot, "other agents", time.Now())
+	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	csr, _ := identity.CSR(key, "evil")
+	cert, err := otherCA.IssueAgent(csr, pki.Identity{TenantID: e.tenant, AgentID: ids.NewUUID()}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tlsCfg := tlsconf.Client("localhost", e.root.Cert, cert, []*x509.Certificate{otherCA.Cert}, key)
+	conn, err := grpc.NewClient(e.addr, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	stream, err := openrmmv1.NewAgentServiceClient(conn).Connect(context.Background())
+	if err == nil {
+		_, err = stream.Recv()
+	}
+	if err == nil {
+		t.Fatal("foreign certificate accepted")
+	}
+}
+
+func TestAgentRejectsServerNotChainingToPinnedRoot(t *testing.T) {
+	e := start(t)
+	cfg := e.agentConfig(t, e.token(t, 1))
+	otherRoot, _ := pki.NewRootCA("other", time.Now())
+	// Pin a different root: the agent must refuse to talk to the gateway.
+	rootFile := filepath.Join(t.TempDir(), "root.crt")
+	os.WriteFile(rootFile, pki.EncodeCertPEM(otherRoot.Cert), 0o600)
+	cfgFile := filepath.Join(t.TempDir(), "agent.json")
+	os.WriteFile(cfgFile, []byte(`{"server":"`+e.addr+`","root_ca_file":"`+rootFile+`","enroll_token":"`+cfg.EnrollToken+`","data_dir":"`+cfg.DataDir+`"}`), 0o600)
+	bad, err := config.Load(cfgFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := connectOnce(t, e, bad); err == nil {
+		t.Fatal("agent trusted a server outside its pinned root")
+	}
+	agents, _ := e.store.ListAgents(context.Background(), e.tenant)
+	if len(agents) != 0 {
+		t.Fatal("token was sent to an untrusted server")
+	}
+}
+
+// connectOnce runs the client until its first connection attempt fails, and
+// returns that error.
+func connectOnce(t *testing.T, e *env, cfg *config.Config) error {
+	t.Helper()
+	id, err := identity.Load(cfg.DataDir, cfg.RootCA())
+	if err != nil {
+		// Not enrolled: try to enroll against the server.
+		conn, derr := grpc.NewClient(cfg.Server, grpc.WithTransportCredentials(credentials.NewTLS(
+			tlsconf.Client(cfg.ServerName(), cfg.RootCA(), nil, nil, nil))))
+		if derr != nil {
+			return derr
+		}
+		defer conn.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := openrmmv1.NewEnrollmentServiceClient(conn).Enroll(ctx, enrollReq(t, cfg.EnrollToken))
+		return err
+	}
+	conn, err := grpc.NewClient(cfg.Server, grpc.WithTransportCredentials(credentials.NewTLS(
+		tlsconf.Client(cfg.ServerName(), cfg.RootCA(), id.Cert, id.Chain, id.Key))))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stream, err := openrmmv1.NewAgentServiceClient(conn).Connect(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = stream.Recv()
+	return err
+}
+
+func dialNoCert(t *testing.T, e *env) *grpc.ClientConn {
+	t.Helper()
+	conn, err := grpc.NewClient(e.addr, grpc.WithTransportCredentials(credentials.NewTLS(
+		tlsconf.Client("localhost", e.root.Cert, nil, nil, nil))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	return conn
+}
+
+func enrollReq(t *testing.T, token string) *openrmmv1.EnrollRequest {
+	t.Helper()
+	key, _ := identity.NewKey()
+	csr, err := identity.CSR(key, "pc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &openrmmv1.EnrollRequest{Token: token, CsrDer: csr, Host: &openrmmv1.HostInfo{Hostname: "pc"}}
+}
+
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal("condition not met")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

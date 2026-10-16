@@ -1,0 +1,36 @@
+[Unit]
+Description=open-rmm endpoint management agent
+Documentation=https://github.com/stefanozanarini/open-rmm
+Wants=network-online.target
+After=network-online.target
+# Give up restarting only after 10 failures in 10 minutes; the health-check
+# timer (phase 0, next step) brings the service back even then.
+StartLimitIntervalSec=600
+StartLimitBurst=10
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/openrmm-agent run -config /etc/open-rmm/agent.json
+Restart=always
+RestartSec=5s
+
+StateDirectory=open-rmm
+StateDirectoryMode=0700
+ConfigurationDirectory=open-rmm
+UMask=0077
+
+# Hardening. The agent runs as root because management modules need it;
+# these options limit what the core itself can do.
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

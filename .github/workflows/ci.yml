@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Generated code is up to date
+        run: |
+          make tools
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          make proto
+          git diff --exit-code gen/
+      - name: Lint
+        run: make lint
+      - name: Vulnerabilities
+        run: make vuln
+      - name: Unit and end-to-end tests
+        run: make test
+      - name: Integration tests (PostgreSQL)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "CREATE ROLE openrmm LOGIN PASSWORD 'test'"
+          psql -h localhost -U postgres -c "CREATE DATABASE openrmm OWNER openrmm"
+          OPENRMM_TEST_DATABASE_URL="postgres://openrmm:test@localhost:5432/openrmm?sslmode=disable" make test-integration
+      - name: Build (Linux and Windows)
+        run: make build build-windows

@@ -1,0 +1,12 @@
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.*
+# Never commit key material.
+*.key
+*.pem
+!**/testdata/**
+.env
+/dev-pki/
