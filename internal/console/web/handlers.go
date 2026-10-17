@@ -462,3 +462,56 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, "audit", "Registro attività", d)
 }
+
+type targetView struct {
+	store.ReleaseTarget
+	Done, Total int
+}
+
+type updatesData struct {
+	Targets  []targetView
+	Releases []store.Release
+	Problems []store.Agent
+}
+
+func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, "nessun tenant", http.StatusForbidden)
+		return
+	}
+	targets, err := s.store.ListReleaseTargets(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	rels, err := s.store.ListReleases(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	agents, err := s.store.ListAgents(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	d := updatesData{Releases: rels}
+	for _, tg := range targets {
+		v := targetView{ReleaseTarget: tg}
+		for _, a := range agents {
+			if a.Status == store.AgentActive && a.UpdateRing == tg.Ring && a.Host.OS+"/"+a.Host.Arch == tg.Platform {
+				v.Total++
+				if a.Host.AgentVersion == tg.Version {
+					v.Done++
+				}
+			}
+		}
+		d.Targets = append(d.Targets, v)
+	}
+	for _, a := range agents {
+		if a.Update.State == "rolled_back" || a.Update.State == "rejected" {
+			d.Problems = append(d.Problems, a)
+		}
+	}
+	s.render(w, r, "updates", "Aggiornamenti dell'agente", d)
+}

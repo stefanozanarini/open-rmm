@@ -171,15 +171,21 @@ func (p *Postgres) CreateAgent(ctx context.Context, a Agent) error {
 
 const agentColumns = `tenant_id::text, id::text, status, hostname, os, os_version, arch, agent_version,
 	machine_id, cert_fingerprint, cert_not_after, enrolled_at, coalesce(enrolled_token_id::text, ''),
-	last_seen_at, last_seen_ip, coalesce(prev_cert_fingerprint, ''), approved_at, approved_by`
+	last_seen_at, last_seen_ip, coalesce(prev_cert_fingerprint, ''), approved_at, approved_by,
+	update_ring, update_state, update_version, update_error, update_at`
 
 func scanAgent(row pgx.Row) (Agent, error) {
 	var a Agent
 	var status string
 	var ip *netip.Addr
+	var updAt *time.Time
 	err := row.Scan(&a.TenantID, &a.ID, &status, &a.Host.Hostname, &a.Host.OS, &a.Host.OSVersion,
 		&a.Host.Arch, &a.Host.AgentVersion, &a.Host.MachineID, &a.CertFingerprint, &a.CertNotAfter,
-		&a.EnrolledAt, &a.EnrolledTokenID, &a.LastSeenAt, &ip, &a.PrevCertFingerprint, &a.ApprovedAt, &a.ApprovedBy)
+		&a.EnrolledAt, &a.EnrolledTokenID, &a.LastSeenAt, &ip, &a.PrevCertFingerprint, &a.ApprovedAt, &a.ApprovedBy,
+		&a.UpdateRing, &a.Update.State, &a.Update.Version, &a.Update.Error, &updAt)
+	if updAt != nil {
+		a.Update.At = *updAt
+	}
 	a.Status = AgentStatus(status)
 	a.LastSeenIP = ip
 	return a, err

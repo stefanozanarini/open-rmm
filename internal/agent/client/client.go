@@ -11,7 +11,9 @@ import (
 	"io"
 	"log/slog"
 	"math/rand/v2"
+	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -23,11 +25,16 @@ import (
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/agent/config"
 	"github.com/stefanozanarini/open-rmm/internal/agent/executor"
+	"github.com/stefanozanarini/open-rmm/internal/agent/health"
 	"github.com/stefanozanarini/open-rmm/internal/agent/hostinfo"
 	"github.com/stefanozanarini/open-rmm/internal/agent/identity"
 	"github.com/stefanozanarini/open-rmm/internal/agent/jobs"
 	"github.com/stefanozanarini/open-rmm/internal/agent/modcache"
+	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
+	"github.com/stefanozanarini/open-rmm/internal/agent/svcctl"
+	"github.com/stefanozanarini/open-rmm/internal/agent/updater"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
+	"github.com/stefanozanarini/open-rmm/internal/release"
 	"github.com/stefanozanarini/open-rmm/internal/tlsconf"
 )
 
@@ -52,6 +59,15 @@ type Client struct {
 
 	// OnConnected, if set, is called after each successful hello (tests).
 	OnConnected func()
+	// ConfigPath is passed to the watchdog service when the agent updates
+	// it; empty disables watchdog updates (development runs).
+	ConfigPath string
+	// Services controls the OS services (nil: no watchdog updates).
+	Services svcctl.Manager
+
+	updater   *updater.Updater
+	connected atomic.Bool
+	lastConn  atomic.Int64
 
 	runCtx    context.Context
 	mu        sync.Mutex
@@ -64,12 +80,38 @@ func New(cfg *config.Config, version string, log *slog.Logger) *Client {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Client{cfg: cfg, version: version, log: log}
+	return &Client{cfg: cfg, version: version, log: log, updater: updater.New(cfg, version, log)}
+}
+
+// writeHealth refreshes the health file read by the watchdog until ctx ends.
+func (c *Client) writeHealth(ctx context.Context) {
+	exe, _ := os.Executable()
+	h := health.Health{Version: c.version, PID: os.Getpid(), Executable: exe, Started: time.Now()}
+	t := time.NewTicker(health.Interval)
+	defer t.Stop()
+	for {
+		h.Updated, h.Connected = time.Now(), c.connected.Load()
+		if lc := c.lastConn.Load(); lc > 0 {
+			h.LastConnected = time.Unix(lc, 0)
+		}
+		if err := health.Write(c.cfg.DataDir, h); err != nil {
+			c.log.Warn("health file", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // Run blocks until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) error {
 	c.runCtx = ctx
+	if err := secfile.EnsureDir(c.cfg.DataDir); err != nil {
+		return err
+	}
+	go c.writeHealth(ctx)
 	defer func() {
 		c.mu.Lock()
 		e := c.exec
@@ -227,6 +269,9 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 	if c.OnConnected != nil {
 		c.OnConnected()
 	}
+	c.connected.Store(true)
+	c.lastConn.Store(time.Now().Unix())
+	defer c.connected.Store(false)
 	if id.NeedsRenewal(time.Now()) {
 		if err := c.renew(ctx, conn, id); err != nil {
 			c.log.Error("certificate renewal failed, will retry", "err", err)
@@ -237,6 +282,10 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 
 	sendCh := make(chan *openrmmv1.AgentMessage, 64)
 	sess := &session{ctx: sctx, out: sendCh, conn: conn}
+	go c.updater.ReportResult(sess)
+	if c.Services != nil && c.ConfigPath != "" {
+		go updater.UpdateWatchdog(c.Services, c.cfg.InstallDir, []string{"run", "-config", c.ConfigPath}, c.log)
+	}
 	recvErr := make(chan error, 1)
 	go func() {
 		for {
@@ -250,6 +299,8 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 				c.handleJob(verifier, exec, m.Job)
 			case *openrmmv1.ConsoleMessage_JobUpdateAck:
 				exec.Acked(m.JobUpdateAck.GetJobId())
+			case *openrmmv1.ConsoleMessage_AgentUpdate:
+				c.updater.Offer(sctx, sess, m.AgentUpdate.GetManifest())
 			}
 		}
 	}()
@@ -363,6 +414,40 @@ func (s *session) Send(u *openrmmv1.JobUpdate) {
 	select {
 	case s.out <- &openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_JobUpdate{JobUpdate: u}}:
 	case <-s.ctx.Done():
+	}
+}
+
+func (s *session) SendUpdateStatus(u *openrmmv1.UpdateStatus) {
+	select {
+	case s.out <- &openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_UpdateStatus{UpdateStatus: u}}:
+	case <-s.ctx.Done():
+	}
+}
+
+// FetchRelease downloads the executables of a release.
+func (s *session) FetchRelease(ctx context.Context, version, platform string) (map[string][]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer cancel()
+	stream, err := openrmmv1.NewAgentServiceClient(s.conn).GetAgentRelease(ctx,
+		&openrmmv1.GetAgentReleaseRequest{Version: version, Platform: platform})
+	if err != nil {
+		return nil, err
+	}
+	files := map[string][]byte{}
+	total := 0
+	for {
+		chunk, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return files, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		total += len(chunk.GetData())
+		if total > 3*release.MaxFileSize || len(files) > 4 {
+			return nil, errors.New("release too large")
+		}
+		files[chunk.GetFile()] = append(files[chunk.GetFile()], chunk.GetData()...)
 	}
 }
 

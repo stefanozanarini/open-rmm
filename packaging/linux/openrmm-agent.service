@@ -3,14 +3,15 @@ Description=open-rmm endpoint management agent
 Documentation=https://github.com/stefanozanarini/open-rmm
 Wants=network-online.target
 After=network-online.target
-# Give up restarting only after 10 failures in 10 minutes; the health-check
-# timer (phase 0, next step) brings the service back even then.
 StartLimitIntervalSec=600
 StartLimitBurst=10
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/openrmm-agent run -config /etc/open-rmm/agent.json
+# The installed version is selected by the drop-in
+# openrmm-agent.service.d/50-openrmm-version.conf, written by the package and
+# by the watchdog when it applies an update.
+ExecStart=/opt/open-rmm/versions/initial/openrmm-agent run -config /etc/open-rmm/agent.json
 Restart=always
 RestartSec=5s
 
@@ -22,6 +23,8 @@ UMask=0077
 # Hardening. The agent runs as root because management modules need it;
 # these options limit what the core itself can do.
 ProtectSystem=full
+# The agent updates the watchdog unit's version drop-in.
+ReadWritePaths=-/etc/systemd/system/openrmm-watchdog.service.d
 ProtectHome=read-only
 PrivateTmp=yes
 ProtectKernelTunables=yes

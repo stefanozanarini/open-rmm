@@ -68,9 +68,12 @@ type Agent struct {
 	EnrolledAt          time.Time
 	ApprovedAt          *time.Time
 	ApprovedBy          string
-	EnrolledTokenID     string
-	LastSeenAt          *time.Time
-	LastSeenIP          *netip.Addr
+	// UpdateRing is "pilot" or "broad".
+	UpdateRing      string
+	Update          AgentUpdate
+	EnrolledTokenID string
+	LastSeenAt      *time.Time
+	LastSeenIP      *netip.Addr
 }
 
 // Store is implemented by the PostgreSQL store and by an in-memory store for
@@ -103,6 +106,7 @@ type Store interface {
 
 	JobStore
 	SessionStore
+	ReleaseStore
 }
 
 // HashToken returns the value stored in place of an enrollment token.

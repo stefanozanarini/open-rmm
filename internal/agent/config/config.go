@@ -42,12 +42,17 @@ type Config struct {
 	MaxConcurrentJobs int `json:"max_concurrent_jobs,omitempty"`
 	// DataDir holds keys, certificates and state.
 	DataDir string `json:"data_dir,omitempty"`
+	// InstallDir holds the installed versions (InstallDir/versions/x.y.z).
+	InstallDir string `json:"install_dir,omitempty"`
+	// ReleaseSigningKeys lists the trusted agent release keys ("ed25519:...").
+	ReleaseSigningKeys []string `json:"release_signing_keys,omitempty"`
 	// AllowAdHocScripts is a local policy; default true (architecture §6.4).
 	AllowAdHocScripts *bool `json:"allow_adhoc_scripts,omitempty"`
 
-	root       *x509.Certificate
-	keys       *signing.Keyring
-	moduleKeys *signing.Keyring
+	root        *x509.Certificate
+	keys        *signing.Keyring
+	moduleKeys  *signing.Keyring
+	releaseKeys *signing.Keyring
 }
 
 // Load reads the file at path (which may be missing when the registry
@@ -76,6 +81,9 @@ func Load(path string) (*Config, error) {
 	}
 	if c.DataDir == "" {
 		c.DataDir = DefaultDataDir()
+	}
+	if c.InstallDir == "" {
+		c.InstallDir = DefaultInstallDir()
 	}
 	return c, c.validate()
 }
@@ -126,6 +134,19 @@ func (c *Config) validate() error {
 			return err
 		}
 	}
+	c.releaseKeys = signing.NewKeyring()
+	for _, s := range c.ReleaseSigningKeys {
+		pub, err := signing.ParsePublicKey(s)
+		if err != nil {
+			return fmt.Errorf("release signing key: %w", err)
+		}
+		if _, err := c.releaseKeys.Add(ed25519.PublicKey(pub), signing.DomainAgentRelease); err != nil {
+			return err
+		}
+	}
+	if !filepath.IsAbs(c.InstallDir) {
+		return errors.New("install_dir must be an absolute path")
+	}
 	if c.MaxConcurrentJobs == 0 {
 		c.MaxConcurrentJobs = 4
 	}
@@ -152,6 +173,9 @@ func (c *Config) JobKeyring() *signing.Keyring { return c.keys }
 
 // ModuleKeyring returns the trusted module release keys.
 func (c *Config) ModuleKeyring() *signing.Keyring { return c.moduleKeys }
+
+// ReleaseKeyring returns the trusted agent release keys.
+func (c *Config) ReleaseKeyring() *signing.Keyring { return c.releaseKeys }
 
 // AdHocScriptsAllowed reports the effective local policy.
 func (c *Config) AdHocScriptsAllowed() bool {

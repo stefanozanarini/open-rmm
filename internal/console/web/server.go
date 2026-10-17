@@ -158,6 +158,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /jobs", s.auth(s.handleJobs))
 	mux.Handle("GET /jobs/{id}", s.auth(s.handleJob))
 	mux.Handle("GET /modules", s.auth(s.handleModules))
+	mux.Handle("GET /updates", s.auth(s.handleUpdates))
 	mux.Handle("GET /tokens", s.role(authn.RoleAdmin, s.handleTokens))
 	mux.Handle("POST /tokens", s.role(authn.RoleAdmin, s.handleCreateToken))
 	mux.Handle("GET /audit", s.auth(s.handleAudit))
@@ -307,4 +308,5 @@ var labels = map[string]string{
 	"pending": "in attesa", "active": "attivo", "revoked": "revocato", "online": "online",
 	"queued": "in coda", "sent": "inviato", "accepted": "accettato", "running": "in esecuzione",
 	"succeeded": "completato", "failed": "fallito", "rejected": "rifiutato", "expired": "scaduto",
+	"downloading": "download", "staged": "pronto", "applied": "installato", "rolled_back": "ripristinato",
 }

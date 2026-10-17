@@ -247,8 +247,12 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 	// Jobs already sent in this session are not sent again on every wake-up;
 	// unanswered ones are re-sent once per session (the agent deduplicates).
 	sent := map[string]bool{}
+	offered := map[string]bool{}
 	if a.Status == store.AgentActive {
 		if err := s.dispatch(ctx, stream, a, sent); err != nil {
+			return err
+		}
+		if err := s.offerUpdate(ctx, stream, a, offered); err != nil {
 			return err
 		}
 	}
@@ -269,15 +273,18 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 		case <-idle.C:
 			return status.Error(codes.DeadlineExceeded, "agent silent too long")
 		case <-sess.wake:
-			if a.Status == store.AgentPending {
-				cur, err := s.stillAuthorized(ctx, c)
-				if err != nil {
-					return err
-				}
-				a = cur
+			// Approval, ring or target may have changed: re-read the agent.
+			cur, err := s.stillAuthorized(ctx, c)
+			if err != nil {
+				return err
 			}
+			cur.Host = a.Host
+			a = cur
 			if a.Status == store.AgentActive {
 				if err := s.dispatch(ctx, stream, a, sent); err != nil {
+					return err
+				}
+				if err := s.offerUpdate(ctx, stream, a, offered); err != nil {
 					return err
 				}
 			}
@@ -303,6 +310,8 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 						return err
 					}
 				}
+			case *openrmmv1.AgentMessage_UpdateStatus:
+				s.recordUpdateStatus(ctx, a, m.UpdateStatus)
 			case *openrmmv1.AgentMessage_JobUpdate:
 				if ack := s.recordJobUpdate(ctx, a, m.JobUpdate); ack {
 					if err := stream.Send(&openrmmv1.ConsoleMessage{Msg: &openrmmv1.ConsoleMessage_JobUpdateAck{

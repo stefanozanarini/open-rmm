@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -215,5 +216,53 @@ func testJobLifecycle(t *testing.T, s Store) {
 	}
 	if list, _ := s.ListJobs(ctx, tenant.ID, agent.ID, 10); len(list) != 2 {
 		t.Fatalf("list = %d jobs", len(list))
+	}
+}
+
+func TestReleases(t *testing.T) { testReleases(t, NewMemory()) }
+
+func testReleases(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	agent := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "pc"},
+		CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)}
+	if err := s.CreateAgent(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	// Releases are global: use a version unique to this run.
+	v := fmt.Sprintf("9.%d.%d", time.Now().Unix()%100000, time.Now().Nanosecond()%100000)
+	r := Release{Version: v, Platform: "windows/amd64", KeyID: "k", Manifest: []byte("{}"), Signature: []byte("s"),
+		Files: map[string][]byte{"openrmm-agent.exe": []byte("a"), "openrmm-watchdog.exe": []byte("w")}}
+	if err := s.PutRelease(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutRelease(ctx, r); err != ErrReleaseExists {
+		t.Fatalf("republish: %v", err)
+	}
+	if d, err := s.GetReleaseFile(ctx, v, "windows/amd64", "openrmm-agent.exe"); err != nil || string(d) != "a" {
+		t.Fatalf("file: %q %v", d, err)
+	}
+	if err := s.SetReleaseTarget(ctx, ReleaseTarget{TenantID: tenant.ID, Ring: RingPilot, Platform: "windows/amd64", Version: "0.0.1"}); err != ErrNotFound {
+		t.Fatalf("target to unpublished release: %v", err)
+	}
+	if err := s.SetReleaseTarget(ctx, ReleaseTarget{TenantID: tenant.ID, Ring: RingPilot, Platform: "windows/amd64", Version: v}); err != nil {
+		t.Fatal(err)
+	}
+	if tg, err := s.GetReleaseTarget(ctx, tenant.ID, RingPilot, "windows/amd64"); err != nil || tg.Version != v {
+		t.Fatalf("target: %+v %v", tg, err)
+	}
+	if _, err := s.GetReleaseTarget(ctx, tenant.ID, RingBroad, "windows/amd64"); err != ErrNotFound {
+		t.Fatalf("broad target: %v", err)
+	}
+	if err := s.SetAgentRing(ctx, tenant.ID, agent.ID, RingPilot); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAgentUpdate(ctx, tenant.ID, agent.ID, AgentUpdate{State: "staged", Version: v, At: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := s.GetAgent(ctx, tenant.ID, agent.ID)
+	if a.UpdateRing != RingPilot || a.Update.State != "staged" || a.Update.Version != v {
+		t.Fatalf("agent = %+v", a)
 	}
 }

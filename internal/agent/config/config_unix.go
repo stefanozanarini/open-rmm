@@ -8,4 +8,7 @@ func DefaultConfigPath() string { return "/etc/open-rmm/agent.json" }
 // DefaultDataDir is where the agent keeps keys and state.
 func DefaultDataDir() string { return "/var/lib/open-rmm" }
 
+// DefaultInstallDir holds the installed versions.
+func DefaultInstallDir() string { return "/opt/open-rmm" }
+
 func overlayOS(*Config) error { return nil }

@@ -49,7 +49,8 @@ var (
 )
 
 func (e *env) keysJSON() string {
-	return `"job_signing_keys":["` + pubKey(e.jobSigner) + `"],"module_signing_keys":["` + pubKey(e.moduleSigner) + `"]`
+	return `"job_signing_keys":["` + pubKey(e.jobSigner) + `"],"module_signing_keys":["` + pubKey(e.moduleSigner) +
+		`"],"release_signing_keys":["` + pubKey(e.releaseSigner) + `"]`
 }
 
 // publish packs dir (with the repository SDK), signs it and publishes it.

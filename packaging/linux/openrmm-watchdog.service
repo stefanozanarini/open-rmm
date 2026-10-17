@@ -1,0 +1,23 @@
+[Unit]
+Description=open-rmm watchdog (keeps the agent running, applies its updates)
+Documentation=https://github.com/stefanozanarini/open-rmm
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/open-rmm/versions/initial/openrmm-watchdog run -config /etc/open-rmm/agent.json
+Restart=always
+RestartSec=10s
+UMask=0077
+ProtectSystem=full
+# The watchdog switches the agent unit's version drop-in.
+ReadWritePaths=-/etc/systemd/system/openrmm-agent.service.d
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

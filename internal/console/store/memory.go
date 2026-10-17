@@ -23,6 +23,8 @@ type Memory struct {
 
 	listeners []func(string)
 	sessions  map[string]WebSession // by session hash
+	releases  map[string]Release    // by version@platform
+	targets   map[string]ReleaseTarget
 }
 
 func NewMemory() *Memory {
@@ -35,6 +37,8 @@ func NewMemory() *Memory {
 		jobs:    map[string]Job{},
 
 		sessions: map[string]WebSession{},
+		releases: map[string]Release{},
+		targets:  map[string]ReleaseTarget{},
 	}
 }
 
@@ -103,6 +107,9 @@ func (m *Memory) ConsumeEnrollmentToken(_ context.Context, tokenHash []byte, now
 func (m *Memory) CreateAgent(_ context.Context, a Agent) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if a.UpdateRing == "" {
+		a.UpdateRing = RingBroad
+	}
 	k := agentKey(a.TenantID, a.ID)
 	if _, ok := m.agents[k]; ok {
 		return fmt.Errorf("agent %s exists", a.ID)

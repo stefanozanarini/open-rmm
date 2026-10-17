@@ -1,6 +1,6 @@
 # open-rmm — Documento di architettura
 
-> Stato: bozza v0.7 — 2026-10-17
+> Stato: bozza v0.8 — 2026-10-17
 > Primo cliente: ~200 endpoint Windows (client e server), parco misto Dell / Lenovo / Acer, BitLocker diffuso, console ospitata presso il cliente e raggiungibile da internet, portatili anche fuori sede.
 
 ---
@@ -402,10 +402,29 @@ Due azioni separate, `hardware` e `software`, con frequenze diverse.
 - **Conflitto rilevato:** se su un PC in modalità *gestita* compaiono policy WSUS o Intune, la console mostra un avviso e il PC passa in *osservazione* finché un operatore non decide.
 - Passaggio da WSUS/Intune all'RMM: documentiamo quali policy rimuovere o modificare.
 
-### 8.3 `accesslog`
-- Windows: eventi 4624/4625/4634/4647/4672, RDP (1149, 21/24/25), blocchi account (4740).
-- Invio in console di eventi **già filtrati e normalizzati**, non dei log grezzi (volume e GDPR).
-- Alert: tentativi falliti ripetuti, accessi fuori orario, accessi con privilegi.
+### 8.3 `accesslog` — login locali e RDP (priorità alta)
+- **Raccolta sull'endpoint**, eventi normalizzati (utente, dominio, tipo di accesso, IP e nome del client, esito, motivo del fallimento):
+  - accessi riusciti `4624` per tipo: 2 interattivo, 7 sblocco, 10 RemoteInteractive (RDP), 11 credenziali in cache, 3 rete (filtrato);
+  - accessi falliti `4625`, logoff `4634`/`4647`, privilegi speciali `4672`, account bloccato `4740`;
+  - RDP: `1149` (TerminalServices-RemoteConnectionManager, con IP sorgente), `21`/`24`/`25` (LocalSessionManager: accesso, disconnessione, riconnessione).
+- Raccolta incrementale (segnalibro sull'ultimo record letto), così niente duplicati né buchi dopo un riavvio.
+- In console vanno solo gli eventi filtrati e normalizzati, non i log grezzi (volume e GDPR).
+- **Rilevamento dei login inusuali in console**, che vede lo storico di tutti gli endpoint:
+  - per ogni coppia utente/endpoint si costruisce una "normalità" fatta di IP sorgenti RDP (e relative subnet /24), orari e giorni abituali, client;
+  - alert per un accesso RDP da un IP o una subnet mai visti per quell'utente o quell'endpoint, da IP pubblico verso un server, fuori dai propri orari, con privilegi amministrativi;
+  - alert per tentativi falliti ripetuti, anche distribuiti su più utenti (password spraying);
+  - un periodo di apprendimento iniziale evita falsi allarmi a raffica; un operatore può marcare un IP o una subnet come attesi.
+- Serve l'esecuzione periodica dei moduli tramite policy (job schedulati, §3.6), da implementare prima di questo modulo.
+
+### 8.3.1 Trend Micro (priorità alta)
+- **`trendmicro-visionone`**: stato dell'agente Trend Vision One sull'endpoint.
+  - Installato o no, versione, servizi in esecuzione.
+  - Connessione al cloud Vision One.
+  - Componenti (pattern, motore) e data dell'ultimo aggiornamento.
+  - Protezione in tempo reale attiva.
+  - Alert se l'agente manca, è fermo o non è aggiornato.
+- **`trendmicro-ztsa`**: stato del client Zero Trust Secure Access: installato, versione, servizio attivo, connesso.
+- Da chiarire: i dettagli dipendono dalla versione dell'agente Trend installata. In alternativa, o in aggiunta, la console può interrogare le API di Vision One per avere la vista lato cloud.
 
 ### 8.4 `winget`
 - Uso tramite **Microsoft.WinGet.Client / API COM**, non tramite parsing dell'output testuale.
@@ -478,6 +497,7 @@ Qualunque modulo che richiede un riavvio (Windows Update, firmware, winget, scri
 | **0 — Fondamenta** | Gateway esposto con mTLS e separazione dall'interfaccia web, login Entra ID, PKI ed enrollment, core agente, watchdog, task schedulato, protocollo gRPC, module manager + SDK PowerShell, `openrmm-signer`, console di base (login MFA, tenant, elenco endpoint, audit), MSI | Agente installabile via GPO che si registra e resta connesso |
 | **1 — MVP** | `inventory` (hardware e software), `script` (libreria + ad hoc), `winupdate` (scansione, installazione, policy, finestre di manutenzione), `accesslog`, aggiornamento automatico dell'agente | Il cliente usa l'RMM per patch e diagnostica |
 | **2** | `openrmm-userhelper` con notifiche, modulo `reboot` con policy configurabili, anelli, `winget` + bootstrap, report di conformità | Patch dei client senza disturbare gli utenti, software di terze parti aggiornato |
+| **2b** | Job schedulati via policy, `accesslog` con rilevamento dei login inusuali, `trendmicro-visionone`, `trendmicro-ztsa` | Sicurezza degli endpoint visibile in console |
 | **3** | `firmware-dell`, `firmware-lenovo`, firmware via Windows Update, controlli BitLocker, `wu-repair` | Firmware gestito |
 | **4** | Agente Linux (pacchetti, fwupd, log, aggiornamenti apt/dnf), federazione in sola lettura | Copertura Linux, vista multi-cliente |
 | **5** | Comandi dalla master con deleghe, sorgente winget privata, Redfish per i server, shell interattiva | — |
@@ -514,3 +534,5 @@ Qualunque modulo che richiede un riavvio (Windows Update, firmware, winget, scri
 | 2026-10-17 | Moduli eseguiti come sottoprocessi con protocollo JSON a righe; il job fissa l'hash del manifest; esecuzione in contesto utente rimandata a `openrmm-userhelper` |
 | 2026-10-17 | Interfaccia web generata dal server invece di React: nessuna dipendenza JavaScript, CSP restrittiva, superficie d'attacco minima |
 | 2026-10-17 | Firma dei job in `openrmm-signer` (container separato, socket locale): firma solo con un id_token Entra fresco, con MFA, il cui `nonce` è l'impronta esatta del comando |
+| 2026-10-17 | Aggiornamento dell'agente: release firmate con chiave dedicata, versioni affiancate, switch e rollback del watchdog, mai downgrade, rollout per anelli |
+| 2026-10-17 | Moduli prioritari: stato Trend Micro Vision One e ZTSA, login locali/RDP con rilevamento dei login inusuali |

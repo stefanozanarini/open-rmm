@@ -26,6 +26,21 @@ service AgentService {
   // manifest, the following ones the archive bytes. Only approved agents may
   // download modules.
   rpc GetModule(GetModuleRequest) returns (stream ModuleChunk);
+
+  // GetAgentRelease streams the executables of a signed release offered to
+  // the agent (see AgentUpdateOffer).
+  rpc GetAgentRelease(GetAgentReleaseRequest) returns (stream ReleaseChunk);
+}
+
+message GetAgentReleaseRequest {
+  string version = 1;
+  string platform = 2;
+}
+
+message ReleaseChunk {
+  // File the data belongs to; files are sent one after the other.
+  string file = 1;
+  bytes data = 2;
 }
 
 message GetModuleRequest {
@@ -76,7 +91,23 @@ message AgentMessage {
     Hello hello = 1;
     Heartbeat heartbeat = 2;
     JobUpdate job_update = 3;
+    UpdateStatus update_status = 4;
   }
+}
+
+// UpdateStatus reports the progress of an agent update.
+message UpdateStatus {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_DOWNLOADING = 1;
+    STATE_STAGED = 2;      // verified and ready; the watchdog applies it
+    STATE_APPLIED = 3;     // running the new version
+    STATE_REJECTED = 4;    // not installed (signature, version, hashes)
+    STATE_ROLLED_BACK = 5; // the new version failed and was reverted
+  }
+  string version = 1;
+  State state = 2;
+  string error = 3;
 }
 
 message ConsoleMessage {
@@ -84,7 +115,14 @@ message ConsoleMessage {
     HelloAck hello_ack = 1;
     SignedEnvelope job = 2;
     JobUpdateAck job_update_ack = 3;
+    AgentUpdateOffer agent_update = 4;
   }
+}
+
+// AgentUpdateOffer proposes a release. The agent installs it only if the
+// manifest is signed by a trusted release key and is newer than itself.
+message AgentUpdateOffer {
+  SignedEnvelope manifest = 1;
 }
 
 // JobUpdateAck confirms that the console stored a final job update, so the

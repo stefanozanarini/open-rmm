@@ -29,6 +29,14 @@ func DefaultConfigPath() string { return filepath.Join(programData(), "open-rmm"
 // DefaultDataDir is where the agent keeps keys and state.
 func DefaultDataDir() string { return filepath.Join(programData(), "open-rmm", "data") }
 
+// DefaultInstallDir holds the installed versions.
+func DefaultInstallDir() string {
+	if p := os.Getenv("ProgramFiles"); p != "" {
+		return filepath.Join(p, "open-rmm")
+	}
+	return `C:\Program Files\open-rmm`
+}
+
 // overlayOS applies the MSI key, then the GPO policy key on top of it.
 //
 // Registry values (all optional):
@@ -38,6 +46,7 @@ func DefaultDataDir() string { return filepath.Join(programData(), "open-rmm", "
 //	EnrollToken       REG_SZ        enrollment token
 //	JobSigningKeys    REG_MULTI_SZ  ed25519:... (one per line)
 //	ModuleSigningKeys REG_MULTI_SZ  ed25519:... (one per line)
+//	ReleaseSigningKeys REG_MULTI_SZ ed25519:... (one per line)
 //	AllowAdHocScripts REG_DWORD     0 or 1
 //	MaxConcurrentJobs REG_DWORD     1-32
 func overlayOS(c *Config) error {
@@ -74,6 +83,9 @@ func overlayKey(c *Config, path string) error {
 	}
 	if v, _, err := k.GetStringsValue("ModuleSigningKeys"); err == nil && len(v) > 0 {
 		c.ModuleSigningKeys = v
+	}
+	if v, _, err := k.GetStringsValue("ReleaseSigningKeys"); err == nil && len(v) > 0 {
+		c.ReleaseSigningKeys = v
 	}
 	if v, _, err := k.GetIntegerValue("MaxConcurrentJobs"); err == nil && v <= 32 {
 		c.MaxConcurrentJobs = int(v)

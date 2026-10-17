@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -36,14 +37,22 @@ func (s *Server) Run(ctx context.Context) {
 
 func (s *Server) wake(key string) {
 	s.mu.Lock()
-	sess := s.sessions[key]
-	s.mu.Unlock()
-	if sess == nil {
-		return
+	var targets []*session
+	if tenant, ok := strings.CutSuffix(key, "/*"); ok {
+		for k, sess := range s.sessions {
+			if strings.HasPrefix(k, tenant+"/") {
+				targets = append(targets, sess)
+			}
+		}
+	} else if sess := s.sessions[key]; sess != nil {
+		targets = append(targets, sess)
 	}
-	select {
-	case sess.wake <- struct{}{}:
-	default: // a wake-up is already pending
+	s.mu.Unlock()
+	for _, sess := range targets {
+		select {
+		case sess.wake <- struct{}{}:
+		default: // a wake-up is already pending
+		}
 	}
 }
 

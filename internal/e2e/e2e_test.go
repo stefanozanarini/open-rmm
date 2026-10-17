@@ -40,14 +40,15 @@ type env struct {
 	offset atomic.Int64
 	// jobSigner and moduleSigner stand in for the signing service and the
 	// offline module release key.
-	jobSigner    *signing.Signer
-	moduleSigner *signing.Signer
-	root         *pki.CA
-	ca           *pki.CA
-	store        *store.Memory
-	gw           *gateway.Server
-	addr         string
-	tenant       string
+	jobSigner     *signing.Signer
+	moduleSigner  *signing.Signer
+	releaseSigner *signing.Signer
+	root          *pki.CA
+	ca            *pki.CA
+	store         *store.Memory
+	gw            *gateway.Server
+	addr          string
+	tenant        string
 }
 
 func quietLog() *slog.Logger {
@@ -90,7 +91,7 @@ func start(t *testing.T) *env {
 	runCtx, stopRun := context.WithCancel(context.Background())
 	go gw.Run(runCtx)
 	t.Cleanup(stopRun)
-	e.jobSigner, e.moduleSigner = newSigner(t), newSigner(t)
+	e.jobSigner, e.moduleSigner, e.releaseSigner = newSigner(t), newSigner(t), newSigner(t)
 	_, port, _ := net.SplitHostPort(lis.Addr().String())
 	e.root, e.ca, e.store, e.gw, e.addr, e.tenant = root, ca, st, gw, "localhost:"+port, tenant
 	return e
@@ -121,7 +122,7 @@ func (e *env) agentConfig(t *testing.T, token string) *config.Config {
 	}
 	cfgFile := filepath.Join(dir, "agent.json")
 	data := `{"server":"` + e.addr + `","root_ca_file":"root-ca.crt","enroll_token":"` + token +
-		`","data_dir":"` + filepath.Join(dir, "data") + `",` + e.keysJSON() + `}`
+		`","data_dir":"` + filepath.Join(dir, "data") + `","install_dir":"` + filepath.Join(dir, "install") + `",` + e.keysJSON() + `}`
 	if err := os.WriteFile(cfgFile, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -135,9 +136,14 @@ func (e *env) agentConfig(t *testing.T, token string) *config.Config {
 // runAgent starts the agent and waits for its first successful connection.
 func runAgent(t *testing.T, cfg *config.Config) context.CancelFunc {
 	t.Helper()
+	return runAgentVersion(t, cfg, "test")
+}
+
+func runAgentVersion(t *testing.T, cfg *config.Config, version string) context.CancelFunc {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	connected := make(chan struct{}, 1)
-	c := client.New(cfg, "test", quietLog())
+	c := client.New(cfg, version, quietLog())
 	c.OnConnected = func() {
 		select {
 		case connected <- struct{}{}:

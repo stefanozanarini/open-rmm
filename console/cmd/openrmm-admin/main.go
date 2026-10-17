@@ -18,6 +18,11 @@
 //	                      [-params JSON] [-script-file FILE] [-ttl 1h] [-wait]
 //	openrmm-admin job show -tenant UUID -id UUID [-wait]
 //	openrmm-admin job list -tenant UUID [-agent UUID]
+//	openrmm-admin release sign -version X.Y.Z -platform OS/ARCH -agent FILE -watchdog FILE -key FILE
+//	openrmm-admin release publish -file BUNDLE     (needs OPENRMM_RELEASE_KEYS)
+//	openrmm-admin release list [-tenant UUID]
+//	openrmm-admin release target -tenant UUID -ring pilot|broad -platform OS/ARCH -version X.Y.Z
+//	openrmm-admin agents ring -tenant UUID -agent UUID -ring pilot|broad
 //
 // Database commands read the connection string from OPENRMM_DATABASE_URL.
 package main
@@ -61,6 +66,8 @@ func run(args []string) error {
 		return signingKeygen(rest)
 	case "module sign":
 		return moduleSign(rest)
+	case "release sign":
+		return releaseSign(rest)
 	}
 	ctx := context.Background()
 	url := os.Getenv("OPENRMM_DATABASE_URL")
@@ -99,6 +106,14 @@ func run(args []string) error {
 		return jobShow(ctx, db, rest)
 	case "job list":
 		return jobList(ctx, db, rest)
+	case "release publish":
+		return releasePublish(ctx, db, rest)
+	case "release list":
+		return releaseList(ctx, db, rest)
+	case "release target":
+		return releaseTarget(ctx, db, rest)
+	case "agents ring":
+		return agentsRing(ctx, db, rest)
 	}
 	return fmt.Errorf("unknown command %q", area+" "+cmd)
 }

@@ -21,7 +21,9 @@ section.warn { background:var(--warn); border:1px solid #f5d48f; padding:4px 16p
 .badge.pending, .badge.queued, .badge.sent { background:#fff1c2; }
 .badge.active, .badge.succeeded, .badge.online { background:#dcfae6; color:var(--ok); }
 .badge.revoked, .badge.failed, .badge.rejected, .badge.expired { background:#fee4e2; color:var(--danger); }
-.badge.running, .badge.accepted { background:#e0eaff; }
+.badge.running, .badge.accepted, .badge.downloading, .badge.staged { background:#e0eaff; }
+.badge.applied { background:#dcfae6; color:var(--ok); }
+.badge.rolled_back { background:#fee4e2; color:var(--danger); }
 dl.facts { display:grid; grid-template-columns:220px 1fr; gap:6px 16px; background:var(--card); border:1px solid var(--line); padding:12px 16px; }
 dl.facts dt { color:var(--muted); }
 dl.facts dd { margin:0; }

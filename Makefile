@@ -17,6 +17,7 @@ build:
 
 build-windows:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/openrmm-agent.exe ./agent/cmd/openrmm-agent
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/openrmm-watchdog.exe ./agent/cmd/openrmm-watchdog
 
 test:
 	$(GO) test -race -count=1 ./...

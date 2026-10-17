@@ -7,6 +7,8 @@
   <dt>Ultimo contatto</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} da {{.}}{{end}}</dd>
   <dt>Registrato</dt><dd>{{fmtTime .Agent.EnrolledAt}}</dd>
   <dt>Approvato</dt><dd>{{fmtTime .Agent.ApprovedAt}} {{.Agent.ApprovedBy}}</dd>
+  <dt>Anello aggiornamenti</dt><dd>{{.Agent.UpdateRing}}</dd>
+  <dt>Ultimo aggiornamento</dt><dd>{{if .Agent.Update.State}}<span class="badge {{.Agent.Update.State}}">{{label .Agent.Update.State}}</span> {{.Agent.Update.Version}} · {{fmtTime .Agent.Update.At}}{{with .Agent.Update.Error}}<br><span class="muted">{{.}}</span>{{end}}{{else}}-{{end}}</dd>
   <dt>Certificato valido fino a</dt><dd>{{fmtTime .Agent.CertNotAfter}}</dd>
   <dt>ID agente</dt><dd><code>{{.Agent.ID}}</code></dd>
   <dt>ID macchina</dt><dd><code>{{.Agent.Host.MachineID}}</code></dd>

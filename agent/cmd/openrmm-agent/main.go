@@ -1,7 +1,7 @@
 // Command openrmm-agent is the open-rmm endpoint agent core.
 //
 //	openrmm-agent run [-config path]        run in the foreground (or as a service)
-//	openrmm-agent install [-config path]    install the Windows service
+//	openrmm-agent install [-config path]    install the Windows service (development; the MSI does this)
 //	openrmm-agent uninstall                 remove the Windows service
 //	openrmm-agent version
 package main
@@ -17,6 +17,8 @@ import (
 
 	"github.com/stefanozanarini/open-rmm/internal/agent/client"
 	"github.com/stefanozanarini/open-rmm/internal/agent/config"
+	"github.com/stefanozanarini/open-rmm/internal/agent/svcctl"
+	"github.com/stefanozanarini/open-rmm/internal/agent/winsvc"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -41,16 +43,21 @@ func run(args []string) error {
 	}
 	switch cmd {
 	case "run":
-		if isService() {
-			return runService(*cfgPath)
+		if winsvc.IsService() {
+			return winsvc.Run(svcctl.Agent, func(ctx context.Context, log *slog.Logger) error {
+				return runAgent(ctx, *cfgPath, log, true)
+			})
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		return runAgent(ctx, *cfgPath, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+		// Under systemd (INVOCATION_ID is set) the agent manages the
+		// watchdog unit too.
+		managed := os.Getenv("INVOCATION_ID") != ""
+		return runAgent(ctx, *cfgPath, slog.New(slog.NewTextHandler(os.Stderr, nil)), managed)
 	case "install":
-		return installService(*cfgPath)
+		return winsvc.Install(svcctl.Agent, "open-rmm agent", "open-rmm endpoint management agent", "run", "-config", *cfgPath)
 	case "uninstall":
-		return uninstallService()
+		return winsvc.Uninstall(svcctl.Agent)
 	case "version":
 		fmt.Println(version)
 		return nil
@@ -59,11 +66,15 @@ func run(args []string) error {
 	}
 }
 
-func runAgent(ctx context.Context, cfgPath string, log *slog.Logger) error {
+func runAgent(ctx context.Context, cfgPath string, log *slog.Logger, managed bool) error {
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return err
 	}
 	log.Info("starting", "version", version, "server", cfg.Server)
-	return client.New(cfg, version, log).Run(ctx)
+	c := client.New(cfg, version, log)
+	if managed {
+		c.Services, c.ConfigPath = svcctl.New(), cfgPath
+	}
+	return c.Run(ctx)
 }
