@@ -11,6 +11,13 @@
 //	openrmm-admin agents revoke -tenant UUID -agent UUID
 //	openrmm-admin audit verify -tenant UUID
 //	openrmm-admin signing keygen -out FILE
+//	openrmm-admin module sign -dir DIR -key FILE [-out FILE] [-sdk modules/sdk]
+//	openrmm-admin module publish -file BUNDLE      (needs OPENRMM_MODULE_KEYS)
+//	openrmm-admin module list
+//	openrmm-admin job run -tenant UUID -agent UUID -module ID -version X.Y.Z -action NAME -key FILE
+//	                      [-params JSON] [-script-file FILE] [-ttl 1h] [-wait]
+//	openrmm-admin job show -tenant UUID -id UUID [-wait]
+//	openrmm-admin job list -tenant UUID [-agent UUID]
 //
 // Database commands read the connection string from OPENRMM_DATABASE_URL.
 package main
@@ -52,6 +59,8 @@ func run(args []string) error {
 		return pkiInit(rest)
 	case "signing keygen":
 		return signingKeygen(rest)
+	case "module sign":
+		return moduleSign(rest)
 	}
 	ctx := context.Background()
 	url := os.Getenv("OPENRMM_DATABASE_URL")
@@ -80,6 +89,16 @@ func run(args []string) error {
 		return agentsRevoke(ctx, db, rest)
 	case "audit verify":
 		return auditVerify(ctx, db, rest)
+	case "module publish":
+		return modulePublish(ctx, db, rest)
+	case "module list":
+		return moduleList(ctx, db)
+	case "job run":
+		return jobRun(ctx, db, rest)
+	case "job show":
+		return jobShow(ctx, db, rest)
+	case "job list":
+		return jobList(ctx, db, rest)
 	}
 	return fmt.Errorf("unknown command %q", area+" "+cmd)
 }

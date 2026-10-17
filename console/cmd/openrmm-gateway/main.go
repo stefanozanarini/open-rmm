@@ -131,6 +131,8 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	gs := gw.GRPCServer(tlsconf.Server(srvCerts[0], srvCerts[1:], srvKey, ca.Cert))
+	// Wakes agent sessions when jobs are queued (PostgreSQL LISTEN/NOTIFY).
+	go gw.Run(ctx)
 
 	lis, err := net.Listen("tcp", env("OPENRMM_LISTEN", ":8443"))
 	if err != nil {

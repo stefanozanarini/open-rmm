@@ -257,6 +257,12 @@ func (p *Postgres) ApproveAgent(ctx context.Context, tenantID, agentID, by strin
 		if err != nil {
 			return err
 		}
+		if tag.RowsAffected() == 1 {
+			// Wake the agent's session so queued jobs are delivered at once.
+			if _, err := tx.Exec(ctx, `SELECT pg_notify($1, $2)`, jobsChannel, WakeKey(tenantID, agentID)); err != nil {
+				return err
+			}
+		}
 		if tag.RowsAffected() == 0 {
 			var exists bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE id = $1)`, agentID).Scan(&exists); err != nil {

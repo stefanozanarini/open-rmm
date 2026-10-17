@@ -21,6 +21,22 @@ service AgentService {
   // by the agent. The current certificate stays valid until the agent first
   // connects with the new one, so a lost response cannot lock it out.
   rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+
+  // GetModule streams a signed module: the first chunk carries the signed
+  // manifest, the following ones the archive bytes. Only approved agents may
+  // download modules.
+  rpc GetModule(GetModuleRequest) returns (stream ModuleChunk);
+}
+
+message GetModuleRequest {
+  string module = 1;
+  string version = 2;
+}
+
+message ModuleChunk {
+  // Set in the first chunk only.
+  SignedEnvelope manifest = 1;
+  bytes data = 2;
 }
 
 message RenewCertificateRequest {
@@ -67,7 +83,14 @@ message ConsoleMessage {
   oneof msg {
     HelloAck hello_ack = 1;
     SignedEnvelope job = 2;
+    JobUpdateAck job_update_ack = 3;
   }
+}
+
+// JobUpdateAck confirms that the console stored a final job update, so the
+// agent can drop it from its outbox.
+message JobUpdateAck {
+  string job_id = 1;
 }
 
 message Hello {
@@ -122,4 +145,6 @@ message JobUpdate {
   State state = 2;
   bytes result_json = 3;
   string error = 4;
+  int32 progress_percent = 5;
+  string message = 6;
 }

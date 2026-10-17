@@ -65,6 +65,7 @@ type Server struct {
 
 type session struct {
 	cancel context.CancelFunc
+	wake   chan struct{}
 }
 
 // New returns a Server.
@@ -226,35 +227,93 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 	s.log.Info("agent connected", "tenant", a.TenantID, "agent", a.ID, "hostname", host.Hostname,
 		"peer", ip.String(), "status", a.Status)
 
+	msgs := make(chan *openrmmv1.AgentMessage)
+	recvErr := make(chan error, 1)
+	go func() {
+		for {
+			m, err := stream.Recv()
+			if err != nil {
+				recvErr <- err
+				return
+			}
+			select {
+			case msgs <- m:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Jobs already sent in this session are not sent again on every wake-up;
+	// unanswered ones are re-sent once per session (the agent deduplicates).
+	sent := map[string]bool{}
+	if a.Status == store.AgentActive {
+		if err := s.dispatch(ctx, stream, a, sent); err != nil {
+			return err
+		}
+	}
 	lastWrite := s.now()
+	// An agent silent for three intervals is considered gone.
+	idle := time.NewTimer(3 * s.heartbeat)
+	defer idle.Stop()
 	for {
-		// An agent silent for three intervals is considered gone.
-		msg, err := recvWithTimeout(ctx, stream, 3*s.heartbeat)
-		if err != nil {
+		select {
+		case <-ctx.Done():
+			return status.Error(codes.Canceled, "session replaced or closed")
+		case err := <-recvErr:
 			if errors.Is(err, io.EOF) || status.Code(err) == codes.Canceled {
 				s.log.Info("agent disconnected", "agent", a.ID)
 				return nil
 			}
 			return err
-		}
-		switch m := msg.GetMsg().(type) {
-		case *openrmmv1.AgentMessage_Heartbeat:
-			if now := s.now(); now.Sub(lastWrite) >= seenWriteInterval {
-				// Revocation must also end sessions that are already open.
+		case <-idle.C:
+			return status.Error(codes.DeadlineExceeded, "agent silent too long")
+		case <-sess.wake:
+			if a.Status == store.AgentPending {
 				cur, err := s.stillAuthorized(ctx, c)
 				if err != nil {
 					return err
 				}
 				a = cur
-				if err := s.store.UpdateAgentSeen(ctx, a.TenantID, a.ID, nil, now, ipp); err != nil {
-					s.log.Error("update agent", "err", err)
-				}
-				lastWrite = now
 			}
-		case *openrmmv1.AgentMessage_JobUpdate:
-			s.log.Info("job update", "agent", a.ID, "job", m.JobUpdate.GetJobId(), "state", m.JobUpdate.GetState().String())
-		default:
-			return status.Error(codes.InvalidArgument, "unexpected message")
+			if a.Status == store.AgentActive {
+				if err := s.dispatch(ctx, stream, a, sent); err != nil {
+					return err
+				}
+			}
+		case msg := <-msgs:
+			idle.Reset(3 * s.heartbeat)
+			switch m := msg.GetMsg().(type) {
+			case *openrmmv1.AgentMessage_Heartbeat:
+				if now := s.now(); now.Sub(lastWrite) >= seenWriteInterval {
+					// Revocation must also end sessions that are already open.
+					cur, err := s.stillAuthorized(ctx, c)
+					if err != nil {
+						return err
+					}
+					a = cur
+					if err := s.store.UpdateAgentSeen(ctx, a.TenantID, a.ID, nil, now, ipp); err != nil {
+						s.log.Error("update agent", "err", err)
+					}
+					lastWrite = now
+				}
+				// Fallback in case a notification was missed.
+				if a.Status == store.AgentActive {
+					if err := s.dispatch(ctx, stream, a, sent); err != nil {
+						return err
+					}
+				}
+			case *openrmmv1.AgentMessage_JobUpdate:
+				if ack := s.recordJobUpdate(ctx, a, m.JobUpdate); ack {
+					if err := stream.Send(&openrmmv1.ConsoleMessage{Msg: &openrmmv1.ConsoleMessage_JobUpdateAck{
+						JobUpdateAck: &openrmmv1.JobUpdateAck{JobId: m.JobUpdate.GetJobId()},
+					}}); err != nil {
+						return err
+					}
+				}
+			default:
+				return status.Error(codes.InvalidArgument, "unexpected message")
+			}
 		}
 	}
 }
@@ -327,7 +386,7 @@ func (s *Server) replaceSession(a store.Agent, cancel context.CancelFunc) *sessi
 	if old, ok := s.sessions[k]; ok {
 		old.cancel()
 	}
-	sess := &session{cancel: cancel}
+	sess := &session{cancel: cancel, wake: make(chan struct{}, 1)}
 	s.sessions[k] = sess
 	return sess
 }

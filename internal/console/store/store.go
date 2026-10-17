@@ -100,6 +100,8 @@ type Store interface {
 	// AppendAudit assigns Seq, PrevHash and Hash and stores the event.
 	AppendAudit(ctx context.Context, e audit.Event) (audit.Event, error)
 	ListAudit(ctx context.Context, tenantID string) ([]audit.Event, error)
+
+	JobStore
 }
 
 // HashToken returns the value stored in place of an enrollment token.

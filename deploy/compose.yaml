@@ -65,6 +65,8 @@ services:
       OPENRMM_DATABASE_URL: postgres://openrmm:${OPENRMM_DB_PASSWORD}@db:5432/openrmm?sslmode=disable
     volumes:
       - ./pki:/pki
+    # Scratch space for verifying module bundles before publishing.
+    tmpfs: [/tmp]
     networks: [internal]
     read_only: true
     cap_drop: [ALL]

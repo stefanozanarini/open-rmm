@@ -8,8 +8,10 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand/v2"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -20,9 +22,12 @@ import (
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/agent/config"
+	"github.com/stefanozanarini/open-rmm/internal/agent/executor"
 	"github.com/stefanozanarini/open-rmm/internal/agent/hostinfo"
 	"github.com/stefanozanarini/open-rmm/internal/agent/identity"
 	"github.com/stefanozanarini/open-rmm/internal/agent/jobs"
+	"github.com/stefanozanarini/open-rmm/internal/agent/modcache"
+	"github.com/stefanozanarini/open-rmm/internal/modules"
 	"github.com/stefanozanarini/open-rmm/internal/tlsconf"
 )
 
@@ -47,6 +52,11 @@ type Client struct {
 
 	// OnConnected, if set, is called after each successful hello (tests).
 	OnConnected func()
+
+	runCtx    context.Context
+	mu        sync.Mutex
+	exec      *executor.Executor
+	execAgent string
 }
 
 // New returns a Client.
@@ -59,6 +69,15 @@ func New(cfg *config.Config, version string, log *slog.Logger) *Client {
 
 // Run blocks until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) error {
+	c.runCtx = ctx
+	defer func() {
+		c.mu.Lock()
+		e := c.exec
+		c.mu.Unlock()
+		if e != nil {
+			e.Wait()
+		}
+	}()
 	backoff := minBackoff
 	for {
 		connected, err := c.runOnce(ctx)
@@ -168,6 +187,10 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 	if err != nil {
 		return false, err
 	}
+	exec, err := c.executorFor(id)
+	if err != nil {
+		return false, err
+	}
 	conn, err := c.dial(id)
 	if err != nil {
 		return false, err
@@ -212,7 +235,8 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 		}
 	}
 
-	sendCh := make(chan *openrmmv1.AgentMessage, 16)
+	sendCh := make(chan *openrmmv1.AgentMessage, 64)
+	sess := &session{ctx: sctx, out: sendCh, conn: conn}
 	recvErr := make(chan error, 1)
 	go func() {
 		for {
@@ -221,15 +245,18 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 				recvErr <- err
 				return
 			}
-			if env := msg.GetJob(); env != nil {
-				select {
-				case sendCh <- c.handleJob(verifier, env):
-				case <-sctx.Done():
-					return
-				}
+			switch m := msg.GetMsg().(type) {
+			case *openrmmv1.ConsoleMessage_Job:
+				c.handleJob(verifier, exec, m.Job)
+			case *openrmmv1.ConsoleMessage_JobUpdateAck:
+				exec.Acked(m.JobUpdateAck.GetJobId())
 			}
 		}
 	}()
+	// Attach after the receive loop is running: it resends the outbox
+	// through sendCh, which the loop below drains.
+	go exec.Attach(sess)
+	defer exec.Detach(sess)
 
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
@@ -264,6 +291,23 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 	}
 }
 
+// executorFor returns the executor of the current identity. Jobs keep
+// running across reconnections; a new identity (re-enrollment) gets a new
+// executor.
+func (c *Client) executorFor(id *identity.Identity) (*executor.Executor, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.exec != nil && c.execAgent == id.AgentID {
+		return c.exec, nil
+	}
+	e, err := executor.New(c.runCtx, c.cfg, id.TenantID, id.AgentID, c.log)
+	if err != nil {
+		return nil, err
+	}
+	c.exec, c.execAgent = e, id.AgentID
+	return e, nil
+}
+
 // renew obtains a certificate for a fresh key pair and stores it. The old
 // identity remains on disk until the new one is fully written.
 func (c *Client) renew(ctx context.Context, conn *grpc.ClientConn, id *identity.Identity) error {
@@ -293,20 +337,70 @@ func (c *Client) renew(ctx context.Context, conn *grpc.ClientConn, id *identity.
 	return nil
 }
 
-// handleJob verifies a job. Execution through modules is the next phase-0
-// step; until then verified jobs are rejected as unsupported.
-func (c *Client) handleJob(v *jobs.Verifier, env *openrmmv1.SignedEnvelope) *openrmmv1.AgentMessage {
-	upd := &openrmmv1.JobUpdate{State: openrmmv1.JobUpdate_STATE_REJECTED}
+// handleJob verifies a job and hands it to the executor. Envelopes that fail
+// verification are dropped: nothing in them can be trusted, not even the job
+// id to report on.
+func (c *Client) handleJob(v *jobs.Verifier, exec *executor.Executor, env *openrmmv1.SignedEnvelope) {
 	job, err := v.Verify(env, time.Now())
-	if err != nil {
-		c.log.Warn("job rejected", "err", err)
-		upd.Error = "verification failed"
-	} else {
-		upd.JobId = job.GetJobId()
-		upd.Error = "module runtime not available"
-		c.log.Info("job verified but not executed", "job", job.GetJobId(), "module", job.GetModule())
+	switch {
+	case errors.Is(err, jobs.ErrReplay):
+		exec.Replayed(job.GetJobId())
+	case err != nil:
+		c.log.Warn("job rejected: verification failed", "err", err)
+	default:
+		exec.Start(job)
 	}
-	return &openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_JobUpdate{JobUpdate: upd}}
+}
+
+// session is the executor's view of the live connection.
+type session struct {
+	ctx  context.Context
+	out  chan<- *openrmmv1.AgentMessage
+	conn *grpc.ClientConn
+}
+
+func (s *session) Send(u *openrmmv1.JobUpdate) {
+	select {
+	case s.out <- &openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_JobUpdate{JobUpdate: u}}:
+	case <-s.ctx.Done():
+	}
+}
+
+// FetchModule downloads a module over the authenticated connection.
+func (s *session) FetchModule(ctx context.Context, id, version string) (*modcache.Fetched, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	stream, err := openrmmv1.NewAgentServiceClient(s.conn).GetModule(ctx, &openrmmv1.GetModuleRequest{Module: id, Version: version})
+	if err != nil {
+		return nil, err
+	}
+	var f *modcache.Fetched
+	var archive []byte
+	for {
+		chunk, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if f == nil {
+			m := chunk.GetManifest()
+			if m == nil {
+				return nil, errors.New("first module chunk carries no manifest")
+			}
+			f = &modcache.Fetched{KeyID: m.GetKeyId(), Manifest: m.GetPayload(), Signature: m.GetSignature()}
+		}
+		if len(archive)+len(chunk.GetData()) > modules.MaxArchiveSize {
+			return nil, errors.New("module archive too large")
+		}
+		archive = append(archive, chunk.GetData()...)
+	}
+	if f == nil {
+		return nil, errors.New("empty module stream")
+	}
+	f.Archive = archive
+	return f, nil
 }
 
 func parseDER(ders [][]byte) ([]*x509.Certificate, error) {

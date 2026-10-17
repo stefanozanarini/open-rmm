@@ -18,6 +18,10 @@ type Memory struct {
 	tokens  map[string]EnrollmentToken // by hex(token hash)
 	agents  map[string]Agent           // by tenant/agent
 	audit   map[string][]audit.Event
+	modules map[string]Module // by id@version
+	jobs    map[string]Job    // by tenant/job
+
+	listeners []func(string)
 }
 
 func NewMemory() *Memory {
@@ -26,6 +30,8 @@ func NewMemory() *Memory {
 		tokens:  map[string]EnrollmentToken{},
 		agents:  map[string]Agent{},
 		audit:   map[string][]audit.Event{},
+		modules: map[string]Module{},
+		jobs:    map[string]Job{},
 	}
 }
 
@@ -167,6 +173,12 @@ func (m *Memory) ApproveAgent(_ context.Context, tenantID, agentID, by string, a
 	}
 	a.Status, a.ApprovedAt, a.ApprovedBy = AgentActive, &at, by
 	m.agents[k] = a
+	listeners := append([]func(string){}, m.listeners...)
+	go func() {
+		for _, fn := range listeners {
+			fn(WakeKey(tenantID, agentID))
+		}
+	}()
 	return nil
 }
 

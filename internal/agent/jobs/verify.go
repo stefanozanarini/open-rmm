@@ -15,6 +15,7 @@ import (
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
+	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/signing"
 )
 
@@ -62,7 +63,8 @@ func NewVerifier(keys *signing.Keyring, tenantID, agentID, dataDir string) (*Ver
 
 // Verify authenticates env and returns the job it carries. The nonce is
 // recorded and persisted before Verify returns, so a job is accepted at most
-// once even across restarts.
+// once even across restarts. On ErrReplay the (authentic) job is returned
+// too, so the caller can report on it.
 func (v *Verifier) Verify(env *openrmmv1.SignedEnvelope, now time.Time) (*openrmmv1.Job, error) {
 	if v.keys.Len() == 0 {
 		return nil, errors.New("no job signing keys configured")
@@ -77,7 +79,7 @@ func (v *Verifier) Verify(env *openrmmv1.SignedEnvelope, now time.Time) (*openrm
 	if job.GetTenantId() != v.tenantID || job.GetAgentId() != v.agentID {
 		return nil, errors.New("job addressed to another agent")
 	}
-	if job.GetJobId() == "" || job.GetModule() == "" || job.GetAction() == "" {
+	if !ids.IsUUID(job.GetJobId()) || job.GetModule() == "" || job.GetAction() == "" {
 		return nil, errors.New("job is missing required fields")
 	}
 	if len(job.GetModuleSha256()) != 32 {
@@ -97,6 +99,9 @@ func (v *Verifier) Verify(env *openrmmv1.SignedEnvelope, now time.Time) (*openrm
 		return nil, errors.New("job expired")
 	}
 	if err := v.remember(job.GetNonce(), exp.Add(clockSkew), now); err != nil {
+		if errors.Is(err, ErrReplay) {
+			return job, err
+		}
 		return nil, err
 	}
 	return job, nil

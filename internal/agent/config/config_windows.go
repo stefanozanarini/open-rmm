@@ -37,7 +37,9 @@ func DefaultDataDir() string { return filepath.Join(programData(), "open-rmm", "
 //	RootCA            REG_SZ        PEM of the root certificate
 //	EnrollToken       REG_SZ        enrollment token
 //	JobSigningKeys    REG_MULTI_SZ  ed25519:... (one per line)
+//	ModuleSigningKeys REG_MULTI_SZ  ed25519:... (one per line)
 //	AllowAdHocScripts REG_DWORD     0 or 1
+//	MaxConcurrentJobs REG_DWORD     1-32
 func overlayOS(c *Config) error {
 	for _, path := range []string{installKey, policyKey} {
 		if err := overlayKey(c, path); err != nil {
@@ -69,6 +71,12 @@ func overlayKey(c *Config, path string) error {
 	}
 	if v, _, err := k.GetStringsValue("JobSigningKeys"); err == nil && len(v) > 0 {
 		c.JobSigningKeys = v
+	}
+	if v, _, err := k.GetStringsValue("ModuleSigningKeys"); err == nil && len(v) > 0 {
+		c.ModuleSigningKeys = v
+	}
+	if v, _, err := k.GetIntegerValue("MaxConcurrentJobs"); err == nil && v <= 32 {
+		c.MaxConcurrentJobs = int(v)
 	}
 	if v, _, err := k.GetIntegerValue("AllowAdHocScripts"); err == nil {
 		b := v != 0

@@ -31,18 +31,23 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/open-rmm/internal/signing"
 	"github.com/stefanozanarini/open-rmm/internal/tlsconf"
 )
 
 type env struct {
 	// offset shifts the gateway clock, e.g. to issue certificates "in the past".
 	offset atomic.Int64
-	root   *pki.CA
-	ca     *pki.CA
-	store  *store.Memory
-	gw     *gateway.Server
-	addr   string
-	tenant string
+	// jobSigner and moduleSigner stand in for the signing service and the
+	// offline module release key.
+	jobSigner    *signing.Signer
+	moduleSigner *signing.Signer
+	root         *pki.CA
+	ca           *pki.CA
+	store        *store.Memory
+	gw           *gateway.Server
+	addr         string
+	tenant       string
 }
 
 func quietLog() *slog.Logger {
@@ -82,6 +87,10 @@ func start(t *testing.T) *env {
 	}
 	go gs.Serve(lis)
 	t.Cleanup(gs.Stop)
+	runCtx, stopRun := context.WithCancel(context.Background())
+	go gw.Run(runCtx)
+	t.Cleanup(stopRun)
+	e.jobSigner, e.moduleSigner = newSigner(t), newSigner(t)
 	_, port, _ := net.SplitHostPort(lis.Addr().String())
 	e.root, e.ca, e.store, e.gw, e.addr, e.tenant = root, ca, st, gw, "localhost:"+port, tenant
 	return e
@@ -112,7 +121,7 @@ func (e *env) agentConfig(t *testing.T, token string) *config.Config {
 	}
 	cfgFile := filepath.Join(dir, "agent.json")
 	data := `{"server":"` + e.addr + `","root_ca_file":"root-ca.crt","enroll_token":"` + token +
-		`","data_dir":"` + filepath.Join(dir, "data") + `"}`
+		`","data_dir":"` + filepath.Join(dir, "data") + `",` + e.keysJSON() + `}`
 	if err := os.WriteFile(cfgFile, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +306,7 @@ func TestAgentRejectsServerNotChainingToPinnedRoot(t *testing.T) {
 	rootFile := filepath.Join(t.TempDir(), "root.crt")
 	os.WriteFile(rootFile, pki.EncodeCertPEM(otherRoot.Cert), 0o600)
 	cfgFile := filepath.Join(t.TempDir(), "agent.json")
-	os.WriteFile(cfgFile, []byte(`{"server":"`+e.addr+`","root_ca_file":"`+rootFile+`","enroll_token":"`+cfg.EnrollToken+`","data_dir":"`+cfg.DataDir+`"}`), 0o600)
+	os.WriteFile(cfgFile, []byte(`{"server":"`+e.addr+`","root_ca_file":"`+rootFile+`","enroll_token":"`+cfg.EnrollToken+`","data_dir":"`+cfg.DataDir+`",`+e.keysJSON()+`}`), 0o600)
 	bad, err := config.Load(cfgFile)
 	if err != nil {
 		t.Fatal(err)

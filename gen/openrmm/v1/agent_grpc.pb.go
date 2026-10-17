@@ -131,6 +131,7 @@ var EnrollmentService_ServiceDesc = grpc.ServiceDesc{
 const (
 	AgentService_Connect_FullMethodName          = "/openrmm.v1.AgentService/Connect"
 	AgentService_RenewCertificate_FullMethodName = "/openrmm.v1.AgentService/RenewCertificate"
+	AgentService_GetModule_FullMethodName        = "/openrmm.v1.AgentService/GetModule"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -146,6 +147,10 @@ type AgentServiceClient interface {
 	// by the agent. The current certificate stays valid until the agent first
 	// connects with the new one, so a lost response cannot lock it out.
 	RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error)
+	// GetModule streams a signed module: the first chunk carries the signed
+	// manifest, the following ones the archive bytes. Only approved agents may
+	// download modules.
+	GetModule(ctx context.Context, in *GetModuleRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ModuleChunk], error)
 }
 
 type agentServiceClient struct {
@@ -179,6 +184,25 @@ func (c *agentServiceClient) RenewCertificate(ctx context.Context, in *RenewCert
 	return out, nil
 }
 
+func (c *agentServiceClient) GetModule(ctx context.Context, in *GetModuleRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ModuleChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[1], AgentService_GetModule_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GetModuleRequest, ModuleChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_GetModuleClient = grpc.ServerStreamingClient[ModuleChunk]
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -192,6 +216,10 @@ type AgentServiceServer interface {
 	// by the agent. The current certificate stays valid until the agent first
 	// connects with the new one, so a lost response cannot lock it out.
 	RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error)
+	// GetModule streams a signed module: the first chunk carries the signed
+	// manifest, the following ones the archive bytes. Only approved agents may
+	// download modules.
+	GetModule(*GetModuleRequest, grpc.ServerStreamingServer[ModuleChunk]) error
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -207,6 +235,9 @@ func (UnimplementedAgentServiceServer) Connect(grpc.BidiStreamingServer[AgentMes
 }
 func (UnimplementedAgentServiceServer) RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenewCertificate not implemented")
+}
+func (UnimplementedAgentServiceServer) GetModule(*GetModuleRequest, grpc.ServerStreamingServer[ModuleChunk]) error {
+	return status.Error(codes.Unimplemented, "method GetModule not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -254,6 +285,17 @@ func _AgentService_RenewCertificate_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_GetModule_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetModuleRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).GetModule(m, &grpc.GenericServerStream[GetModuleRequest, ModuleChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_GetModuleServer = grpc.ServerStreamingServer[ModuleChunk]
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -272,6 +314,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _AgentService_Connect_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetModule",
+			Handler:       _AgentService_GetModule_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "openrmm/v1/agent.proto",

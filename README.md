@@ -24,7 +24,8 @@ Fase 0 (fondamenta), in corso:
 - [x] Approvazione dei nuovi agenti, con approvazione automatica attivabile per singolo token
 - [x] Rinnovo automatico del certificato dell'agente, con rotazione della chiave
 - [x] Server in container Linux (Docker Compose), gateway non privilegiato e in sola lettura
-- [ ] Esecuzione dei moduli firmati e SDK PowerShell
+- [x] Esecuzione dei moduli firmati, con SDK PowerShell e sh; moduli `sysinfo` e `script`
+- [x] Coda dei job con consegna immediata e risultati che sopravvivono alle disconnessioni
 - [ ] Watchdog, task schedulato di controllo, aggiornamento automatico A/B
 - [ ] Servizio di firma dei job (`openrmm-signer`)
 - [ ] Console web con login Entra ID e MFA
@@ -33,6 +34,7 @@ Fase 0 (fondamenta), in corso:
 ## Installazione e sviluppo
 
 - Installazione del server: [docs/INSTALLAZIONE.md](docs/INSTALLAZIONE.md)
+- Scrivere e pubblicare moduli: [docs/MODULI.md](docs/MODULI.md)
 - Sviluppo: [docs/SVILUPPO.md](docs/SVILUPPO.md)
 
 ```bash

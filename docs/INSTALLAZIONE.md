@@ -70,6 +70,22 @@ docker compose run --rm admin audit verify   -tenant <TENANT>
 
 `reject` e `revoke` sono equivalenti: l'agente viene disconnesso e non può più collegarsi.
 
+## Chiavi di firma
+
+Servono due coppie di chiavi Ed25519, distinte:
+
+| Chiave | Uso | Dove sta la parte privata |
+|---|---|---|
+| Rilascio moduli | Firma i moduli | Offline, sulla macchina da cui si firmano i moduli |
+| Firma dei job | Firma i comandi inviati agli agenti | Per ora con l'operatore che usa `job run`; poi nel servizio `openrmm-signer` |
+
+```bash
+docker compose run --rm --no-deps --user "$(id -u):$(id -g)" -v "$PWD/keys:/keys" admin signing keygen -out /keys/module-release.key
+docker compose run --rm --no-deps --user "$(id -u):$(id -g)" -v "$PWD/keys:/keys" admin signing keygen -out /keys/job-signing.key
+```
+
+Il comando stampa la chiave pubblica (`ed25519:…`). Le chiavi pubbliche vanno configurate sugli agenti: `module_signing_keys` e `job_signing_keys` nel file di configurazione, oppure i valori di registro `ModuleSigningKeys` e `JobSigningKeys` (REG_MULTI_SZ) via MSI o GPO. Per pubblicare moduli, imposta anche `OPENRMM_MODULE_KEYS` con la chiave pubblica di rilascio moduli. Come si firmano e pubblicano i moduli è descritto in [MODULI.md](MODULI.md).
+
 ## Certificati degli agenti
 
 I certificati degli agenti durano 90 giorni. L'agente li rinnova da solo quando manca meno di un terzo della validità (circa 30 giorni), generando ogni volta una nuova chiave. Il certificato precedente resta valido finché l'agente non si collega con quello nuovo, così una risposta persa durante il rinnovo non lo lascia fuori.

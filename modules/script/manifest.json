@@ -1,0 +1,14 @@
+{
+  "id": "script",
+  "version": "1.0.0",
+  "description": "Runs an ad-hoc PowerShell script supplied in the job. Refused where the local policy AllowAdHocScripts is 0.",
+  "protocol_version": 1,
+  "capabilities": ["adhoc_script"],
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "run": { "description": "Run params.script and return its output", "timeout_seconds": 1800 }
+  }
+}

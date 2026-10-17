@@ -12,3 +12,5 @@ coverage.*
 /dev-pki/
 deploy/.env
 deploy/pki/
+deploy/keys/
+*.ormm

@@ -1,0 +1,15 @@
+{
+  "id": "sysinfo",
+  "version": "1.0.0",
+  "description": "Basic host information; also a reference module for the SDKs.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" },
+    "linux/amd64": { "type": "sh", "path": "main.sh" },
+    "linux/arm64": { "type": "sh", "path": "main.sh" }
+  },
+  "actions": {
+    "info": { "description": "Hostname, OS, uptime", "timeout_seconds": 120 }
+  }
+}

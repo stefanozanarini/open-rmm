@@ -1,6 +1,6 @@
 # open-rmm — Documento di architettura
 
-> Stato: bozza v0.5 — 2026-10-17
+> Stato: bozza v0.6 — 2026-10-17
 > Primo cliente: ~200 endpoint Windows (client e server), parco misto Dell / Lenovo / Acer, BitLocker diffuso, console ospitata presso il cliente e raggiungibile da internet, portatili anche fuori sede.
 
 ---
@@ -91,7 +91,7 @@
   /agent/...           core dell'agente: config, identity, client, jobs, secfile, hostinfo
   /console/...         gateway, store (PostgreSQL), audit
   /e2e                 test end-to-end gateway ↔ agente
-/modules               moduli funzionali (dalla fase 0, passo 2)
+/modules               moduli funzionali e SDK (powershell, sh)
 /packaging
   /wix                 MSI per Windows
   /linux               unit systemd, deb / rpm
@@ -127,33 +127,16 @@ Codice, identificatori e commenti sono in inglese (progetto open source); la doc
 
 ### 3.3 Manifest di modulo
 
-Ogni modulo è un pacchetto (zip) con un manifest firmato:
+Ogni modulo è un archivio zip con un manifest firmato (Ed25519, chiave di rilascio moduli offline). Il manifest indica l'entrypoint per ogni piattaforma, le azioni con i loro timeout, le capability, e lo SHA-256 dell'archivio e di ogni file. Il job contiene lo SHA-256 del manifest firmato, quindi l'agente esegue esattamente la versione approvata.
 
-```yaml
-id: winupdate
-version: 1.4.0
-platforms: [windows/amd64, windows/arm64]
-type: powershell            # powershell | binary
-entrypoint: WinUpdate.ps1
-min_core_version: 1.0.0     # versione minima del protocollo core↔modulo
-context: system             # system | user
-timeout_default: 3600s
-actions:
-  scan:     { params_schema: schemas/scan.json,    result_schema: schemas/scan-result.json }
-  install:  { params_schema: schemas/install.json, result_schema: schemas/install-result.json }
-  history:  { result_schema: schemas/history.json }
-files:
-  - path: WinUpdate.ps1
-    sha256: "…"
-signature: <ed25519 sulla forma canonica del manifest>
-```
+Formato completo, controlli e flusso di firma in [MODULI.md](MODULI.md).
 
 ### 3.4 Protocollo core ↔ modulo
 
-- Il core avvia il modulo come sottoprocesso e scambia messaggi **JSON su stdin/stdout** (JSON-RPC 2.0), uno per riga.
-- Messaggi del modulo: `progress`, `log`, `result`, `error`. Il core inoltra l'avanzamento alla console in streaming.
-- Il core **non interpreta** i risultati: li valida contro lo schema del manifest e li inoltra. La console sa come visualizzarli.
-- Per PowerShell, l'SDK (`sdk-ps`) fornisce le funzioni `Send-RmmProgress`, `Send-RmmResult` ecc., così che chi scrive un modulo non debba conoscere il protocollo.
+- Il core avvia il modulo come sottoprocesso in una cartella di lavoro temporanea, con ambiente minimo, e gli scrive su stdin una riga JSON con azione e parametri.
+- Il modulo risponde con righe JSON su stdout: `progress`, `log` e un solo evento finale `result` o `error`. Il core inoltra l'avanzamento alla console in tempo reale.
+- Limiti di dimensione e timeout; in caso di violazione il core termina l'intero albero di processi (process group su Linux, Job Object su Windows).
+- Gli SDK (`modules/sdk/powershell`, `modules/sdk/sh`) nascondono il protocollo a chi scrive i moduli.
 
 ### 3.5 Ciclo di vita di una nuova funzionalità
 
@@ -166,9 +149,11 @@ signature: <ed25519 sulla forma canonica del manifest>
 
 ### 3.6 Job
 
-Ogni attività è un **job**: `{job_id, tenant_id, agent_id, module, version, action, params, scadenza, nonce}`.
-- Job **immediati**: inviati dalla console sullo stream aperto dall'agente.
-- Job **schedulati**: fanno parte della *policy* dell'agente, salvata in locale ed eseguita anche offline; i risultati vengono accodati.
+Ogni attività è un **job**: `{job_id, tenant_id, agent_id, module, version, module_sha256, action, params, not_before, scadenza, nonce}`, firmato.
+- Job **immediati**: messi in coda nel database; il gateway li consegna sullo stream aperto dall'agente appena è connesso e approvato, risvegliato da una notifica PostgreSQL (`LISTEN/NOTIFY`), con un controllo di riserva a ogni heartbeat.
+- Gli aggiornamenti finali (riuscito, fallito, rifiutato) vengono scritti dall'agente in una outbox su disco prima dell'invio e rispediti dopo disconnessioni o riavvii, finché la console non li conferma.
+- Un job già ricevuto e consegnato di nuovo dopo una riconnessione non viene rieseguito: l'agente rimanda lo stato che conosce.
+- Job **schedulati** (da fare): fanno parte della *policy* dell'agente, salvata in locale ed eseguita anche offline; i risultati vengono accodati.
 
 ---
 
@@ -526,3 +511,4 @@ Qualunque modulo che richiede un riavvio (Windows Update, firmware, winget, scri
 | 2026-10-17 | Il server della console gira in **container Linux** (Docker Compose): solo il gateway è esposto, PostgreSQL su rete interna |
 | 2026-10-17 | **Nuovi agenti in attesa di approvazione** per default; l'**approvazione automatica** è un'opzione del singolo token di enrollment |
 | 2026-10-17 | **Rinnovo automatico** del certificato dell'agente a 2/3 della validità, con nuova chiave; il certificato precedente resta valido fino al primo uso del nuovo |
+| 2026-10-17 | Moduli eseguiti come sottoprocessi con protocollo JSON a righe; il job fissa l'hash del manifest; esecuzione in contesto utente rimandata a `openrmm-userhelper` |
