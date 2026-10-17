@@ -4,7 +4,13 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 IMAGE="${GO_IMAGE:-golang:1.26-bookworm}"
+# Forward the build environment (e.g. GOOS=windows from the Makefile).
+FWD=()
+for v in GOOS GOARCH CGO_ENABLED GOFLAGS; do
+  if [ -n "${!v:-}" ]; then FWD+=(-e "$v=${!v}"); fi
+done
 exec docker run --rm -i \
+  "${FWD[@]}" \
   -u "$(id -u):$(id -g)" \
   -v "$ROOT:/src" -w /src \
   -v openrmm-gocache:/cache \
