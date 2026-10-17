@@ -1,0 +1,79 @@
+# open-rmm console on a single Linux host.
+#
+#   cp .env.example .env    # then set the passwords
+#   docker compose up -d
+#
+# Only the agents endpoint is published. PostgreSQL lives on an internal
+# network with no route to the outside.
+
+name: open-rmm
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      OPENRMM_DB_PASSWORD: ${OPENRMM_DB_PASSWORD:?set OPENRMM_DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d openrmm"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt: ["no-new-privileges:true"]
+
+  gateway:
+    image: ${OPENRMM_IMAGE:-open-rmm:dev}
+    build:
+      context: ..
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      OPENRMM_DATABASE_URL: postgres://openrmm:${OPENRMM_DB_PASSWORD}@db:5432/openrmm?sslmode=disable
+      OPENRMM_LISTEN: ":8443"
+      OPENRMM_TLS_CERT: /run/openrmm/pki/gateway.crt
+      OPENRMM_TLS_KEY: /run/openrmm/pki/gateway.key
+      OPENRMM_AGENTS_CA_CERT: /run/openrmm/pki/agents-ca.crt
+      OPENRMM_AGENTS_CA_KEY: /run/openrmm/pki/agents-ca.key
+    volumes:
+      # Only the four files the gateway needs; the root CA key never goes here.
+      - ./pki/gateway:/run/openrmm/pki:ro
+    ports:
+      - "${OPENRMM_PUBLIC_PORT:-443}:8443"
+    networks: [internal, public]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 512m
+
+  # One-off administration: docker compose run --rm admin <area> <command> ...
+  admin:
+    image: ${OPENRMM_IMAGE:-open-rmm:dev}
+    profiles: [tools]
+    entrypoint: ["/usr/local/bin/openrmm-admin"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      OPENRMM_DATABASE_URL: postgres://openrmm:${OPENRMM_DB_PASSWORD}@db:5432/openrmm?sslmode=disable
+    volumes:
+      - ./pki:/pki
+    networks: [internal]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  internal:
+    internal: true
+  public: {}
+
+volumes:
+  db-data: {}

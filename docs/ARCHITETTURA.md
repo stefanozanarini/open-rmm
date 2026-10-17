@@ -1,6 +1,6 @@
 # open-rmm — Documento di architettura
 
-> Stato: bozza v0.4 — 2026-10-16
+> Stato: bozza v0.5 — 2026-10-17
 > Primo cliente: ~200 endpoint Windows (client e server), parco misto Dell / Lenovo / Acer, BitLocker diffuso, console ospitata presso il cliente e raggiungibile da internet, portatili anche fuori sede.
 
 ---
@@ -196,8 +196,10 @@ Ogni attività è un **job**: `{job_id, tenant_id, agent_id, module, version, ac
 2. L'agente genera **in locale** la coppia di chiavi (protetta con TPM se disponibile, altrimenti DPAPI-machine).
 3. Invia una CSR con il token. La console verifica il token (monouso o con limite d'uso e scadenza, legato a un tenant).
 4. La console rilascia un certificato client con `agent_id` e `tenant_id`.
-5. Rotazione automatica del certificato prima della scadenza. Revoca dalla console.
-6. L'agente fa **pinning della CA della console** ricevuta all'installazione.
+5. Il nuovo agente è **in attesa di approvazione** (`pending`), salvo che il token sia stato creato con approvazione automatica. Un agente in attesa può connettersi ed è visibile in console, ma non riceve job.
+6. Rinnovo automatico del certificato (validità 90 giorni) quando ne resta meno di un terzo: l'agente genera una nuova chiave e chiede un nuovo certificato sulla connessione autenticata. Il certificato precedente resta valido finché l'agente non si collega con quello nuovo; i rinnovi di un certificato emesso da meno di un'ora sono rifiutati.
+7. Revoca dalla console: l'agente viene disconnesso anche se è collegato in quel momento.
+8. L'agente fa **pinning della CA della console** ricevuta all'installazione.
 
 ---
 
@@ -521,3 +523,6 @@ Qualunque modulo che richiede un riavvio (Windows Update, firmware, winget, scri
 | 2026-10-16 | Riavvii configurabili tramite policy per gruppo |
 | 2026-10-16 | Codice e commenti in inglese, documentazione in italiano |
 | 2026-10-16 | La console rifiuta di avviarsi con un ruolo PostgreSQL superuser o BYPASSRLS (la RLS verrebbe ignorata) |
+| 2026-10-17 | Il server della console gira in **container Linux** (Docker Compose): solo il gateway è esposto, PostgreSQL su rete interna |
+| 2026-10-17 | **Nuovi agenti in attesa di approvazione** per default; l'**approvazione automatica** è un'opzione del singolo token di enrollment |
+| 2026-10-17 | **Rinnovo automatico** del certificato dell'agente a 2/3 della validità, con nuova chiave; il certificato precedente resta valido fino al primo uso del nuovo |

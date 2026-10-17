@@ -23,13 +23,17 @@ import (
 )
 
 const (
-	keyFile   = "agent.key"
-	certFile  = "agent.crt"
 	stateFile = "identity.json"
+	filesGlob = "agent-*"
 )
 
-// ErrNoIdentity means the agent has not enrolled yet.
-var ErrNoIdentity = errors.New("agent not enrolled")
+var (
+	// ErrNoIdentity means the agent has not enrolled yet.
+	ErrNoIdentity = errors.New("agent not enrolled")
+	// ErrExpired means the certificate expired before it could be renewed;
+	// the agent must enroll again.
+	ErrExpired = errors.New("agent certificate expired")
+)
 
 // Identity is the enrolled identity of this agent.
 type Identity struct {
@@ -40,9 +44,14 @@ type Identity struct {
 	Chain    []*x509.Certificate // intermediates
 }
 
+// state is the identity index. Key and certificate live in versioned files
+// it points to, so replacing them (renewal) is a single atomic rename of the
+// index: a crash leaves either the old or the new identity, never a mix.
 type state struct {
 	TenantID string `json:"tenant_id"`
 	AgentID  string `json:"agent_id"`
+	KeyFile  string `json:"key_file"`
+	CertFile string `json:"cert_file"`
 }
 
 // Load reads the identity from dir and checks that it is coherent and chains
@@ -59,7 +68,10 @@ func Load(dir string, root *x509.Certificate) (*Identity, error) {
 	if err := json.Unmarshal(raw, &st); err != nil {
 		return nil, fmt.Errorf("identity state: %w", err)
 	}
-	keyPEM, err := os.ReadFile(filepath.Join(dir, keyFile))
+	if !validFileName(st.KeyFile) || !validFileName(st.CertFile) {
+		return nil, errors.New("identity state: invalid file names")
+	}
+	keyPEM, err := os.ReadFile(filepath.Join(dir, st.KeyFile))
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +79,7 @@ func Load(dir string, root *x509.Certificate) (*Identity, error) {
 	if err != nil {
 		return nil, err
 	}
-	certPEM, err := os.ReadFile(filepath.Join(dir, certFile))
+	certPEM, err := os.ReadFile(filepath.Join(dir, st.CertFile))
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +94,24 @@ func Load(dir string, root *x509.Certificate) (*Identity, error) {
 	return id, nil
 }
 
+// validFileName accepts only names produced by Save, so a tampered index
+// cannot point the agent at files outside its data directory.
+func validFileName(name string) bool {
+	ok, _ := filepath.Match(filesGlob, name)
+	return ok && filepath.Base(name) == name
+}
+
+// NeedsRenewal reports whether less than a third of the certificate validity
+// is left.
+func (id *Identity) NeedsRenewal(now time.Time) bool {
+	lifetime := id.Cert.NotAfter.Sub(id.Cert.NotBefore)
+	return id.Cert.NotAfter.Sub(now) < lifetime/3
+}
+
 func (id *Identity) check(root *x509.Certificate, now time.Time) error {
+	if now.After(id.Cert.NotAfter) {
+		return fmt.Errorf("%w on %s", ErrExpired, id.Cert.NotAfter.Format(time.RFC3339))
+	}
 	type equaler interface{ Equal(crypto.PublicKey) bool }
 	if e, ok := id.Cert.PublicKey.(equaler); !ok || !e.Equal(id.Key.Public()) {
 		return errors.New("certificate does not match private key")
@@ -132,17 +161,35 @@ func Save(dir string, root *x509.Certificate, id *Identity) error {
 	if err != nil {
 		return err
 	}
-	st, err := json.Marshal(state{TenantID: id.TenantID, AgentID: id.AgentID})
+	version := time.Now().UTC().Format("20060102T150405.000000000Z")
+	st := state{TenantID: id.TenantID, AgentID: id.AgentID,
+		KeyFile: "agent-" + version + ".key", CertFile: "agent-" + version + ".crt"}
+	raw, err := json.Marshal(st)
 	if err != nil {
 		return err
 	}
-	// The state file is written last: its presence marks a complete identity.
-	if err := secfile.WriteFile(filepath.Join(dir, keyFile), keyPEM); err != nil {
+	if err := secfile.WriteFile(filepath.Join(dir, st.KeyFile), keyPEM); err != nil {
 		return err
 	}
 	certs := append([]*x509.Certificate{id.Cert}, id.Chain...)
-	if err := secfile.WriteFile(filepath.Join(dir, certFile), pki.EncodeCertPEM(certs...)); err != nil {
+	if err := secfile.WriteFile(filepath.Join(dir, st.CertFile), pki.EncodeCertPEM(certs...)); err != nil {
 		return err
 	}
-	return secfile.WriteFile(filepath.Join(dir, stateFile), st)
+	// The index is replaced last: until this rename the old identity is
+	// still the one in use.
+	if err := secfile.WriteFile(filepath.Join(dir, stateFile), raw); err != nil {
+		return err
+	}
+	removeStale(dir, st)
+	return nil
+}
+
+// removeStale deletes key and certificate files no longer referenced.
+func removeStale(dir string, keep state) {
+	old, _ := filepath.Glob(filepath.Join(dir, filesGlob))
+	for _, p := range old {
+		if b := filepath.Base(p); b != keep.KeyFile && b != keep.CertFile {
+			_ = os.Remove(p)
+		}
+	}
 }

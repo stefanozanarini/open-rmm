@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -12,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,6 +35,8 @@ import (
 )
 
 type env struct {
+	// offset shifts the gateway clock, e.g. to issue certificates "in the past".
+	offset atomic.Int64
 	root   *pki.CA
 	ca     *pki.CA
 	store  *store.Memory
@@ -65,7 +69,9 @@ func start(t *testing.T) *env {
 	if err := st.CreateTenant(context.Background(), store.Tenant{ID: tenant, Name: "test"}); err != nil {
 		t.Fatal(err)
 	}
-	gw, err := gateway.New(gateway.Config{Store: st, AgentsCA: ca, Logger: quietLog(), HeartbeatInterval: 10 * time.Second})
+	e := &env{}
+	gw, err := gateway.New(gateway.Config{Store: st, AgentsCA: ca, Logger: quietLog(), HeartbeatInterval: 10 * time.Second,
+		Now: func() time.Time { return time.Now().Add(time.Duration(e.offset.Load())) }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,14 +83,20 @@ func start(t *testing.T) *env {
 	go gs.Serve(lis)
 	t.Cleanup(gs.Stop)
 	_, port, _ := net.SplitHostPort(lis.Addr().String())
-	return &env{root: root, ca: ca, store: st, gw: gw, addr: "localhost:" + port, tenant: tenant}
+	e.root, e.ca, e.store, e.gw, e.addr, e.tenant = root, ca, st, gw, "localhost:"+port, tenant
+	return e
 }
 
 func (e *env) token(t *testing.T, maxUses int) string {
+	return e.tokenWith(t, maxUses, false)
+}
+
+func (e *env) tokenWith(t *testing.T, maxUses int, autoApprove bool) string {
 	t.Helper()
 	secret := ids.NewSecret(32)
 	if err := e.store.CreateEnrollmentToken(context.Background(), store.EnrollmentToken{
 		ID: ids.NewUUID(), TenantID: e.tenant, MaxUses: maxUses, ExpiresAt: time.Now().Add(time.Hour),
+		AutoApprove: autoApprove,
 	}, store.HashToken(secret)); err != nil {
 		t.Fatal(err)
 	}
@@ -362,5 +374,156 @@ func waitFor(t *testing.T, cond func() bool) {
 			t.Fatal("condition not met")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func (e *env) onlyAgent(t *testing.T) store.Agent {
+	t.Helper()
+	agents, _ := e.store.ListAgents(context.Background(), e.tenant)
+	if len(agents) != 1 {
+		t.Fatalf("got %d agents", len(agents))
+	}
+	return agents[0]
+}
+
+// hello opens a session with id and returns the console's HelloAck.
+func hello(t *testing.T, e *env, id *identity.Identity) (*openrmmv1.HelloAck, error) {
+	t.Helper()
+	conn, err := grpc.NewClient(e.addr, grpc.WithTransportCredentials(credentials.NewTLS(
+		tlsconf.Client("localhost", e.root.Cert, id.Cert, id.Chain, id.Key))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	stream, err := openrmmv1.NewAgentServiceClient(conn).Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stream.Send(&openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_Hello{Hello: &openrmmv1.Hello{Host: &openrmmv1.HostInfo{Hostname: "pc"}}}})
+	msg, err := stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	return msg.GetHelloAck(), nil
+}
+
+func TestNewAgentWaitsForApproval(t *testing.T) {
+	e := start(t)
+	cfg := e.agentConfig(t, e.token(t, 1))
+	id := enrollOnly(t, e, cfg)
+	if a := e.onlyAgent(t); a.Status != store.AgentPending || a.ApprovedAt != nil {
+		t.Fatalf("new agent status = %s", a.Status)
+	}
+	// A pending agent may connect, and is told it is pending.
+	ack, err := hello(t, e, id)
+	if err != nil || !ack.GetApprovalPending() {
+		t.Fatalf("pending hello: %v, %v", ack, err)
+	}
+	if err := e.store.ApproveAgent(context.Background(), e.tenant, id.AgentID, "tester", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	ack, err = hello(t, e, id)
+	if err != nil || ack.GetApprovalPending() {
+		t.Fatalf("approved hello: %v, %v", ack, err)
+	}
+	if err := e.store.ApproveAgent(context.Background(), e.tenant, id.AgentID, "tester", time.Now()); err != store.ErrNotPending {
+		t.Fatalf("double approval: %v", err)
+	}
+}
+
+func TestAutoApproveToken(t *testing.T) {
+	e := start(t)
+	cfg := e.agentConfig(t, e.tokenWith(t, 1, true))
+	id := enrollOnly(t, e, cfg)
+	a := e.onlyAgent(t)
+	if a.Status != store.AgentActive || a.ApprovedAt == nil || a.ApprovedBy == "" {
+		t.Fatalf("auto-approved agent = %+v", a)
+	}
+	if ack, err := hello(t, e, id); err != nil || ack.GetApprovalPending() {
+		t.Fatalf("hello: %v, %v", ack, err)
+	}
+}
+
+func TestAgentRenewsCertificateAutomatically(t *testing.T) {
+	e := start(t)
+	// Enroll with the gateway clock 70 days back: the certificate has 20 of
+	// its 90 days left, below the renewal threshold.
+	e.offset.Store(int64(-70 * 24 * time.Hour))
+	cfg := e.agentConfig(t, e.tokenWith(t, 1, true))
+	old := enrollOnly(t, e, cfg)
+	if err := identity.Save(cfg.DataDir, cfg.RootCA(), old); err != nil {
+		t.Fatal(err)
+	}
+	e.offset.Store(0)
+
+	runAgent(t, cfg)
+	waitFor(t, func() bool {
+		cur, err := identity.Load(cfg.DataDir, cfg.RootCA())
+		return err == nil && !cur.Cert.Equal(old.Cert)
+	})
+	renewed, _ := identity.Load(cfg.DataDir, cfg.RootCA())
+	if renewed.NeedsRenewal(time.Now()) || renewed.AgentID != old.AgentID {
+		t.Fatalf("renewed identity = %s until %s", renewed.AgentID, renewed.Cert.NotAfter)
+	}
+	if renewed.Key.Public().(interface{ Equal(crypto.PublicKey) bool }).Equal(old.Key.Public()) {
+		t.Fatal("renewal reused the old key")
+	}
+	// Once the agent has connected with the new certificate, the old one
+	// is no longer accepted.
+	waitFor(t, func() bool { return e.onlyAgent(t).PrevCertFingerprint == "" })
+	if _, err := hello(t, e, old); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("old certificate after renewal: %v", err)
+	}
+	events, _ := e.store.ListAudit(context.Background(), e.tenant)
+	if events[len(events)-1].Action != "agent.certificate_renewed" {
+		t.Fatalf("last audit event = %s", events[len(events)-1].Action)
+	}
+}
+
+func TestLostRenewalResponseDoesNotLockAgentOut(t *testing.T) {
+	e := start(t)
+	restore := gateway.SetMinRenewIntervalForTest(0)
+	defer restore()
+	cfg := e.agentConfig(t, e.tokenWith(t, 1, true))
+	id := enrollOnly(t, e, cfg)
+	conn, err := grpc.NewClient(e.addr, grpc.WithTransportCredentials(credentials.NewTLS(
+		tlsconf.Client("localhost", e.root.Cert, id.Cert, id.Chain, id.Key))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	key, _ := identity.NewKey()
+	csr, _ := identity.CSR(key, "pc")
+	// The console rotates the certificate, but the agent never sees the
+	// response: it must still be able to connect with its old certificate.
+	if _, err := openrmmv1.NewAgentServiceClient(conn).RenewCertificate(context.Background(),
+		&openrmmv1.RenewCertificateRequest{CsrDer: csr}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hello(t, e, id); err != nil {
+		t.Fatalf("old certificate refused after lost renewal: %v", err)
+	}
+	// And it can renew again with it.
+	if _, err := openrmmv1.NewAgentServiceClient(conn).RenewCertificate(context.Background(),
+		&openrmmv1.RenewCertificateRequest{CsrDer: csr}); err != nil {
+		t.Fatalf("second renewal: %v", err)
+	}
+}
+
+func TestRenewalRateLimited(t *testing.T) {
+	e := start(t)
+	cfg := e.agentConfig(t, e.tokenWith(t, 1, true))
+	id := enrollOnly(t, e, cfg)
+	conn, _ := grpc.NewClient(e.addr, grpc.WithTransportCredentials(credentials.NewTLS(
+		tlsconf.Client("localhost", e.root.Cert, id.Cert, id.Chain, id.Key))))
+	defer conn.Close()
+	key, _ := identity.NewKey()
+	csr, _ := identity.CSR(key, "pc")
+	_, err := openrmmv1.NewAgentServiceClient(conn).RenewCertificate(context.Background(),
+		&openrmmv1.RenewCertificateRequest{CsrDer: csr})
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("renewal of a fresh certificate: %v", err)
 	}
 }

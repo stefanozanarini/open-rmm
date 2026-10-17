@@ -129,7 +129,8 @@ var EnrollmentService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	AgentService_Connect_FullMethodName = "/openrmm.v1.AgentService/Connect"
+	AgentService_Connect_FullMethodName          = "/openrmm.v1.AgentService/Connect"
+	AgentService_RenewCertificate_FullMethodName = "/openrmm.v1.AgentService/RenewCertificate"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -141,6 +142,10 @@ type AgentServiceClient interface {
 	// Connect is the long-lived stream opened by the agent. The console never
 	// opens connections towards endpoints: every command travels on this stream.
 	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentMessage, ConsoleMessage], error)
+	// RenewCertificate issues a new certificate for a new key pair generated
+	// by the agent. The current certificate stays valid until the agent first
+	// connects with the new one, so a lost response cannot lock it out.
+	RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error)
 }
 
 type agentServiceClient struct {
@@ -164,6 +169,16 @@ func (c *agentServiceClient) Connect(ctx context.Context, opts ...grpc.CallOptio
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ConnectClient = grpc.BidiStreamingClient[AgentMessage, ConsoleMessage]
 
+func (c *agentServiceClient) RenewCertificate(ctx context.Context, in *RenewCertificateRequest, opts ...grpc.CallOption) (*RenewCertificateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewCertificateResponse)
+	err := c.cc.Invoke(ctx, AgentService_RenewCertificate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -173,6 +188,10 @@ type AgentServiceServer interface {
 	// Connect is the long-lived stream opened by the agent. The console never
 	// opens connections towards endpoints: every command travels on this stream.
 	Connect(grpc.BidiStreamingServer[AgentMessage, ConsoleMessage]) error
+	// RenewCertificate issues a new certificate for a new key pair generated
+	// by the agent. The current certificate stays valid until the agent first
+	// connects with the new one, so a lost response cannot lock it out.
+	RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -185,6 +204,9 @@ type UnimplementedAgentServiceServer struct{}
 
 func (UnimplementedAgentServiceServer) Connect(grpc.BidiStreamingServer[AgentMessage, ConsoleMessage]) error {
 	return status.Error(codes.Unimplemented, "method Connect not implemented")
+}
+func (UnimplementedAgentServiceServer) RenewCertificate(context.Context, *RenewCertificateRequest) (*RenewCertificateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewCertificate not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -214,13 +236,36 @@ func _AgentService_Connect_Handler(srv interface{}, stream grpc.ServerStream) er
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ConnectServer = grpc.BidiStreamingServer[AgentMessage, ConsoleMessage]
 
+func _AgentService_RenewCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewCertificateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).RenewCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_RenewCertificate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).RenewCertificate(ctx, req.(*RenewCertificateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AgentService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "openrmm.v1.AgentService",
 	HandlerType: (*AgentServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "RenewCertificate",
+			Handler:    _AgentService_RenewCertificate_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Connect",

@@ -10,3 +10,5 @@ coverage.*
 !**/testdata/**
 .env
 /dev-pki/
+deploy/.env
+deploy/pki/

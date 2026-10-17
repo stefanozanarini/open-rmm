@@ -159,11 +159,14 @@ func (s *Server) Enroll(ctx context.Context, req *openrmmv1.EnrollRequest) (*ope
 	a := store.Agent{
 		TenantID:        id.TenantID,
 		ID:              id.AgentID,
-		Status:          store.AgentActive,
+		Status:          store.AgentPending,
 		Host:            host,
 		CertFingerprint: pki.Fingerprint(cert),
 		CertNotAfter:    cert.NotAfter,
 		EnrolledTokenID: tok.ID,
+	}
+	if tok.AutoApprove {
+		a.Status, a.ApprovedAt, a.ApprovedBy = store.AgentActive, &now, "token:"+tok.ID
 	}
 	if err := s.store.CreateAgent(ctx, a); err != nil {
 		s.log.Error("create agent", "err", err)
@@ -171,9 +174,9 @@ func (s *Server) Enroll(ctx context.Context, req *openrmmv1.EnrollRequest) (*ope
 	}
 	s.audit(ctx, id.TenantID, "agent:"+id.AgentID, "agent.enrolled", id.AgentID, map[string]any{
 		"hostname": host.Hostname, "machine_id": host.MachineID, "token_id": tok.ID,
-		"peer": ip.String(), "cert_fingerprint": a.CertFingerprint,
+		"peer": ip.String(), "cert_fingerprint": a.CertFingerprint, "status": string(a.Status),
 	})
-	s.log.Info("agent enrolled", "tenant", id.TenantID, "agent", id.AgentID, "hostname", host.Hostname)
+	s.log.Info("agent enrolled", "tenant", id.TenantID, "agent", id.AgentID, "hostname", host.Hostname, "status", a.Status)
 	return &openrmmv1.EnrollResponse{
 		TenantId:       id.TenantID,
 		AgentId:        id.AgentID,
@@ -184,10 +187,11 @@ func (s *Server) Enroll(ctx context.Context, req *openrmmv1.EnrollRequest) (*ope
 
 // Connect is the agent's long-lived stream.
 func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
-	a, ok := AgentFromContext(stream.Context())
+	c, ok := callerFromContext(stream.Context())
 	if !ok {
 		return status.Error(codes.Unauthenticated, "unauthenticated")
 	}
+	a := c.agent
 	ctx, cancel := context.WithCancel(stream.Context())
 	defer cancel()
 	sess := s.replaceSession(a, cancel)
@@ -215,11 +219,12 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 		return status.Error(codes.Unavailable, "temporarily unavailable")
 	}
 	if err := stream.Send(&openrmmv1.ConsoleMessage{Msg: &openrmmv1.ConsoleMessage_HelloAck{
-		HelloAck: &openrmmv1.HelloAck{HeartbeatIntervalSeconds: int32(s.heartbeat / time.Second)}, // #nosec G115 -- bounded to [1, 3600] in New,
+		HelloAck: &openrmmv1.HelloAck{HeartbeatIntervalSeconds: int32(s.heartbeat / time.Second), ApprovalPending: a.Status == store.AgentPending}, // #nosec G115 -- bounded to [1, 3600] in New
 	}}); err != nil {
 		return err
 	}
-	s.log.Info("agent connected", "tenant", a.TenantID, "agent", a.ID, "hostname", host.Hostname, "peer", ip.String())
+	s.log.Info("agent connected", "tenant", a.TenantID, "agent", a.ID, "hostname", host.Hostname,
+		"peer", ip.String(), "status", a.Status)
 
 	lastWrite := s.now()
 	for {
@@ -236,9 +241,11 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 		case *openrmmv1.AgentMessage_Heartbeat:
 			if now := s.now(); now.Sub(lastWrite) >= seenWriteInterval {
 				// Revocation must also end sessions that are already open.
-				if err := s.stillAuthorized(ctx, a); err != nil {
+				cur, err := s.stillAuthorized(ctx, c)
+				if err != nil {
 					return err
 				}
+				a = cur
 				if err := s.store.UpdateAgentSeen(ctx, a.TenantID, a.ID, nil, now, ipp); err != nil {
 					s.log.Error("update agent", "err", err)
 				}
@@ -252,17 +259,63 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 	}
 }
 
-func (s *Server) stillAuthorized(ctx context.Context, a store.Agent) error {
-	cur, err := s.store.GetAgent(ctx, a.TenantID, a.ID)
+// stillAuthorized re-reads the agent during a session. It ends the session if
+// the agent was revoked or the session's certificate was superseded, and
+// returns the current record (e.g. pending → active after approval).
+func (s *Server) stillAuthorized(ctx context.Context, c caller) (store.Agent, error) {
+	cur, err := s.store.GetAgent(ctx, c.agent.TenantID, c.agent.ID)
 	if err != nil {
 		s.log.Error("agent lookup failed", "err", err)
-		return nil // keep the session; the next check will retry
+		return c.agent, nil // keep the session; the next check will retry
 	}
-	if cur.Status != store.AgentActive || cur.CertFingerprint != a.CertFingerprint {
-		s.log.Warn("closing session of revoked agent", "agent", a.ID)
-		return status.Error(codes.PermissionDenied, "agent revoked")
+	if cur.Status == store.AgentRevoked {
+		s.log.Warn("closing session of revoked agent", "agent", cur.ID)
+		return cur, status.Error(codes.PermissionDenied, "agent revoked")
 	}
-	return nil
+	if c.fingerprint != cur.CertFingerprint && c.fingerprint != cur.PrevCertFingerprint {
+		return cur, status.Error(codes.PermissionDenied, "certificate superseded")
+	}
+	return cur, nil
+}
+
+// minRenewInterval rejects renewals of a certificate younger than this, so a
+// compromised or buggy agent cannot mint certificates in a loop.
+var minRenewInterval = time.Hour
+
+// RenewCertificate issues a new certificate for the calling agent.
+func (s *Server) RenewCertificate(ctx context.Context, req *openrmmv1.RenewCertificateRequest) (*openrmmv1.RenewCertificateResponse, error) {
+	c, ok := callerFromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "unauthenticated")
+	}
+	now := s.now()
+	if now.Sub(c.leaf.NotBefore) < minRenewInterval {
+		return nil, status.Error(codes.FailedPrecondition, "certificate too recent to renew")
+	}
+	id := pki.Identity{TenantID: c.agent.TenantID, AgentID: c.agent.ID}
+	cert, err := s.ca.IssueAgent(req.GetCsrDer(), id, now)
+	if errors.Is(err, pki.ErrBadCSR) {
+		return nil, status.Error(codes.InvalidArgument, "invalid CSR")
+	}
+	if err != nil {
+		s.log.Error("issue agent certificate", "err", err)
+		return nil, status.Error(codes.Internal, "certificate issuance failed")
+	}
+	newFP := pki.Fingerprint(cert)
+	err = s.store.RotateAgentCert(ctx, id.TenantID, id.AgentID, c.fingerprint, newFP, cert.NotAfter)
+	if errors.Is(err, store.ErrCertMismatch) {
+		return nil, status.Error(codes.PermissionDenied, "certificate superseded")
+	}
+	if err != nil {
+		s.log.Error("rotate agent certificate", "err", err)
+		return nil, status.Error(codes.Unavailable, "temporarily unavailable")
+	}
+	s.audit(ctx, id.TenantID, "agent:"+id.AgentID, "agent.certificate_renewed", id.AgentID, map[string]any{
+		"old_fingerprint": c.fingerprint, "new_fingerprint": newFP,
+		"not_after": cert.NotAfter.UTC().Format(time.RFC3339),
+	})
+	s.log.Info("agent certificate renewed", "agent", id.AgentID, "not_after", cert.NotAfter)
+	return &openrmmv1.RenewCertificateResponse{CertificateDer: cert.Raw, ChainDer: [][]byte{s.ca.Cert.Raw}}, nil
 }
 
 // replaceSession makes sure an agent has at most one live stream: a new

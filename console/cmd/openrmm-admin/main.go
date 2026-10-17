@@ -3,9 +3,11 @@
 //	openrmm-admin pki init -dir DIR -gateway-dns agent.example.com
 //	openrmm-admin db migrate
 //	openrmm-admin tenant create -name "Cliente"
-//	openrmm-admin token create -tenant UUID [-ttl 24h] [-max-uses 1] [-description ...]
+//	openrmm-admin token create -tenant UUID [-ttl 24h] [-max-uses 1] [-auto-approve] [-description ...]
 //	openrmm-admin token revoke -id UUID
 //	openrmm-admin agents list -tenant UUID
+//	openrmm-admin agents approve -tenant UUID -agent UUID
+//	openrmm-admin agents reject -tenant UUID -agent UUID     (alias of revoke)
 //	openrmm-admin agents revoke -tenant UUID -agent UUID
 //	openrmm-admin audit verify -tenant UUID
 //	openrmm-admin signing keygen -out FILE
@@ -72,7 +74,9 @@ func run(args []string) error {
 		return tokenRevoke(ctx, db, rest)
 	case "agents list":
 		return agentsList(ctx, db, rest)
-	case "agents revoke":
+	case "agents approve":
+		return agentsApprove(ctx, db, rest)
+	case "agents revoke", "agents reject":
 		return agentsRevoke(ctx, db, rest)
 	case "audit verify":
 		return auditVerify(ctx, db, rest)
@@ -203,6 +207,7 @@ func tokenCreate(ctx context.Context, db store.Store, args []string) error {
 	ttl := fs.Duration("ttl", 24*time.Hour, "validity")
 	maxUses := fs.Int("max-uses", 1, "number of enrollments allowed")
 	desc := fs.String("description", "", "free text, e.g. 'GPO sede Bologna'")
+	autoApprove := fs.Bool("auto-approve", false, "agents enrolled with this token are active at once, without operator approval")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -217,16 +222,21 @@ func tokenCreate(ctx context.Context, db store.Store, args []string) error {
 	}
 	secret := ids.NewSecret(32)
 	t := store.EnrollmentToken{ID: ids.NewUUID(), TenantID: *tenant, Description: *desc,
-		MaxUses: *maxUses, ExpiresAt: time.Now().Add(*ttl)}
+		MaxUses: *maxUses, ExpiresAt: time.Now().Add(*ttl), AutoApprove: *autoApprove}
 	if err := db.CreateEnrollmentToken(ctx, t, store.HashToken(secret)); err != nil {
 		return err
 	}
 	if _, err := db.AppendAudit(ctx, audit.Event{TenantID: t.TenantID, Actor: "admin-cli", Action: "enrollment_token.created",
-		Target: t.ID, Details: map[string]any{"max_uses": t.MaxUses, "expires_at": t.ExpiresAt.UTC().Format(time.RFC3339), "description": t.Description}}); err != nil {
+		Target: t.ID, Details: map[string]any{"max_uses": t.MaxUses, "expires_at": t.ExpiresAt.UTC().Format(time.RFC3339),
+			"description": t.Description, "auto_approve": t.AutoApprove}}); err != nil {
 		return err
 	}
-	fmt.Printf("token id: %s\nexpires:  %s\nmax uses: %d\n\n%s\n\n(the token is shown only once)\n",
-		t.ID, t.ExpiresAt.Format(time.RFC3339), t.MaxUses, secret)
+	approval := "required (agents wait in 'pending' until approved)"
+	if t.AutoApprove {
+		approval = "automatic"
+	}
+	fmt.Printf("token id: %s\nexpires:  %s\nmax uses: %d\napproval: %s\n\n%s\n\n(the token is shown only once)\n",
+		t.ID, t.ExpiresAt.Format(time.RFC3339), t.MaxUses, approval, secret)
 	return nil
 }
 
@@ -259,6 +269,28 @@ func agentsList(ctx context.Context, db store.Store, args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", a.ID, a.Host.Hostname, a.Host.OSVersion, a.Host.AgentVersion, a.Status, seen)
 	}
 	return w.Flush()
+}
+
+func agentsApprove(ctx context.Context, db store.Store, args []string) error {
+	fs := flag.NewFlagSet("agents approve", flag.ContinueOnError)
+	tenant := fs.String("tenant", "", "tenant ID")
+	agent := fs.String("agent", "", "agent ID")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	a, err := db.GetAgent(ctx, *tenant, *agent)
+	if err != nil {
+		return err
+	}
+	if err := db.ApproveAgent(ctx, *tenant, *agent, "admin-cli", time.Now()); err != nil {
+		return err
+	}
+	_, err = db.AppendAudit(ctx, audit.Event{TenantID: *tenant, Actor: "admin-cli", Action: "agent.approved", Target: *agent,
+		Details: map[string]any{"hostname": a.Host.Hostname, "machine_id": a.Host.MachineID}})
+	if err == nil {
+		fmt.Printf("approved %s (%s)\n", a.ID, a.Host.Hostname)
+	}
+	return err
 }
 
 func agentsRevoke(ctx context.Context, db store.Store, args []string) error {

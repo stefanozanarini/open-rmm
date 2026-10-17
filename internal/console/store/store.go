@@ -15,6 +15,8 @@ import (
 var (
 	ErrNotFound     = errors.New("not found")
 	ErrTokenInvalid = errors.New("enrollment token invalid, expired, revoked or exhausted")
+	ErrNotPending   = errors.New("agent is not pending approval")
+	ErrCertMismatch = errors.New("certificate is neither the current nor the previous one")
 )
 
 type Tenant struct {
@@ -31,11 +33,15 @@ type EnrollmentToken struct {
 	Uses        int
 	ExpiresAt   time.Time
 	RevokedAt   *time.Time
+	// AutoApprove makes agents enrolled with this token active immediately;
+	// otherwise they wait for an operator's approval.
+	AutoApprove bool
 }
 
 type AgentStatus string
 
 const (
+	AgentPending AgentStatus = "pending"
 	AgentActive  AgentStatus = "active"
 	AgentRevoked AgentStatus = "revoked"
 )
@@ -56,10 +62,15 @@ type Agent struct {
 	Host            HostInfo
 	CertFingerprint string
 	CertNotAfter    time.Time
-	EnrolledAt      time.Time
-	EnrolledTokenID string
-	LastSeenAt      *time.Time
-	LastSeenIP      *netip.Addr
+	// PrevCertFingerprint is the certificate replaced by the last renewal,
+	// accepted until the agent connects with the new one.
+	PrevCertFingerprint string
+	EnrolledAt          time.Time
+	ApprovedAt          *time.Time
+	ApprovedBy          string
+	EnrolledTokenID     string
+	LastSeenAt          *time.Time
+	LastSeenIP          *netip.Addr
 }
 
 // Store is implemented by the PostgreSQL store and by an in-memory store for
@@ -78,6 +89,13 @@ type Store interface {
 	ListAgents(ctx context.Context, tenantID string) ([]Agent, error)
 	UpdateAgentSeen(ctx context.Context, tenantID, agentID string, host *HostInfo, seen time.Time, ip *netip.Addr) error
 	SetAgentStatus(ctx context.Context, tenantID, agentID string, s AgentStatus) error
+	// ApproveAgent moves a pending agent to active.
+	ApproveAgent(ctx context.Context, tenantID, agentID, by string, at time.Time) error
+	// RotateAgentCert records a renewed certificate. usedFingerprint is the
+	// certificate the agent authenticated with; it becomes the previous one.
+	RotateAgentCert(ctx context.Context, tenantID, agentID, usedFingerprint, newFingerprint string, notAfter time.Time) error
+	// ForgetPrevCert drops the previous certificate once the new one is in use.
+	ForgetPrevCert(ctx context.Context, tenantID, agentID string) error
 
 	// AppendAudit assigns Seq, PrevHash and Hash and stores the event.
 	AppendAudit(ctx context.Context, e audit.Event) (audit.Event, error)

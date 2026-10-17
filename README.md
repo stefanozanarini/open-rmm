@@ -21,16 +21,19 @@ Fase 0 (fondamenta), in corso:
 - [x] Configurazione da file, registro (MSI) e GPO (`HKLM\SOFTWARE\Policies\open-rmm`)
 - [x] Verifica dei job firmati (Ed25519, scadenza, destinatario, anti-replay persistente)
 - [x] PostgreSQL con isolamento per tenant (row-level security) e audit log a catena di hash non modificabile
-- [ ] Rinnovo automatico del certificato dell'agente
+- [x] Approvazione dei nuovi agenti, con approvazione automatica attivabile per singolo token
+- [x] Rinnovo automatico del certificato dell'agente, con rotazione della chiave
+- [x] Server in container Linux (Docker Compose), gateway non privilegiato e in sola lettura
 - [ ] Esecuzione dei moduli firmati e SDK PowerShell
 - [ ] Watchdog, task schedulato di controllo, aggiornamento automatico A/B
 - [ ] Servizio di firma dei job (`openrmm-signer`)
 - [ ] Console web con login Entra ID e MFA
 - [ ] Pacchetto MSI
 
-## Sviluppo
+## Installazione e sviluppo
 
-Vedi [docs/SVILUPPO.md](docs/SVILUPPO.md).
+- Installazione del server: [docs/INSTALLAZIONE.md](docs/INSTALLAZIONE.md)
+- Sviluppo: [docs/SVILUPPO.md](docs/SVILUPPO.md)
 
 ```bash
 make test

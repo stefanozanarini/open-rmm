@@ -47,3 +47,19 @@ jobs:
           OPENRMM_TEST_DATABASE_URL="postgres://openrmm:test@localhost:5432/openrmm?sslmode=disable" make test-integration
       - name: Build (Linux and Windows)
         run: make build build-windows
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build console image
+        run: docker build -t open-rmm:ci .
+      - name: Image runs as non-root
+        run: test "$(docker image inspect open-rmm:ci --format '{{.Config.User}}')" = "nonroot:nonroot"
+      - name: Compose file is valid
+        working-directory: deploy
+        run: |
+          cp .env.example .env
+          docker compose config --quiet

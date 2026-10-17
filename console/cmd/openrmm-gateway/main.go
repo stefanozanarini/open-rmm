@@ -10,6 +10,10 @@
 //	OPENRMM_TLS_KEY          gateway key (gateway.key)
 //	OPENRMM_AGENTS_CA_CERT   agents CA certificate (agents-ca.crt)
 //	OPENRMM_AGENTS_CA_KEY    agents CA key (agents-ca.key)
+//
+// "openrmm-gateway healthcheck" exits 0 if the listener accepts TCP
+// connections; it is meant for container health checks, where the image has
+// no shell or curl.
 package main
 
 import (
@@ -30,11 +34,31 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(healthcheck())
+	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	if err := run(log); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
 	}
+}
+
+func healthcheck() int {
+	addr := env("OPENRMM_LISTEN", ":8443")
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return 1
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	c, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 3*time.Second)
+	if err != nil {
+		return 1
+	}
+	_ = c.Close()
+	return 0
 }
 
 func env(name, def string) string {

@@ -126,9 +126,9 @@ func (p *Postgres) GetTenant(ctx context.Context, id string) (Tenant, error) {
 
 func (p *Postgres) CreateEnrollmentToken(ctx context.Context, t EnrollmentToken, tokenHash []byte) error {
 	_, err := p.pool.Exec(ctx, `INSERT INTO enrollment_tokens
-		(id, tenant_id, token_hash, description, max_uses, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		t.ID, t.TenantID, tokenHash, t.Description, t.MaxUses, t.ExpiresAt)
+		(id, tenant_id, token_hash, description, max_uses, expires_at, auto_approve)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		t.ID, t.TenantID, tokenHash, t.Description, t.MaxUses, t.ExpiresAt, t.AutoApprove)
 	return err
 }
 
@@ -145,8 +145,8 @@ func (p *Postgres) ConsumeEnrollmentToken(ctx context.Context, tokenHash []byte,
 	var t EnrollmentToken
 	err := p.pool.QueryRow(ctx, `UPDATE enrollment_tokens SET uses = uses + 1
 		WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > $2 AND uses < max_uses
-		RETURNING id::text, tenant_id::text, description, max_uses, uses, expires_at`,
-		tokenHash, now).Scan(&t.ID, &t.TenantID, &t.Description, &t.MaxUses, &t.Uses, &t.ExpiresAt)
+		RETURNING id::text, tenant_id::text, description, max_uses, uses, expires_at, auto_approve`,
+		tokenHash, now).Scan(&t.ID, &t.TenantID, &t.Description, &t.MaxUses, &t.Uses, &t.ExpiresAt, &t.AutoApprove)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return EnrollmentToken{}, ErrTokenInvalid
 	}
@@ -161,17 +161,17 @@ func (p *Postgres) CreateAgent(ctx context.Context, a Agent) error {
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO agents
 			(tenant_id, id, status, hostname, os, os_version, arch, agent_version, machine_id,
-			 cert_fingerprint, cert_not_after, enrolled_token_id)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+			 cert_fingerprint, cert_not_after, enrolled_token_id, approved_at, approved_by)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 			a.TenantID, a.ID, string(a.Status), a.Host.Hostname, a.Host.OS, a.Host.OSVersion, a.Host.Arch,
-			a.Host.AgentVersion, a.Host.MachineID, a.CertFingerprint, a.CertNotAfter, tokenID)
+			a.Host.AgentVersion, a.Host.MachineID, a.CertFingerprint, a.CertNotAfter, tokenID, a.ApprovedAt, a.ApprovedBy)
 		return err
 	})
 }
 
 const agentColumns = `tenant_id::text, id::text, status, hostname, os, os_version, arch, agent_version,
 	machine_id, cert_fingerprint, cert_not_after, enrolled_at, coalesce(enrolled_token_id::text, ''),
-	last_seen_at, last_seen_ip`
+	last_seen_at, last_seen_ip, coalesce(prev_cert_fingerprint, ''), approved_at, approved_by`
 
 func scanAgent(row pgx.Row) (Agent, error) {
 	var a Agent
@@ -179,7 +179,7 @@ func scanAgent(row pgx.Row) (Agent, error) {
 	var ip *netip.Addr
 	err := row.Scan(&a.TenantID, &a.ID, &status, &a.Host.Hostname, &a.Host.OS, &a.Host.OSVersion,
 		&a.Host.Arch, &a.Host.AgentVersion, &a.Host.MachineID, &a.CertFingerprint, &a.CertNotAfter,
-		&a.EnrolledAt, &a.EnrolledTokenID, &a.LastSeenAt, &ip)
+		&a.EnrolledAt, &a.EnrolledTokenID, &a.LastSeenAt, &ip, &a.PrevCertFingerprint, &a.ApprovedAt, &a.ApprovedBy)
 	a.Status = AgentStatus(status)
 	a.LastSeenIP = ip
 	return a, err
@@ -246,6 +246,47 @@ func (p *Postgres) SetAgentStatus(ctx context.Context, tenantID, agentID string,
 		if err == nil && tag.RowsAffected() == 0 {
 			return ErrNotFound
 		}
+		return err
+	})
+}
+
+func (p *Postgres) ApproveAgent(ctx context.Context, tenantID, agentID, by string, at time.Time) error {
+	return p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE agents SET status = 'active', approved_at = $2, approved_by = $3
+			WHERE id = $1 AND status = 'pending'`, agentID, at, by)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			var exists bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM agents WHERE id = $1)`, agentID).Scan(&exists); err != nil {
+				return err
+			}
+			if exists {
+				return ErrNotPending
+			}
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+func (p *Postgres) RotateAgentCert(ctx context.Context, tenantID, agentID, used, newFP string, notAfter time.Time) error {
+	return p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE agents
+			SET prev_cert_fingerprint = $2, cert_fingerprint = $3, cert_not_after = $4
+			WHERE id = $1 AND status <> 'revoked' AND (cert_fingerprint = $2 OR prev_cert_fingerprint = $2)`,
+			agentID, used, newFP, notAfter)
+		if err == nil && tag.RowsAffected() == 0 {
+			return ErrCertMismatch
+		}
+		return err
+	})
+}
+
+func (p *Postgres) ForgetPrevCert(ctx context.Context, tenantID, agentID string) error {
+	return p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE agents SET prev_cert_fingerprint = NULL WHERE id = $1`, agentID)
 		return err
 	})
 }

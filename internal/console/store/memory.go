@@ -154,6 +154,51 @@ func (m *Memory) SetAgentStatus(_ context.Context, tenantID, agentID string, s A
 	return nil
 }
 
+func (m *Memory) ApproveAgent(_ context.Context, tenantID, agentID, by string, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := agentKey(tenantID, agentID)
+	a, ok := m.agents[k]
+	if !ok {
+		return ErrNotFound
+	}
+	if a.Status != AgentPending {
+		return ErrNotPending
+	}
+	a.Status, a.ApprovedAt, a.ApprovedBy = AgentActive, &at, by
+	m.agents[k] = a
+	return nil
+}
+
+func (m *Memory) RotateAgentCert(_ context.Context, tenantID, agentID, used, newFP string, notAfter time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := agentKey(tenantID, agentID)
+	a, ok := m.agents[k]
+	if !ok || a.Status == AgentRevoked {
+		return ErrNotFound
+	}
+	if used != a.CertFingerprint && (a.PrevCertFingerprint == "" || used != a.PrevCertFingerprint) {
+		return ErrCertMismatch
+	}
+	a.PrevCertFingerprint, a.CertFingerprint, a.CertNotAfter = used, newFP, notAfter
+	m.agents[k] = a
+	return nil
+}
+
+func (m *Memory) ForgetPrevCert(_ context.Context, tenantID, agentID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := agentKey(tenantID, agentID)
+	a, ok := m.agents[k]
+	if !ok {
+		return ErrNotFound
+	}
+	a.PrevCertFingerprint = ""
+	m.agents[k] = a
+	return nil
+}
+
 func (m *Memory) AppendAudit(_ context.Context, e audit.Event) (audit.Event, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

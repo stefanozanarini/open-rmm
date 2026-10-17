@@ -9,3 +9,11 @@ func SetCheckIntervalForTest(d time.Duration) (restore func()) {
 	seenWriteInterval = d
 	return func() { seenWriteInterval = old }
 }
+
+// SetMinRenewIntervalForTest changes the minimum certificate age for
+// renewal. Tests only.
+func SetMinRenewIntervalForTest(d time.Duration) (restore func()) {
+	old := minRenewInterval
+	minRenewInterval = d
+	return func() { minRenewInterval = old }
+}

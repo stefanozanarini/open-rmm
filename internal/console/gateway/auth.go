@@ -26,15 +26,30 @@ var unauthenticatedMethods = map[string]bool{
 
 type identityKey struct{}
 
+// caller is the authenticated agent of a call.
+type caller struct {
+	agent store.Agent
+	// fingerprint of the certificate used for this connection.
+	fingerprint string
+	leaf        *x509.Certificate
+}
+
 // AgentFromContext returns the authenticated agent of the call.
 func AgentFromContext(ctx context.Context) (store.Agent, bool) {
-	a, ok := ctx.Value(identityKey{}).(store.Agent)
-	return a, ok
+	c, ok := ctx.Value(identityKey{}).(caller)
+	return c.agent, ok
+}
+
+func callerFromContext(ctx context.Context) (caller, bool) {
+	c, ok := ctx.Value(identityKey{}).(caller)
+	return c, ok
 }
 
 // authenticate verifies that the TLS peer presented an agent certificate that
-// chains to the agents CA, carries a well-formed identity and belongs to an
-// active agent whose current certificate it is.
+// chains to the agents CA, carries a well-formed identity and belongs to a
+// non-revoked agent whose current (or, during a renewal, previous)
+// certificate it is. Pending agents are authenticated: what they may do is
+// decided by each RPC.
 func (s *Server) authenticate(ctx context.Context, method string) (context.Context, error) {
 	if unauthenticatedMethods[method] {
 		return ctx, nil
@@ -63,15 +78,26 @@ func (s *Server) authenticate(ctx context.Context, method string) (context.Conte
 		s.log.Error("agent lookup failed", "err", err)
 		return nil, status.Error(codes.Unavailable, "temporarily unavailable")
 	}
-	if a.Status != store.AgentActive {
+	if a.Status != store.AgentActive && a.Status != store.AgentPending {
 		return nil, status.Error(codes.PermissionDenied, "agent revoked")
 	}
-	// Only the most recently issued certificate is accepted, so replacing a
-	// certificate implicitly revokes the previous one.
-	if pki.Fingerprint(leaf) != a.CertFingerprint {
+	// Only the latest certificate is accepted, plus the one it replaced until
+	// the agent first uses the new one: a renewal implicitly revokes the old
+	// certificate without risking a lock-out if the response was lost.
+	fp := pki.Fingerprint(leaf)
+	switch {
+	case fp == a.CertFingerprint:
+		if a.PrevCertFingerprint != "" {
+			if err := s.store.ForgetPrevCert(ctx, a.TenantID, a.ID); err != nil {
+				s.log.Error("forget previous certificate", "err", err)
+			}
+			a.PrevCertFingerprint = ""
+		}
+	case a.PrevCertFingerprint != "" && fp == a.PrevCertFingerprint:
+	default:
 		return nil, status.Error(codes.PermissionDenied, "certificate superseded")
 	}
-	return context.WithValue(ctx, identityKey{}, a), nil
+	return context.WithValue(ctx, identityKey{}, caller{agent: a, fingerprint: fp, leaf: leaf}), nil
 }
 
 func hasClientAuth(c *x509.Certificate) bool {

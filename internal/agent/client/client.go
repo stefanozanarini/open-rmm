@@ -35,6 +35,10 @@ const (
 	rpcTimeout    = 30 * time.Second
 )
 
+// errRenewed ends a session after a certificate renewal so the agent
+// reconnects at once with the new certificate.
+var errRenewed = errors.New("certificate renewed, reconnecting")
+
 // Client runs the agent's connection loop.
 type Client struct {
 	cfg     *config.Config
@@ -65,8 +69,10 @@ func (c *Client) Run(ctx context.Context) error {
 			backoff = minBackoff
 		}
 		wait := jitter(backoff)
-		switch status.Code(err) {
-		case codes.PermissionDenied, codes.Unauthenticated:
+		switch {
+		case errors.Is(err, errRenewed):
+			wait = 0
+		case status.Code(err) == codes.PermissionDenied, status.Code(err) == codes.Unauthenticated:
 			wait = jitter(deniedBackoff)
 		}
 		c.log.Warn("connection ended, retrying", "err", err, "in", wait.Round(time.Second))
@@ -89,7 +95,13 @@ func jitter(d time.Duration) time.Duration {
 
 func (c *Client) runOnce(ctx context.Context) (connected bool, err error) {
 	id, err := identity.Load(c.cfg.DataDir, c.cfg.RootCA())
-	if errors.Is(err, identity.ErrNoIdentity) {
+	switch {
+	case errors.Is(err, identity.ErrNoIdentity):
+		id, err = c.enroll(ctx)
+	case errors.Is(err, identity.ErrExpired):
+		// Offline longer than the certificate lifetime: only a new
+		// enrollment (and a new agent record) can bring it back.
+		c.log.Error("certificate expired, enrolling again", "err", err)
 		id, err = c.enroll(ctx)
 	}
 	if err != nil {
@@ -184,9 +196,20 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 	if interval < 10*time.Second || interval > 10*time.Minute {
 		interval = 60 * time.Second
 	}
-	c.log.Info("connected", "server", c.cfg.Server, "heartbeat", interval)
+	if ack.GetApprovalPending() {
+		c.log.Warn("connected, waiting for an operator to approve this agent", "agent", id.AgentID)
+	} else {
+		c.log.Info("connected", "server", c.cfg.Server, "heartbeat", interval)
+	}
 	if c.OnConnected != nil {
 		c.OnConnected()
+	}
+	if id.NeedsRenewal(time.Now()) {
+		if err := c.renew(ctx, conn, id); err != nil {
+			c.log.Error("certificate renewal failed, will retry", "err", err)
+		} else {
+			return true, errRenewed
+		}
 	}
 
 	sendCh := make(chan *openrmmv1.AgentMessage, 16)
@@ -210,6 +233,7 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
+	lastRenewAttempt := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
@@ -227,8 +251,46 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 			}}); err != nil {
 				return true, err
 			}
+			if id.NeedsRenewal(time.Now()) && time.Since(lastRenewAttempt) > time.Hour {
+				lastRenewAttempt = time.Now()
+				if err := c.renew(ctx, conn, id); err != nil {
+					c.log.Error("certificate renewal failed, will retry", "err", err)
+				} else {
+					stream.CloseSend()
+					return true, errRenewed
+				}
+			}
 		}
 	}
+}
+
+// renew obtains a certificate for a fresh key pair and stores it. The old
+// identity remains on disk until the new one is fully written.
+func (c *Client) renew(ctx context.Context, conn *grpc.ClientConn, id *identity.Identity) error {
+	key, err := identity.NewKey()
+	if err != nil {
+		return err
+	}
+	csr, err := identity.CSR(key, id.AgentID)
+	if err != nil {
+		return err
+	}
+	rctx, cancel := context.WithTimeout(ctx, rpcTimeout)
+	defer cancel()
+	resp, err := openrmmv1.NewAgentServiceClient(conn).RenewCertificate(rctx, &openrmmv1.RenewCertificateRequest{CsrDer: csr})
+	if err != nil {
+		return err
+	}
+	certs, err := parseDER(append([][]byte{resp.GetCertificateDer()}, resp.GetChainDer()...))
+	if err != nil {
+		return err
+	}
+	next := &identity.Identity{TenantID: id.TenantID, AgentID: id.AgentID, Key: key, Cert: certs[0], Chain: certs[1:]}
+	if err := identity.Save(c.cfg.DataDir, c.cfg.RootCA(), next); err != nil {
+		return err
+	}
+	c.log.Info("certificate renewed", "not_after", next.Cert.NotAfter)
+	return nil
 }
 
 // handleJob verifies a job. Execution through modules is the next phase-0

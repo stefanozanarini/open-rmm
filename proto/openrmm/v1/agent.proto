@@ -16,6 +16,20 @@ service AgentService {
   // Connect is the long-lived stream opened by the agent. The console never
   // opens connections towards endpoints: every command travels on this stream.
   rpc Connect(stream AgentMessage) returns (stream ConsoleMessage);
+
+  // RenewCertificate issues a new certificate for a new key pair generated
+  // by the agent. The current certificate stays valid until the agent first
+  // connects with the new one, so a lost response cannot lock it out.
+  rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+}
+
+message RenewCertificateRequest {
+  bytes csr_der = 1;
+}
+
+message RenewCertificateResponse {
+  bytes certificate_der = 1;
+  repeated bytes chain_der = 2;
 }
 
 message HostInfo {
@@ -62,6 +76,9 @@ message Hello {
 
 message HelloAck {
   int32 heartbeat_interval_seconds = 1;
+  // approval_pending is true while an operator has not approved the agent.
+  // A pending agent stays connected but receives no jobs.
+  bool approval_pending = 2;
 }
 
 message Heartbeat {

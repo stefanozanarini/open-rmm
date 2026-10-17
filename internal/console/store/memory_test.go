@@ -78,3 +78,53 @@ func testEnrollmentTokenLimits(t *testing.T, s Store) {
 		t.Fatalf("unknown token: %v", err)
 	}
 }
+
+func TestApprovalAndRotation(t *testing.T) { testApprovalAndRotation(t, NewMemory()) }
+
+func testApprovalAndRotation(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	if err := s.CreateTenant(ctx, tenant); err != nil {
+		t.Fatal(err)
+	}
+	a := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentPending, Host: HostInfo{Hostname: "pc"},
+		CertFingerprint: "fp1", CertNotAfter: time.Now().Add(time.Hour)}
+	if err := s.CreateAgent(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApproveAgent(ctx, tenant.ID, a.ID, "op", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApproveAgent(ctx, tenant.ID, a.ID, "op", time.Now()); err != ErrNotPending {
+		t.Fatalf("second approval: %v", err)
+	}
+	if err := s.ApproveAgent(ctx, tenant.ID, ids.NewUUID(), "op", time.Now()); err != ErrNotFound {
+		t.Fatalf("unknown agent: %v", err)
+	}
+	got, _ := s.GetAgent(ctx, tenant.ID, a.ID)
+	if got.Status != AgentActive || got.ApprovedBy != "op" || got.ApprovedAt == nil {
+		t.Fatalf("approved agent = %+v", got)
+	}
+
+	exp := time.Now().Add(90 * 24 * time.Hour)
+	if err := s.RotateAgentCert(ctx, tenant.ID, a.ID, "fp1", "fp2", exp); err != nil {
+		t.Fatal(err)
+	}
+	// Renewing again with the previous certificate (lost response) works.
+	if err := s.RotateAgentCert(ctx, tenant.ID, a.ID, "fp1", "fp3", exp); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.GetAgent(ctx, tenant.ID, a.ID)
+	if got.CertFingerprint != "fp3" || got.PrevCertFingerprint != "fp1" {
+		t.Fatalf("after rotations: current %s prev %s", got.CertFingerprint, got.PrevCertFingerprint)
+	}
+	if err := s.RotateAgentCert(ctx, tenant.ID, a.ID, "fp2", "fp4", exp); err != ErrCertMismatch {
+		t.Fatalf("rotation with a superseded certificate: %v", err)
+	}
+	if err := s.ForgetPrevCert(ctx, tenant.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RotateAgentCert(ctx, tenant.ID, a.ID, "fp1", "fp5", exp); err != ErrCertMismatch {
+		t.Fatalf("rotation with a forgotten certificate: %v", err)
+	}
+}
