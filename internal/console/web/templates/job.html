@@ -1,0 +1,17 @@
+{{define "content"}}
+{{with .Data}}
+<dl class="facts">
+  <dt>Stato</dt><dd><span class="badge {{.Job.State}}">{{label .Job.State}}</span>{{if .Job.Progress}} {{.Job.Progress}}%{{end}} {{.Job.Message}}</dd>
+  <dt>Agente</dt><dd><a href="/agents/{{.Job.AgentID}}">{{if .Agent.Host.Hostname}}{{.Agent.Host.Hostname}}{{else}}{{.Job.AgentID}}{{end}}</a></dd>
+  <dt>Modulo</dt><dd>{{.Job.Module}} {{.Job.ModuleVersion}} · {{.Job.Action}}</dd>
+  <dt>Creato</dt><dd>{{fmtTime .Job.CreatedAt}} da {{.Job.CreatedBy}}</dd>
+  <dt>Inviato</dt><dd>{{fmtTime .Job.SentAt}}</dd>
+  <dt>Terminato</dt><dd>{{fmtTime .Job.FinishedAt}}</dd>
+  <dt>Scade</dt><dd>{{fmtTime .Job.ExpiresAt}}</dd>
+</dl>
+{{if .Job.Error}}<h2>Errore</h2><pre class="error">{{.Job.Error}}</pre>{{end}}
+{{if .Output}}<h2>Output</h2><pre>{{.Output}}</pre>{{end}}
+{{if .Result}}<h2>Risultato</h2><pre>{{.Result}}</pre>{{end}}
+<h2>Parametri</h2><pre>{{.Params}}</pre>
+{{end}}
+{{end}}

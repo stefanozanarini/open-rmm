@@ -102,6 +102,7 @@ type Store interface {
 	ListAudit(ctx context.Context, tenantID string) ([]audit.Event, error)
 
 	JobStore
+	SessionStore
 }
 
 // HashToken returns the value stored in place of an enrollment token.

@@ -5,3 +5,8 @@ deploy/pki
 deploy/.env
 **/*.key
 **/*.pem
+deploy/secrets
+deploy/console-tls
+deploy/keys
+deploy/.env*
+!deploy/.env.example

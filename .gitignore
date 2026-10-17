@@ -14,3 +14,5 @@ deploy/.env
 deploy/pki/
 deploy/keys/
 *.ormm
+deploy/secrets/
+deploy/console-tls/

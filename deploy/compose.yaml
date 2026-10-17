@@ -53,6 +53,78 @@ services:
     pids_limit: 256
     mem_limit: 512m
 
+  # Operator web console. Published on the LAN only (OPENRMM_CONSOLE_BIND),
+  # never on the internet. Needs outbound HTTPS to Microsoft for sign-in.
+  server:
+    image: ${OPENRMM_IMAGE:-open-rmm:dev}
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/openrmm-server"]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/openrmm-server", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+      signer:
+        condition: service_healthy
+    environment:
+      OPENRMM_DATABASE_URL: postgres://openrmm:${OPENRMM_DB_PASSWORD}@db:5432/openrmm?sslmode=disable
+      OPENRMM_PUBLIC_URL: ${OPENRMM_PUBLIC_URL:?set OPENRMM_PUBLIC_URL in .env}
+      OPENRMM_HTTP_LISTEN: ":8080"
+      OPENRMM_TLS_CERT: ${OPENRMM_CONSOLE_TLS_CERT:-}
+      OPENRMM_TLS_KEY: ${OPENRMM_CONSOLE_TLS_KEY:-}
+      OPENRMM_OIDC_ISSUER: ${OPENRMM_OIDC_ISSUER:?set OPENRMM_OIDC_ISSUER in .env}
+      OPENRMM_OIDC_CLIENT_ID: ${OPENRMM_OIDC_CLIENT_ID:?set OPENRMM_OIDC_CLIENT_ID in .env}
+      OPENRMM_OIDC_CLIENT_SECRET_FILE: /run/openrmm/secrets/oidc-client-secret
+      OPENRMM_MFA_CLAIM: ${OPENRMM_MFA_CLAIM:-amr}
+      OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:?set OPENRMM_TENANT_MAP in .env}
+      OPENRMM_SIGNER_SOCKET: /run/openrmm-signer/signer.sock
+    volumes:
+      - ./secrets/server:/run/openrmm/secrets:ro
+      - ./console-tls:/run/openrmm/tls:ro
+      - signer-socket:/run/openrmm-signer
+    ports:
+      - "${OPENRMM_CONSOLE_BIND:-127.0.0.1:8080}:8080"
+    networks: [internal, public]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 512m
+
+  # Holds the job signing key. No published port, no database access: it is
+  # reachable only through the Unix socket shared with the server, and talks
+  # only to Microsoft (to fetch the keys that sign operator tokens).
+  signer:
+    image: ${OPENRMM_IMAGE:-open-rmm:dev}
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/openrmm-signer"]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/openrmm-signer", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    environment:
+      OPENRMM_SIGNER_KEY: /run/openrmm/secrets/job-signing.key
+      OPENRMM_SIGNER_SOCKET: /run/openrmm-signer/signer.sock
+      OPENRMM_SIGNER_STATE: /var/lib/openrmm-signer/used-tokens.json
+      OPENRMM_OIDC_ISSUER: ${OPENRMM_OIDC_ISSUER:?set OPENRMM_OIDC_ISSUER in .env}
+      OPENRMM_OIDC_CLIENT_ID: ${OPENRMM_OIDC_CLIENT_ID:?set OPENRMM_OIDC_CLIENT_ID in .env}
+      OPENRMM_MFA_CLAIM: ${OPENRMM_MFA_CLAIM:-amr}
+      OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:?set OPENRMM_TENANT_MAP in .env}
+    volumes:
+      - ./secrets/signer:/run/openrmm/secrets:ro
+      - signer-socket:/run/openrmm-signer
+      - signer-state:/var/lib/openrmm-signer
+    networks: [signer-egress]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+
   # One-off administration: docker compose run --rm admin <area> <command> ...
   admin:
     image: ${OPENRMM_IMAGE:-open-rmm:dev}
@@ -76,6 +148,10 @@ networks:
   internal:
     internal: true
   public: {}
+  # Outbound only (nothing publishes ports on it): the signer's way to Microsoft.
+  signer-egress: {}
 
 volumes:
   db-data: {}
+  signer-socket: {}
+  signer-state: {}

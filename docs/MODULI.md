@@ -123,22 +123,20 @@ docker compose run --rm admin module list
 
 ## Eseguire un job
 
-```bash
-docker compose run --rm --user "$(id -u):$(id -g)" -v "$PWD:/in:ro" admin job run \
-  -tenant <TENANT> -agent <AGENT> -module sysinfo -version 1.0.0 -action info \
-  -key /in/job-signing.key -wait
-```
+Dalla console web: pagina dell'agente → **Esegui un comando**, oppure il form **Script PowerShell** per i moduli `adhoc_script`. Dopo il clic l'operatore viene rimandato a Microsoft per una nuova autenticazione. Il servizio `openrmm-signer` firma il comando solo se quell'autenticazione:
 
-Per il modulo `script`:
+- è recente;
+- è avvenuta con MFA;
+- è stata fatta da un operatore con il ruolo giusto;
+- è stata emessa per esattamente quel comando.
 
-```bash
-docker compose run --rm --user "$(id -u):$(id -g)" -v "$PWD:/in:ro" admin job run -tenant <TENANT> -agent <AGENT> \
-  -module script -version 1.0.0 -action run -script-file /in/diagnostica.ps1 -key /in/job-signing.key -wait
-```
+Dettagli in [ENTRA.md](ENTRA.md).
 
-Il testo completo dello script finisce nell'audit log.
+Il testo completo degli script finisce nel registro attività.
 
-> **Provvisorio.** Oggi `job run` firma con una chiave passata da riga di comando e senza MFA. Nel prossimo passo la firma passa al servizio separato `openrmm-signer`, che firma solo dopo aver verificato permessi e MFA dell'operatore per quel job specifico.
+### Da riga di comando (solo sviluppo)
+
+`openrmm-admin job run -key <chiave>` firma direttamente con una chiave di firma dei job, senza MFA. Serve per lo sviluppo e i test e non va usato in produzione: la chiave di produzione sta solo nel container `signer`.
 
 ## Moduli inclusi
 

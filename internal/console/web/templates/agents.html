@@ -1,0 +1,31 @@
+{{define "agentrows"}}
+<table>
+<thead><tr><th>Nome</th><th>Sistema</th><th>Versione agente</th><th>Ultimo contatto</th><th>Registrato</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+  <td><a href="/agents/{{.ID}}">{{.Host.Hostname}}</a></td>
+  <td>{{.Host.OSVersion}}</td>
+  <td>{{.Host.AgentVersion}}</td>
+  <td>{{fmtTime .LastSeenAt}}</td>
+  <td>{{fmtTime .EnrolledAt}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{end}}
+{{define "content"}}
+{{with .Data}}
+{{if .Pending}}
+<section class="warn">
+<h2>In attesa di approvazione ({{len .Pending}})</h2>
+<p>Questi agenti sono connessi ma non ricevono comandi finché non vengono approvati. Verifica che siano PC dell'azienda prima di approvarli.</p>
+{{template "agentrows" .Pending}}
+</section>
+{{end}}
+<h2>Attivi ({{len .Active}})</h2>
+{{if .Active}}{{template "agentrows" .Active}}{{else}}<p class="muted">Nessun agente attivo.</p>{{end}}
+{{if .Revoked}}
+<h2>Revocati ({{len .Revoked}})</h2>
+{{template "agentrows" .Revoked}}
+{{end}}
+{{end}}
+{{end}}

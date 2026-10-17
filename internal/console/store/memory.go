@@ -22,6 +22,7 @@ type Memory struct {
 	jobs    map[string]Job    // by tenant/job
 
 	listeners []func(string)
+	sessions  map[string]WebSession // by session hash
 }
 
 func NewMemory() *Memory {
@@ -32,6 +33,8 @@ func NewMemory() *Memory {
 		audit:   map[string][]audit.Event{},
 		modules: map[string]Module{},
 		jobs:    map[string]Job{},
+
+		sessions: map[string]WebSession{},
 	}
 }
 

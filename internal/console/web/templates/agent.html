@@ -1,0 +1,75 @@
+{{define "content"}}
+{{with .Data}}
+<dl class="facts">
+  <dt>Stato</dt><dd><span class="badge {{.Agent.Status}}">{{label .Agent.Status}}</span> {{if .Online}}<span class="badge online">online</span>{{end}}</dd>
+  <dt>Sistema</dt><dd>{{.Agent.Host.OSVersion}} ({{.Agent.Host.OS}}/{{.Agent.Host.Arch}})</dd>
+  <dt>Versione agente</dt><dd>{{.Agent.Host.AgentVersion}}</dd>
+  <dt>Ultimo contatto</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} da {{.}}{{end}}</dd>
+  <dt>Registrato</dt><dd>{{fmtTime .Agent.EnrolledAt}}</dd>
+  <dt>Approvato</dt><dd>{{fmtTime .Agent.ApprovedAt}} {{.Agent.ApprovedBy}}</dd>
+  <dt>Certificato valido fino a</dt><dd>{{fmtTime .Agent.CertNotAfter}}</dd>
+  <dt>ID agente</dt><dd><code>{{.Agent.ID}}</code></dd>
+  <dt>ID macchina</dt><dd><code>{{.Agent.Host.MachineID}}</code></dd>
+</dl>
+{{end}}
+
+{{if .IsAdmin}}
+<div class="actions">
+{{if eq .Data.Agent.Status "pending"}}
+<form method="post" action="/agents/{{.Data.Agent.ID}}/approve" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <button class="primary">Approva</button>
+</form>
+{{end}}
+{{if ne .Data.Agent.Status "revoked"}}
+<form method="post" action="/agents/{{.Data.Agent.ID}}/revoke" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <button class="danger">Revoca</button>
+</form>
+{{end}}
+</div>
+{{end}}
+
+{{if and .CanRun .Data.Actions}}
+{{$csrf := .CSRF}}{{$id := .Data.Agent.ID}}
+<h2>Esegui un comando</h2>
+<p class="muted">Prima dell'esecuzione ti verrà chiesto di autenticarti di nuovo con Microsoft: l'approvazione vale solo per quel comando.</p>
+{{if .Data.Commands}}
+<form method="post" action="/agents/{{$id}}/jobs" class="stack">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+  <label>Azione
+    <select name="target">
+    {{range .Data.Commands}}<option value="{{.Module}}|{{.Version}}|{{.Action}}">{{.Module}} {{.Version}} · {{.Action}}{{if .Description}} — {{.Description}}{{end}}</option>{{end}}
+    </select>
+  </label>
+  <label>Parametri (JSON, facoltativi)
+    <input name="params" value="{}" spellcheck="false">
+  </label>
+  {{template "ttl"}}
+  <button class="primary">Approva ed esegui</button>
+</form>
+{{end}}
+{{range .Data.Scripts}}
+<h3>Script PowerShell</h3>
+<form method="post" action="/agents/{{$id}}/jobs" class="stack">
+  <input type="hidden" name="csrf" value="{{$csrf}}">
+  <input type="hidden" name="target" value="{{.Module}}|{{.Version}}|{{.Action}}">
+  <label>Script ({{.Module}} {{.Version}})
+    <textarea name="script" rows="10" spellcheck="false" placeholder="Get-Service | Where-Object Status -eq 'Stopped'"></textarea>
+  </label>
+  {{template "ttl"}}
+  <p class="muted">Il testo completo dello script viene registrato nel registro attività.</p>
+  <button class="primary">Approva ed esegui lo script</button>
+</form>
+{{end}}
+{{end}}
+
+<h2>Ultimi job</h2>
+{{template "jobrows" .Data.Jobs}}
+{{end}}
+
+{{define "ttl"}}
+<label>Validità
+  <select name="ttl_minutes"><option value="15">15 minuti</option><option value="60" selected>1 ora</option><option value="480">8 ore</option><option value="1440">24 ore</option></select>
+</label>
+{{end}}

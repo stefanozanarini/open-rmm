@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{{if .Refresh}}<meta http-equiv="refresh" content="{{.Refresh}}">{{end}}
+<title>{{.Title}} · open-rmm</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="/agents">open-rmm</a>
+  {{if .Operator}}
+  <nav>
+    <a href="/agents">Agenti</a>
+    <a href="/jobs">Job</a>
+    <a href="/modules">Moduli</a>
+    {{if .IsAdmin}}<a href="/tokens">Token</a>{{end}}
+    <a href="/audit">Attività</a>
+  </nav>
+  <div class="who">
+    {{if gt (len .Tenants) 1}}
+    <form method="post" action="/tenant" class="inline">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <select name="tenant">{{range .Tenants}}<option value="{{.ID}}" {{if eq .ID $.Tenant.ID}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+      <button>Cambia</button>
+    </form>
+    {{else}}<span class="tenant">{{.Tenant.Name}}</span>{{end}}
+    <span>{{.Operator.Username}}</span>
+    <form method="post" action="/logout" class="inline">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button class="link">Esci</button>
+    </form>
+  </div>
+  {{end}}
+</header>
+<main>
+{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
+<h1>{{.Title}}</h1>
+{{template "content" .}}
+</main>
+</body>
+</html>
+{{define "jobrows"}}
+{{if .}}
+<table>
+<thead><tr><th>Job</th><th>Modulo</th><th>Azione</th><th>Stato</th><th>Creato</th><th>Da</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+  <td><a href="/jobs/{{.ID}}"><code>{{short .ID}}</code></a></td>
+  <td>{{.Module}} {{.ModuleVersion}}</td>
+  <td>{{.Action}}</td>
+  <td><span class="badge {{.State}}">{{label .State}}</span></td>
+  <td>{{fmtTime .CreatedAt}}</td>
+  <td>{{.CreatedBy}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}<p class="muted">Nessun job.</p>{{end}}
+{{end}}

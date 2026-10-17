@@ -1,0 +1,35 @@
+{{define "content"}}
+{{with .Data}}
+{{if .New}}
+<section class="warn">
+<h2>Nuovo token</h2>
+<p>Copialo ora: <strong>non verrà più mostrato</strong>.</p>
+<pre class="token">{{.New}}</pre>
+<p>Utilizzi: {{.NewTok.MaxUses}} · scade il {{fmtTime .NewTok.ExpiresAt}} · approvazione {{if .NewTok.AutoApprove}}automatica{{else}}manuale{{end}}</p>
+</section>
+{{end}}
+{{end}}
+<h2>Crea un token</h2>
+<form method="post" action="/tokens" class="stack">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>Descrizione <input name="description" maxlength="200" placeholder="es. GPO sede principale"></label>
+  <label>Numero massimo di registrazioni <input name="max_uses" type="number" min="1" max="100000" value="1"></label>
+  <label>Validità (giorni) <input name="days" type="number" min="1" max="90" value="1"></label>
+  <label class="check"><input type="checkbox" name="auto_approve"> Approvazione automatica degli agenti registrati con questo token</label>
+  <p class="muted">Lascia l'approvazione automatica disattivata per i token distribuiti via GPO: il registro delle policy è leggibile da tutti gli utenti del dominio.</p>
+  <button class="primary">Crea token</button>
+</form>
+<h2>Token esistenti</h2>
+<table>
+<thead><tr><th>Descrizione</th><th>Utilizzi</th><th>Scadenza</th><th>Approvazione</th><th>Stato</th></tr></thead>
+<tbody>
+{{range .Data.Tokens}}<tr>
+  <td>{{.Description}}</td>
+  <td>{{.Uses}} / {{.MaxUses}}</td>
+  <td>{{fmtTime .ExpiresAt}}</td>
+  <td>{{if .AutoApprove}}automatica{{else}}manuale{{end}}</td>
+  <td>{{if .RevokedAt}}revocato{{else if .ExpiresAt.Before $.Data.Now}}scaduto{{else if ge .Uses .MaxUses}}esaurito{{else}}valido{{end}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{end}}

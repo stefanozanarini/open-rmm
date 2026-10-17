@@ -1,6 +1,6 @@
 # open-rmm — Documento di architettura
 
-> Stato: bozza v0.6 — 2026-10-17
+> Stato: bozza v0.7 — 2026-10-17
 > Primo cliente: ~200 endpoint Windows (client e server), parco misto Dell / Lenovo / Acer, BitLocker diffuso, console ospitata presso il cliente e raggiungibile da internet, portatili anche fuori sede.
 
 ---
@@ -53,7 +53,7 @@
 │  openrmm-gateway  ──►  openrmm-server (API, logica, job queue)  ──► Postgres
 │                         │                                         │
 │                         ├──► openrmm-signer (servizio firma, isolato) │
-│                         └──► Web UI (React + TypeScript)          │
+│                         └──► Web UI (pagine generate dal server)  │
 │  openrmm-repo: archivio moduli, pacchetti agente, cache cataloghi     │
 └───────────────────────────────────────────────────────────────────┘
 ```
@@ -74,7 +74,7 @@
 | Backend `openrmm-server` | Go |
 | Database | PostgreSQL con Row-Level Security per `tenant_id` |
 | Job queue | Su Postgres (es. libreria *river*), niente broker esterno per partire |
-| Web UI | React + TypeScript |
+| Web UI | Pagine generate dal server Go (html/template), nessun JavaScript di terze parti, CSP restrittiva |
 | Autenticazione operatori | Solo Entra ID (Microsoft 365) via OIDC; MFA sempre obbligatoria (§6.6) |
 | `openrmm-signer` | Processo separato con privilegi minimi, unico detentore della chiave di firma dei job (§6.3) |
 | Deploy | Docker Compose su una singola VM **presso il cliente** (adeguato per 200–2000 endpoint) |
@@ -512,3 +512,5 @@ Qualunque modulo che richiede un riavvio (Windows Update, firmware, winget, scri
 | 2026-10-17 | **Nuovi agenti in attesa di approvazione** per default; l'**approvazione automatica** è un'opzione del singolo token di enrollment |
 | 2026-10-17 | **Rinnovo automatico** del certificato dell'agente a 2/3 della validità, con nuova chiave; il certificato precedente resta valido fino al primo uso del nuovo |
 | 2026-10-17 | Moduli eseguiti come sottoprocessi con protocollo JSON a righe; il job fissa l'hash del manifest; esecuzione in contesto utente rimandata a `openrmm-userhelper` |
+| 2026-10-17 | Interfaccia web generata dal server invece di React: nessuna dipendenza JavaScript, CSP restrittiva, superficie d'attacco minima |
+| 2026-10-17 | Firma dei job in `openrmm-signer` (container separato, socket locale): firma solo con un id_token Entra fresco, con MFA, il cui `nonce` è l'impronta esatta del comando |

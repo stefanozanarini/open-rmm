@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package openrmm.v1;
+
+option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
+
+// SignerService is exposed by openrmm-signer on a local socket. The signer
+// does not trust its caller: every request carries an operator's id_token,
+// freshly obtained from the identity provider for this very request, and the
+// signer verifies it on its own before signing.
+service SignerService {
+  rpc SignJob(SignJobRequest) returns (SignJobResponse);
+}
+
+// JobRequest is what the operator approves. Its canonical hash is embedded in
+// the nonce of the step-up authentication.
+message JobRequest {
+  string tenant_id = 1;
+  string agent_id = 2;
+  string module = 3;
+  string module_version = 4;
+  bytes module_sha256 = 5;
+  string action = 6;
+  bytes params_json = 7;
+  int64 ttl_seconds = 8;
+  // Random value chosen by the console per request, so that two identical
+  // requests still have different hashes.
+  bytes request_nonce = 9;
+}
+
+message SignJobRequest {
+  JobRequest request = 1;
+  string id_token = 2;
+}
+
+message SignJobResponse {
+  string job_id = 1;
+  // Serialized SignedEnvelope carrying the Job.
+  bytes envelope = 2;
+  int64 expires_unix = 3;
+  // Operator identity as verified by the signer, for the audit trail.
+  string operator = 4;
+}

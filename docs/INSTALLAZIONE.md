@@ -6,9 +6,11 @@ La console gira in container su un host Linux con Docker e il plugin Compose. I 
 |---|---|---|
 | `gateway` | Endpoint degli agenti (mTLS) | Sì, porta `OPENRMM_PUBLIC_PORT` (default 443) |
 | `db` | PostgreSQL 16 | No: rete interna senza accesso all'esterno |
+| `server` | Console web degli operatori | Solo sulla LAN (`OPENRMM_CONSOLE_BIND`) |
+| `signer` | Firma dei comandi, unico a conoscere la chiave | No: raggiungibile solo dal `server` tramite socket locale |
 | `admin` | Comandi di amministrazione, solo su richiesta | No |
 
-Il gateway gira come utente non privilegiato (65532), con file system in sola lettura, nessuna capability Linux e limiti di memoria e processi.
+Tutti i servizi girano come utente non privilegiato (65532), con file system in sola lettura, nessuna capability Linux e limiti di memoria e processi. Il gateway, unico esposto su internet, non ha accesso al socket del signer.
 
 ## 1. Configurazione
 
@@ -35,7 +37,22 @@ Lo script crea:
 
 Il nome DNS (`agent.cliente.it`) deve risolvere sull'host sia dalla LAN sia da internet. Il TLS viene terminato dal gateway: se davanti c'è un firewall o un reverse proxy, deve inoltrare la connessione TCP così com'è (passthrough), senza decifrarla.
 
-## 3. Avvio
+## 3. Entra ID e segreti
+
+Registra l'applicazione in Entra ID seguendo [ENTRA.md](ENTRA.md) e completa le variabili della console in `.env`. Poi salva il segreto client in un file e prepara i segreti dei container:
+
+```bash
+./setup-secrets.sh /percorso/segreto-client.txt
+```
+
+Lo script installa il segreto client per il `server`, genera la chiave di firma dei job per il `signer` e ne stampa la chiave pubblica (`ed25519:…`), da configurare sugli agenti come `JobSigningKeys`. Poi cancella il file con il segreto.
+
+La console deve essere raggiungibile in HTTPS. Le possibilità sono due:
+
+- metti certificato e chiave in `deploy/console-tls/` e imposta `OPENRMM_CONSOLE_TLS_CERT=/run/openrmm/tls/console.crt` e `OPENRMM_CONSOLE_TLS_KEY=/run/openrmm/tls/console.key`;
+- oppure usa un reverse proxy TLS interno davanti alla porta della console.
+
+## 4. Avvio
 
 ```bash
 docker compose up -d
@@ -44,7 +61,7 @@ docker compose ps
 
 Il gateway applica da solo le migrazioni del database all'avvio.
 
-## 4. Tenant e token di enrollment
+## 5. Tenant e token di enrollment
 
 ```bash
 docker compose run --rm admin tenant create -name "Cliente"
@@ -59,7 +76,9 @@ Per un token di cui ti fidi completamente (ad esempio uno usato da un tecnico pe
 docker compose run --rm admin token create -tenant <TENANT> -max-uses 1 -ttl 2h -auto-approve
 ```
 
-## 5. Gestione degli agenti
+## 6. Gestione degli agenti
+
+Dalla console web (pagina **Agenti**) gli amministratori approvano o revocano gli agenti, e operatori e amministratori eseguono comandi. Ogni comando richiede una nuova autenticazione Microsoft. Gli stessi comandi sono disponibili da riga di comando:
 
 ```bash
 docker compose run --rm admin agents list    -tenant <TENANT>
@@ -77,11 +96,12 @@ Servono due coppie di chiavi Ed25519, distinte:
 | Chiave | Uso | Dove sta la parte privata |
 |---|---|---|
 | Rilascio moduli | Firma i moduli | Offline, sulla macchina da cui si firmano i moduli |
-| Firma dei job | Firma i comandi inviati agli agenti | Per ora con l'operatore che usa `job run`; poi nel servizio `openrmm-signer` |
+| Firma dei job | Firma i comandi inviati agli agenti | Solo nel container `signer` (generata da `setup-secrets.sh`) |
+
+La chiave di rilascio moduli si genera sulla macchina offline:
 
 ```bash
-docker compose run --rm --no-deps --user "$(id -u):$(id -g)" -v "$PWD/keys:/keys" admin signing keygen -out /keys/module-release.key
-docker compose run --rm --no-deps --user "$(id -u):$(id -g)" -v "$PWD/keys:/keys" admin signing keygen -out /keys/job-signing.key
+openrmm-admin signing keygen -out module-release.key
 ```
 
 Il comando stampa la chiave pubblica (`ed25519:…`). Le chiavi pubbliche vanno configurate sugli agenti: `module_signing_keys` e `job_signing_keys` nel file di configurazione, oppure i valori di registro `ModuleSigningKeys` e `JobSigningKeys` (REG_MULTI_SZ) via MSI o GPO. Per pubblicare moduli, imposta anche `OPENRMM_MODULE_KEYS` con la chiave pubblica di rilascio moduli. Come si firmano e pubblicano i moduli è descritto in [MODULI.md](MODULI.md).

@@ -27,13 +27,14 @@ Fase 0 (fondamenta), in corso:
 - [x] Esecuzione dei moduli firmati, con SDK PowerShell e sh; moduli `sysinfo` e `script`
 - [x] Coda dei job con consegna immediata e risultati che sopravvivono alle disconnessioni
 - [ ] Watchdog, task schedulato di controllo, aggiornamento automatico A/B
-- [ ] Servizio di firma dei job (`openrmm-signer`)
-- [ ] Console web con login Entra ID e MFA
+- [x] Servizio di firma dei job (`openrmm-signer`): firma solo comandi approvati con una nuova autenticazione MFA, verificata in modo indipendente
+- [x] Console web con login Entra ID e MFA: agenti, approvazioni, comandi e script, job, moduli, token, registro attività
 - [ ] Pacchetto MSI
 
 ## Installazione e sviluppo
 
 - Installazione del server: [docs/INSTALLAZIONE.md](docs/INSTALLAZIONE.md)
+- Configurazione di Microsoft Entra ID: [docs/ENTRA.md](docs/ENTRA.md)
 - Scrivere e pubblicare moduli: [docs/MODULI.md](docs/MODULI.md)
 - Sviluppo: [docs/SVILUPPO.md](docs/SVILUPPO.md)
 
