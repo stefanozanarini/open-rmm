@@ -62,4 +62,5 @@ jobs:
         working-directory: deploy
         run: |
           cp .env.example .env
+          sed -i 's/^OPENRMM_TENANT_MAP=$/OPENRMM_TENANT_MAP=placeholder/' .env
           docker compose config --quiet
