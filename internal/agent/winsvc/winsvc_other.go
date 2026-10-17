@@ -18,6 +18,10 @@ func Run(string, func(context.Context, *slog.Logger) error) error { return errNo
 
 func Install(string, string, string, ...string) error { return errNotWindows }
 
+func Ensure(string) error { return nil }
+
+func Harden() error { return nil }
+
 func Uninstall(string) error { return errNotWindows }
 
 func InstallHealthTask() error { return errNotWindows }

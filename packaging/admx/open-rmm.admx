@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- open-rmm agent settings for Group Policy (Computer Configuration). -->
+<policyDefinitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <policyNamespaces>
+    <target prefix="openrmm" namespace="OpenRMM.Policies.Agent"/>
+    <using prefix="windows" namespace="Microsoft.Policies.Windows"/>
+  </policyNamespaces>
+  <resources minRequiredRevision="1.0"/>
+  <supportedOn>
+    <definitions>
+      <definition name="SUPPORTED_OPENRMM" displayName="$(string.SUPPORTED_OPENRMM)"/>
+    </definitions>
+  </supportedOn>
+  <categories>
+    <category name="OpenRMM" displayName="$(string.OpenRMM)"/>
+    <category name="OpenRMM_Trust" displayName="$(string.OpenRMM_Trust)">
+      <parentCategory ref="OpenRMM"/>
+    </category>
+    <category name="OpenRMM_Local" displayName="$(string.OpenRMM_Local)">
+      <parentCategory ref="OpenRMM"/>
+    </category>
+  </categories>
+  <policies>
+    <policy name="Server" class="Machine" displayName="$(string.Server)" explainText="$(string.Server_Help)"
+            presentation="$(presentation.Server)" key="SOFTWARE\Policies\open-rmm">
+      <parentCategory ref="OpenRMM"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <elements>
+        <text id="Server" valueName="Server" required="true" maxLength="255"/>
+      </elements>
+    </policy>
+    <policy name="EnrollToken" class="Machine" displayName="$(string.EnrollToken)" explainText="$(string.EnrollToken_Help)"
+            presentation="$(presentation.EnrollToken)" key="SOFTWARE\Policies\open-rmm">
+      <parentCategory ref="OpenRMM"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <elements>
+        <text id="EnrollToken" valueName="EnrollToken" required="true" maxLength="200"/>
+      </elements>
+    </policy>
+    <policy name="RootCA" class="Machine" displayName="$(string.RootCA)" explainText="$(string.RootCA_Help)"
+            presentation="$(presentation.RootCA)" key="SOFTWARE\Policies\open-rmm">
+      <parentCategory ref="OpenRMM_Trust"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <elements>
+        <text id="RootCA" valueName="RootCA" required="true" maxLength="4096"/>
+      </elements>
+    </policy>
+    <policy name="JobSigningKeys" class="Machine" displayName="$(string.JobSigningKeys)" explainText="$(string.Keys_Help)"
+            presentation="$(presentation.JobSigningKeys)" key="SOFTWARE\Policies\open-rmm">
+      <parentCategory ref="OpenRMM_Trust"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <elements>
+        <text id="JobSigningKeys" valueName="JobSigningKeys" required="true" maxLength="1024"/>
+      </elements>
+    </policy>
+    <policy name="ModuleSigningKeys" class="Machine" displayName="$(string.ModuleSigningKeys)" explainText="$(string.Keys_Help)"
+            presentation="$(presentation.ModuleSigningKeys)" key="SOFTWARE\Policies\open-rmm">
+      <parentCategory ref="OpenRMM_Trust"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <elements>
+        <text id="ModuleSigningKeys" valueName="ModuleSigningKeys" required="true" maxLength="1024"/>
+      </elements>
+    </policy>
+    <policy name="ReleaseSigningKeys" class="Machine" displayName="$(string.ReleaseSigningKeys)" explainText="$(string.Keys_Help)"
+            presentation="$(presentation.ReleaseSigningKeys)" key="SOFTWARE\Policies\open-rmm">
+      <parentCategory ref="OpenRMM_Trust"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <elements>
+        <text id="ReleaseSigningKeys" valueName="ReleaseSigningKeys" required="true" maxLength="1024"/>
+      </elements>
+    </policy>
+    <policy name="AllowAdHocScripts" class="Machine" displayName="$(string.AllowAdHocScripts)" explainText="$(string.AllowAdHocScripts_Help)"
+            key="SOFTWARE\Policies\open-rmm" valueName="AllowAdHocScripts">
+      <parentCategory ref="OpenRMM_Local"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <enabledValue><decimal value="1"/></enabledValue>
+      <disabledValue><decimal value="0"/></disabledValue>
+    </policy>
+    <policy name="MaxConcurrentJobs" class="Machine" displayName="$(string.MaxConcurrentJobs)" explainText="$(string.MaxConcurrentJobs_Help)"
+            presentation="$(presentation.MaxConcurrentJobs)" key="SOFTWARE\Policies\open-rmm">
+      <parentCategory ref="OpenRMM_Local"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <elements>
+        <decimal id="MaxConcurrentJobs" valueName="MaxConcurrentJobs" minValue="1" maxValue="32" required="true"/>
+      </elements>
+    </policy>
+  </policies>
+</policyDefinitions>

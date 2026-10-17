@@ -8,7 +8,7 @@ BUF_VERSION := v1.74.0
 PROTOC_GEN_GO_VERSION := v1.36.12
 PROTOC_GEN_GO_GRPC_VERSION := v1.6.2
 
-.PHONY: all build build-windows test test-integration lint vuln proto tools
+.PHONY: all build build-windows msi test test-integration lint vuln proto tools
 
 all: lint test build
 
@@ -18,6 +18,10 @@ build:
 build-windows:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/openrmm-agent.exe ./agent/cmd/openrmm-agent
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/openrmm-watchdog.exe ./agent/cmd/openrmm-watchdog
+
+# Windows installer (needs VERSION=x.y.z; built with msitools/wixl).
+msi: build-windows
+	packaging/wix/build.sh $(VERSION)
 
 test:
 	$(GO) test -race -count=1 ./...

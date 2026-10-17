@@ -12,3 +12,7 @@ func DefaultDataDir() string { return "/var/lib/open-rmm" }
 func DefaultInstallDir() string { return "/opt/open-rmm" }
 
 func overlayOS(*Config) error { return nil }
+
+// ForgetEnrollToken is a no-op: on Linux the token lives in the
+// configuration file managed by the administrator.
+func ForgetEnrollToken() error { return nil }

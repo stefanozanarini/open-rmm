@@ -12,7 +12,9 @@ package config
 import (
 	"crypto/ed25519"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -97,6 +99,15 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid server port %q", port)
 	}
 	pemData := []byte(c.RootCAPEM)
+	// Registry and GPO values are single-line: accept the certificate also
+	// as base64 DER (openrmm-admin pki root-b64).
+	if len(pemData) > 0 && !strings.Contains(c.RootCAPEM, "-----BEGIN") {
+		der, err := base64.StdEncoding.DecodeString(strings.TrimSpace(c.RootCAPEM))
+		if err != nil {
+			return errors.New("root CA must be PEM or base64 DER")
+		}
+		pemData = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	}
 	if len(pemData) == 0 {
 		if c.RootCAFile == "" {
 			return errors.New("the pinned root CA is required (root_ca_file or root_ca_pem)")
@@ -157,6 +168,17 @@ func (c *Config) validate() error {
 		return errors.New("data_dir must be an absolute path")
 	}
 	return nil
+}
+
+// SplitList splits a single-line list of keys ("a,b" or "a;b").
+func SplitList(s string) []string {
+	var out []string
+	for _, p := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '\n' }) {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ServerName returns the host part of Server, used for TLS verification.

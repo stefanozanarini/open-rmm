@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>open-rmm</displayName>
+  <description>open-rmm agent</description>
+  <resources>
+    <stringTable>
+      <string id="SUPPORTED_OPENRMM">open-rmm agent on Windows 10, Windows Server 2016 or later</string>
+      <string id="OpenRMM">open-rmm</string>
+      <string id="OpenRMM_Trust">Trust and keys</string>
+      <string id="OpenRMM_Local">Local policies</string>
+      <string id="Server">Console address</string>
+      <string id="Server_Help">Address of the agents endpoint as host:port, e.g. agent.example.com:443.</string>
+      <string id="EnrollToken">Enrollment token</string>
+      <string id="EnrollToken_Help">Token created in the console (Tokens page) or with openrmm-admin token create. Used only at first start, to enroll the agent.
+
+WARNING: the values of this policy are readable by every user of the computer. Use a short-lived token without automatic approval: new agents wait until an administrator approves them.</string>
+      <string id="RootCA">Console root certificate</string>
+      <string id="RootCA_Help">open-rmm root certificate as base64 DER on one line (openrmm-admin pki root-b64 -in root-ca.crt). The agent only talks to a console whose certificate chains to this root.</string>
+      <string id="JobSigningKeys">Command signing keys</string>
+      <string id="ModuleSigningKeys">Module release keys</string>
+      <string id="ReleaseSigningKeys">Agent release keys</string>
+      <string id="Keys_Help">Public keys as ed25519:..., comma separated. The agent only accepts commands, modules or updates signed with one of them.</string>
+      <string id="AllowAdHocScripts">Allow ad-hoc PowerShell scripts</string>
+      <string id="AllowAdHocScripts_Help">When disabled, this computer refuses modules that run scripts received from the console (script module), whatever the console asks. When not configured, scripts are allowed.</string>
+      <string id="MaxConcurrentJobs">Concurrent commands</string>
+      <string id="MaxConcurrentJobs_Help">Maximum number of commands the agent runs at the same time (1-32, default 4).</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="Server"><textBox refId="Server"><label>host:port</label></textBox></presentation>
+      <presentation id="EnrollToken"><textBox refId="EnrollToken"><label>Token</label></textBox></presentation>
+      <presentation id="RootCA"><textBox refId="RootCA"><label>Base64 DER</label></textBox></presentation>
+      <presentation id="JobSigningKeys"><textBox refId="JobSigningKeys"><label>ed25519:...</label></textBox></presentation>
+      <presentation id="ModuleSigningKeys"><textBox refId="ModuleSigningKeys"><label>ed25519:...</label></textBox></presentation>
+      <presentation id="ReleaseSigningKeys"><textBox refId="ReleaseSigningKeys"><label>ed25519:...</label></textBox></presentation>
+      <presentation id="MaxConcurrentJobs"><decimalTextBox refId="MaxConcurrentJobs" defaultValue="4">MaxConcurrentJobs</decimalTextBox></presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>

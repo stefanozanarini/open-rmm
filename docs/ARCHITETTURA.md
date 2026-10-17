@@ -1,6 +1,6 @@
 # open-rmm — Documento di architettura
 
-> Stato: bozza v0.8 — 2026-10-17
+> Stato: bozza v0.9 — 2026-10-17
 > Primo cliente: ~200 endpoint Windows (client e server), parco misto Dell / Lenovo / Acer, BitLocker diffuso, console ospitata presso il cliente e raggiungibile da internet, portatili anche fuori sede.
 
 ---
@@ -483,8 +483,14 @@ Qualunque modulo che richiede un riavvio (Windows Update, firmware, winget, scri
 
 ## 10. Packaging e installazione
 
-- **MSI (WiX)** con proprietà `SERVER_URL`, `ENROLL_TOKEN`, `ALLOW_ADHOC_SCRIPTS`, `PROXY`. Installabile con GPO Software Installation + MST, oppure con script di avvio.
-- L'MSI installa i servizi `openrmm-agent` e `openrmm-watchdog` con le recovery options, il task schedulato di controllo, l'avvio automatico di `openrmm-userhelper` per gli utenti, e le ACL su `C:\Program Files\open-rmm` e `C:\ProgramData\open-rmm`.
+- **MSI** costruito su Linux con msitools/wixl, che usa lo schema WiX v3 ed è distribuito con licenza LGPL. Proprietà: `SERVER`, `ENROLLTOKEN`, `ROOTCA`, `JOBSIGNINGKEYS`, `MODULESIGNINGKEYS`, `RELEASESIGNINGKEYS`, `ALLOWADHOCSCRIPTS`. Dettagli in [INSTALLAZIONE-AGENTE.md](INSTALLAZIONE-AGENTE.md).
+- Con la GPO l'MSI si assegna così com'è e la configurazione arriva dal modello **ADMX** (`HKLM\SOFTWARE\Policies\open-rmm`), senza file MST.
+- L'MSI installa i file e i servizi `openrmm-agent` e `openrmm-watchdog`. Le impostazioni che wixl non esprime vengono applicate dai servizi stessi a ogni avvio:
+  - azioni di ripristino e avvio ritardato;
+  - task schedulato di controllo;
+  - ACL del registro e di `C:\ProgramData\open-rmm`.
+- Senza configurazione completa i servizi restano avviati e la riprovano ogni minuto, così un'installazione fatta prima dei criteri non fallisce.
+- I servizi sono registrati con `-service`: la modalità servizio è esplicita, non dedotta.
 - Disinstallazione protetta: richiede un codice o un comando dalla console, per evitare rimozioni da parte di malware o utenti.
 - Linux (fase 4): pacchetti `.deb`/`.rpm` con unit systemd.
 
@@ -536,3 +542,4 @@ Qualunque modulo che richiede un riavvio (Windows Update, firmware, winget, scri
 | 2026-10-17 | Firma dei job in `openrmm-signer` (container separato, socket locale): firma solo con un id_token Entra fresco, con MFA, il cui `nonce` è l'impronta esatta del comando |
 | 2026-10-17 | Aggiornamento dell'agente: release firmate con chiave dedicata, versioni affiancate, switch e rollback del watchdog, mai downgrade, rollout per anelli |
 | 2026-10-17 | Moduli prioritari: stato Trend Micro Vision One e ZTSA, login locali/RDP con rilevamento dei login inusuali |
+| 2026-10-17 | MSI costruito con msitools/wixl (LGPL, su Linux) invece di WiX Toolset; configurazione via ADMX per la GPO |

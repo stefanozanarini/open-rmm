@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  open-rmm agent installer (WiX v3 schema, built with msitools/wixl on Linux).
+
+  Installs agent and watchdog in %ProgramFiles%\open-rmm\versions\<version>\,
+  registers the two services and, optionally, writes the configuration passed
+  as public properties to HKLM\SOFTWARE\open-rmm:
+
+    SERVER              agent.example.com:443
+    ENROLLTOKEN         enrollment token (removed from the registry by the
+                        agent once enrolled)
+    ROOTCA              root CA, base64 DER (openrmm-admin pki root-b64)
+    JOBSIGNINGKEYS      ed25519:... (comma separated)
+    MODULESIGNINGKEYS   ed25519:...
+    RELEASESIGNINGKEYS  ed25519:...
+    ALLOWADHOCSCRIPTS   1 or 0
+
+  With Group Policy the recommended way is to assign the MSI unchanged and
+  set the same values through the ADMX template (packaging/admx), which
+  writes HKLM\SOFTWARE\Policies\open-rmm and takes precedence.
+
+  Settings wixl cannot express (service recovery actions, delayed start, the
+  scheduled health check, registry permissions) are applied by the services
+  themselves at every start.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="open-rmm agent" Manufacturer="open-rmm" Version="$(var.Version)"
+           UpgradeCode="4B4C42F6-5B9A-4C37-9A5E-3A0E6D2F7A10" Language="1033">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Description="open-rmm endpoint management agent" Comments="https://github.com/stefanozanarini/open-rmm"/>
+    <MajorUpgrade DowngradeErrorMessage="A newer version of the open-rmm agent is already installed."/>
+    <Media Id="1" Cabinet="agent.cab" EmbedCab="yes"/>
+
+    <Condition Message="The open-rmm agent requires 64-bit Windows.">VersionNT64</Condition>
+    <!-- No Modify/Repair: a repair would write the enrollment token back. -->
+    <Property Id="ARPNOMODIFY" Value="1"/>
+    <Property Id="ARPNOREPAIR" Value="1"/>
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/stefanozanarini/open-rmm"/>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="OPENRMMDIR" Name="open-rmm">
+          <Directory Id="VERSIONSDIR" Name="versions">
+            <Directory Id="VERSIONDIR" Name="$(var.Version)">
+
+              <Component Id="AgentExe" Guid="*" Win64="yes">
+                <File Id="AgentExe" Name="openrmm-agent.exe" Source="$(var.BinDir)/openrmm-agent.exe" KeyPath="yes"/>
+                <ServiceInstall Id="AgentService" Name="openrmm-agent" DisplayName="open-rmm agent"
+                                Description="open-rmm endpoint management agent" Type="ownProcess" Start="auto"
+                                ErrorControl="normal" Account="LocalSystem"
+                                Arguments='run -service -config "[CommonAppDataFolder]open-rmm\agent.json"'/>
+                <ServiceControl Id="AgentServiceControl" Name="openrmm-agent" Start="install" Stop="both" Remove="uninstall" Wait="yes"/>
+              </Component>
+
+              <Component Id="WatchdogExe" Guid="*" Win64="yes">
+                <File Id="WatchdogExe" Name="openrmm-watchdog.exe" Source="$(var.BinDir)/openrmm-watchdog.exe" KeyPath="yes"/>
+                <ServiceInstall Id="WatchdogService" Name="openrmm-watchdog" DisplayName="open-rmm watchdog"
+                                Description="Keeps the open-rmm agent running and applies its updates" Type="ownProcess"
+                                Start="auto" ErrorControl="normal" Account="LocalSystem"
+                                Arguments='run -service -config "[CommonAppDataFolder]open-rmm\agent.json"'/>
+                <ServiceControl Id="WatchdogServiceControl" Name="openrmm-watchdog" Start="install" Stop="both" Remove="uninstall" Wait="yes"/>
+              </Component>
+
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+
+      <Directory Id="CommonAppDataFolder">
+        <Directory Id="DATADIR" Name="open-rmm">
+          <Component Id="DataDir" Guid="8F0F4A6E-2D1B-4B7E-9A51-6C0D3E9F2B11" Win64="yes">
+            <CreateFolder/>
+          </Component>
+        </Directory>
+      </Directory>
+
+      <!--
+        Configuration from the public properties. wixl has no component
+        conditions, so every value is always written: the agent ignores empty
+        values, and AllowAdHocScripts is a string for that reason (an empty
+        DWORD could read as 0 and silently disable scripts).
+      -->
+      <Component Id="Registry" Guid="0C3B8F6A-2F2E-4B0B-8A0E-1A7F3D1C9A01" Win64="yes">
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="InstalledVersion" Type="string" Value="$(var.Version)" KeyPath="yes"/>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="Server" Type="string" Value="[SERVER]"/>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="EnrollToken" Type="string" Value="[ENROLLTOKEN]"/>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="RootCA" Type="string" Value="[ROOTCA]"/>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="JobSigningKeys" Type="string" Value="[JOBSIGNINGKEYS]"/>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="ModuleSigningKeys" Type="string" Value="[MODULESIGNINGKEYS]"/>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="ReleaseSigningKeys" Type="string" Value="[RELEASESIGNINGKEYS]"/>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="AllowAdHocScripts" Type="string" Value="[ALLOWADHOCSCRIPTS]"/>
+      </Component>
+    </Directory>
+
+    <!--
+      On removal (not during upgrades): delete the scheduled task, the versions
+      installed by automatic updates and the agent state, including its
+      private key. Runs after the services are deleted (2000) and before the
+      MSI removes its own files (3500).
+    -->
+    <CustomAction Id="Cleanup" FileKey="WatchdogExe" ExeCommand="msi-uninstall" Execute="deferred" Impersonate="no" Return="ignore"/>
+    <InstallExecuteSequence>
+      <Custom Action="Cleanup" Sequence="3450">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+
+    <Feature Id="Agent" Title="open-rmm agent" Level="1">
+      <ComponentRef Id="AgentExe"/>
+      <ComponentRef Id="WatchdogExe"/>
+      <ComponentRef Id="DataDir"/>
+      <ComponentRef Id="Registry"/>
+    </Feature>
+  </Product>
+</Wix>

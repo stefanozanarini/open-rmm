@@ -1,6 +1,7 @@
 // Command openrmm-admin bootstraps and administers a console.
 //
 //	openrmm-admin pki init -dir DIR -gateway-dns agent.example.com
+//	openrmm-admin pki root-b64 -in root-ca.crt      (value for GPO/MSI: RootCA / ROOTCA)
 //	openrmm-admin db migrate
 //	openrmm-admin tenant create -name "Cliente"
 //	openrmm-admin token create -tenant UUID [-ttl 24h] [-max-uses 1] [-auto-approve] [-description ...]
@@ -31,6 +32,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -62,6 +64,8 @@ func run(args []string) error {
 	switch area + " " + cmd {
 	case "pki init":
 		return pkiInit(rest)
+	case "pki root-b64":
+		return pkiRootB64(rest)
 	case "signing keygen":
 		return signingKeygen(rest)
 	case "module sign":
@@ -355,5 +359,29 @@ func auditVerify(ctx context.Context, db store.Store, args []string) error {
 		return fmt.Errorf("audit chain BROKEN: %w", err)
 	}
 	fmt.Printf("audit chain OK (%d events)\n", len(events))
+	return nil
+}
+
+// pkiRootB64 prints the root certificate as single-line base64 DER, the
+// format expected by the RootCA registry value (GPO, MSI property).
+func pkiRootB64(args []string) error {
+	fs := flag.NewFlagSet("pki root-b64", flag.ContinueOnError)
+	in := fs.String("in", "", "root-ca.crt")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(*in) // #nosec G304 -- operator-chosen file
+	if err != nil {
+		return err
+	}
+	certs, err := pki.ParseCertsPEM(data)
+	if err != nil {
+		return err
+	}
+	if len(certs) != 1 || !certs[0].IsCA {
+		return errors.New("expected exactly one CA certificate")
+	}
+	fmt.Fprintf(os.Stderr, "SHA-256 fingerprint: %s\n", pki.Fingerprint(certs[0]))
+	fmt.Println(base64.StdEncoding.EncodeToString(certs[0].Raw))
 	return nil
 }

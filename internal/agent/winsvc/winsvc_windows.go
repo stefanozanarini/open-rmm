@@ -5,6 +5,7 @@ package winsvc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
@@ -93,6 +95,25 @@ func Install(name, display, description string, args ...string) error {
 	if err != nil {
 		return err
 	}
+	s.Close()
+	return Ensure(name)
+}
+
+// Ensure applies the service settings the MSI cannot express (wixl has no
+// ServiceConfig): recovery actions (restart after 5s, 30s, then every 2
+// minutes, counter reset after a day, also on non-crash failures), delayed
+// automatic start and the event log source. Services call it at startup, so
+// the settings are also restored if someone changes them.
+func Ensure(name string) error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return err
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(name)
+	if err != nil {
+		return err
+	}
 	defer s.Close()
 	if err := s.SetRecoveryActions([]mgr.RecoveryAction{
 		{Type: mgr.ServiceRestart, Delay: 5 * time.Second},
@@ -104,8 +125,41 @@ func Install(name, display, description string, args ...string) error {
 	if err := s.SetRecoveryActionsOnNonCrashFailures(true); err != nil {
 		return err
 	}
+	cfg, err := s.Config()
+	if err != nil {
+		return err
+	}
+	if cfg.StartType == mgr.StartAutomatic && !cfg.DelayedAutoStart {
+		cfg.DelayedAutoStart = true
+		if err := s.UpdateConfig(cfg); err != nil {
+			return err
+		}
+	}
 	_ = eventlog.InstallAsEventCreate(name, eventlog.Error|eventlog.Warning|eventlog.Info)
 	return nil
+}
+
+// protectedSDDL grants full control to LocalSystem and Administrators only.
+const protectedKeySDDL = "D:P(A;CI;KA;;;SY)(A;CI;KA;;;BA)"
+
+// Harden restricts HKLM\SOFTWARE\open-rmm (written by the MSI, may hold the
+// enrollment token) to SYSTEM and Administrators. By default HKLM\SOFTWARE
+// is readable by every user.
+func Harden() error {
+	sd, err := windows.SecurityDescriptorFromString(protectedKeySDDL)
+	if err != nil {
+		return err
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil {
+		return err
+	}
+	err = windows.SetNamedSecurityInfo(`MACHINE\SOFTWARE\open-rmm`, windows.SE_REGISTRY_KEY,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
+	if errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+		return nil
+	}
+	return err
 }
 
 // Uninstall removes a service.

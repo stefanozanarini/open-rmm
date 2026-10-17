@@ -29,12 +29,13 @@ Fase 0 (fondamenta), in corso:
 - [x] Watchdog, task schedulato di controllo, aggiornamento automatico A/B con rollback, rollout per anelli
 - [x] Servizio di firma dei job (`openrmm-signer`): firma solo comandi approvati con una nuova autenticazione MFA, verificata in modo indipendente
 - [x] Console web con login Entra ID e MFA: agenti, approvazioni, comandi e script, job, moduli, token, registro attività
-- [ ] Pacchetto MSI
+- [x] Pacchetto MSI per GPO (costruito su Linux con wixl) e modelli ADMX in italiano e inglese
 
 ## Installazione e sviluppo
 
 - Installazione del server: [docs/INSTALLAZIONE.md](docs/INSTALLAZIONE.md)
 - Configurazione di Microsoft Entra ID: [docs/ENTRA.md](docs/ENTRA.md)
+- Installazione dell'agente su Windows (MSI, GPO): [docs/INSTALLAZIONE-AGENTE.md](docs/INSTALLAZIONE-AGENTE.md)
 - Scrivere e pubblicare moduli: [docs/MODULI.md](docs/MODULI.md)
 - Aggiornamento dell'agente: [docs/AGGIORNAMENTI.md](docs/AGGIORNAMENTI.md)
 - Sviluppo: [docs/SVILUPPO.md](docs/SVILUPPO.md)

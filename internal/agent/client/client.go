@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -221,6 +222,9 @@ func (c *Client) enroll(ctx context.Context) (*identity.Identity, error) {
 		return nil, err
 	}
 	c.log.Info("enrolled", "tenant", id.TenantID, "agent", id.AgentID)
+	if err := config.ForgetEnrollToken(); err != nil {
+		c.log.Warn("could not remove the enrollment token from the registry", "err", err)
+	}
 	return id, nil
 }
 
@@ -284,7 +288,11 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 	sess := &session{ctx: sctx, out: sendCh, conn: conn}
 	go c.updater.ReportResult(sess)
 	if c.Services != nil && c.ConfigPath != "" {
-		go updater.UpdateWatchdog(c.Services, c.cfg.InstallDir, []string{"run", "-config", c.ConfigPath}, c.log)
+		args := []string{"run", "-config", c.ConfigPath}
+		if runtime.GOOS == "windows" {
+			args = []string{"run", "-service", "-config", c.ConfigPath}
+		}
+		go updater.UpdateWatchdog(c.Services, c.cfg.InstallDir, args, c.log)
 	}
 	recvErr := make(chan error, 1)
 	go func() {

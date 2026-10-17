@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
+  <displayName>open-rmm</displayName>
+  <description>open-rmm agent</description>
+  <resources>
+    <stringTable>
+      <string id="SUPPORTED_OPENRMM">Agente open-rmm su Windows 10, Windows Server 2016 o successivi</string>
+      <string id="OpenRMM">open-rmm</string>
+      <string id="OpenRMM_Trust">Fiducia e chiavi</string>
+      <string id="OpenRMM_Local">Policy locali</string>
+      <string id="Server">Indirizzo della console</string>
+      <string id="Server_Help">Indirizzo dell'endpoint degli agenti nella forma host:porta, ad esempio agent.cliente.it:443. Deve risolvere sia dalla LAN sia da internet se i PC lavorano anche fuori sede.</string>
+      <string id="EnrollToken">Token di registrazione</string>
+      <string id="EnrollToken_Help">Token creato nella console (pagina Token) o con openrmm-admin token create. Serve solo al primo avvio, per registrare l'agente.
+
+ATTENZIONE: i valori di questo criterio sono leggibili da tutti gli utenti del computer. Usa un token con scadenza breve e senza approvazione automatica: i nuovi agenti restano in attesa finché un amministratore non li approva.</string>
+      <string id="RootCA">Certificato radice della console</string>
+      <string id="RootCA_Help">Certificato radice di open-rmm in base64 DER, su una sola riga (openrmm-admin pki root-b64 -in root-ca.crt). L'agente si collega solo a una console il cui certificato discende da questa radice.</string>
+      <string id="JobSigningKeys">Chiavi di firma dei comandi</string>
+      <string id="ModuleSigningKeys">Chiavi di rilascio dei moduli</string>
+      <string id="ReleaseSigningKeys">Chiavi di rilascio dell'agente</string>
+      <string id="Keys_Help">Chiavi pubbliche nella forma ed25519:..., separate da virgola. L'agente accetta solo comandi, moduli o aggiornamenti firmati con una di queste chiavi.</string>
+      <string id="AllowAdHocScripts">Consenti gli script PowerShell ad hoc</string>
+      <string id="AllowAdHocScripts_Help">Se disattivato, questo computer rifiuta i moduli che eseguono script ricevuti dalla console (modulo script), qualunque cosa chieda la console. Se non configurato, gli script sono consentiti.</string>
+      <string id="MaxConcurrentJobs">Comandi eseguiti contemporaneamente</string>
+      <string id="MaxConcurrentJobs_Help">Numero massimo di comandi eseguiti contemporaneamente dall'agente (1-32, predefinito 4).</string>
+    </stringTable>
+    <presentationTable>
+      <presentation id="Server"><textBox refId="Server"><label>host:porta</label></textBox></presentation>
+      <presentation id="EnrollToken"><textBox refId="EnrollToken"><label>Token</label></textBox></presentation>
+      <presentation id="RootCA"><textBox refId="RootCA"><label>Base64 DER</label></textBox></presentation>
+      <presentation id="JobSigningKeys"><textBox refId="JobSigningKeys"><label>ed25519:...</label></textBox></presentation>
+      <presentation id="ModuleSigningKeys"><textBox refId="ModuleSigningKeys"><label>ed25519:...</label></textBox></presentation>
+      <presentation id="ReleaseSigningKeys"><textBox refId="ReleaseSigningKeys"><label>ed25519:...</label></textBox></presentation>
+      <presentation id="MaxConcurrentJobs"><decimalTextBox refId="MaxConcurrentJobs" defaultValue="4">MaxConcurrentJobs</decimalTextBox></presentation>
+    </presentationTable>
+  </resources>
+</policyDefinitionResources>
