@@ -35,3 +35,7 @@ Vedi [docs/SVILUPPO.md](docs/SVILUPPO.md).
 ```bash
 make test
 ```
+
+## Licenza
+
+open-rmm è distribuito con licenza [GNU Affero General Public License v3.0](LICENSE). Chi modifica open-rmm e lo offre come servizio in rete deve rendere disponibile il codice sorgente delle proprie modifiche.
