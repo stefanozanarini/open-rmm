@@ -16,6 +16,7 @@ import (
 
 // resultModule is a fake module whose action returns the given JSON.
 func resultModule(t *testing.T, id, version, action, result string) string {
+	result = strings.ReplaceAll(result, "\n", " ") // one JSON line
 	m := fmt.Sprintf(`{"id":%q,"version":%q,"protocol_version":1,"entrypoints":{%q:{"type":"sh","path":"main.sh"}},"actions":{%q:{}}}`,
 		id, version, platform(), action)
 	return shModule(t, m, `. "$OPENRMM_MODULE_DIR/_sdk/openrmm.sh"; rmm_read_request

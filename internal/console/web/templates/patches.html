@@ -1,0 +1,49 @@
+{{define "content"}}
+{{with .Data}}
+<div class="toolbar">
+  <nav class="tabs">
+    <a href="/patches" {{if eq .Family ""}}class="current"{{end}}>Tutti</a>
+    <a href="/patches?family=client" {{if eq .Family "client"}}class="current"{{end}}>Client</a>
+    <a href="/patches?family=server" {{if eq .Family "server"}}class="current"{{end}}>Server</a>
+  </nav>
+</div>
+<div class="cards">
+  <div class="card"><span class="num">{{.ComplianceRate}}%</span>in regola<br><span class="muted">{{.Compliant}} su {{.Total}}</span></div>
+  <div class="card {{if .MissingSec}}bad{{end}}"><span class="num">{{.MissingSec}}</span>con aggiornamenti di sicurezza mancanti</div>
+  <div class="card {{if .Behind}}bad{{end}}"><span class="num">{{.Behind}}</span>indietro di più di un Patch Tuesday</div>
+  <div class="card {{if .RebootPending}}warn{{end}}"><span class="num">{{.RebootPending}}</span>con riavvio in sospeso</div>
+  <div class="card {{if .ThirdParty}}warn{{end}}"><span class="num">{{.ThirdParty}}</span>con applicazioni da aggiornare</div>
+  <div class="card"><span class="num">{{.NotScanned}}</span>senza verifica negli ultimi 7 giorni</div>
+  {{if .Managed}}<div class="card"><span class="num">{{.Managed}}</span>gestiti da WSUS o Intune (solo osservazione)</div>{{end}}
+</div>
+
+<h2>Endpoint, dal più indietro</h2>
+{{if .Rows}}
+<table>
+<thead><tr><th>Nome</th><th>Sicurezza mancanti</th><th>Più vecchio</th><th>Altri</th><th>Riavvio</th><th>App da aggiornare</th><th>Gestione</th><th>Ultima verifica</th></tr></thead>
+<tbody>
+{{range .Rows}}{{$days := .RebootDays}}<tr>
+  <td>{{if .Online}}<span class="dot online"></span>{{else}}<span class="dot"></span>{{end}} <a href="/agents/{{.Agent.ID}}">{{.Agent.Host.Hostname}}</a>{{if eq .Agent.Host.OSFamily "server"}} <span class="badge">server</span>{{end}}</td>
+  {{with .Windows}}
+  <td>{{if .Important}}<span class="badge chk-failing">{{.Important}}</span>{{else}}<span class="badge chk-ok">0</span>{{end}}</td>
+  <td>{{if .Important}}{{.OldestDays}} giorni{{if .Behind}} <span class="muted">({{.Behind}} Patch Tuesday)</span>{{end}}{{else}}-{{end}}</td>
+  <td>{{.Other}}</td>
+  <td>{{if .Reboot}}<span class="badge chk-warning">da {{$days}} gg</span>{{else}}-{{end}}</td>
+  {{else}}<td colspan="4" class="muted">nessuna verifica di Windows Update</td>{{end}}
+  <td>{{with .Winget}}{{if .ThirdParty}}<span class="badge chk-warning">{{.ThirdParty}}</span>{{else}}0{{end}}{{else}}-{{end}}</td>
+  <td>{{with .Windows}}{{if eq .ManagedBy "none"}}open-rmm{{else}}{{.ManagedBy}} <span class="muted">(osservazione)</span>{{end}}{{end}}</td>
+  <td>{{with .Windows}}{{fmtTime .ScannedAt}}{{end}}{{if .Stale}} <span class="badge chk-warning">vecchia</span>{{end}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}<p class="muted">Nessun endpoint attivo.</p>{{end}}
+
+<h2>Applicazioni più diffuse da aggiornare</h2>
+{{if .Apps}}
+<table>
+<thead><tr><th>Applicazione</th><th>Id winget</th><th>Ultima versione</th><th>Endpoint</th></tr></thead>
+<tbody>{{range .Apps}}<tr><td>{{.Name}}</td><td><code>{{.ID}}</code></td><td>{{.Available}}</td><td>{{.Agents}}</td></tr>{{end}}</tbody>
+</table>
+{{else}}<p class="muted">Nessun dato da winget. Crea una policy con il modulo <code>winget</code> (azione <code>scan</code>).</p>{{end}}
+{{end}}
+{{end}}

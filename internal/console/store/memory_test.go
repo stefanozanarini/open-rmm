@@ -480,3 +480,37 @@ func testSecurity(t *testing.T, s Store) {
 		t.Fatalf("list = %+v", list)
 	}
 }
+
+func TestUpdateStatus(t *testing.T) { testUpdateStatus(t, NewMemory()) }
+
+func testUpdateStatus(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	agent := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "pc"},
+		CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, agent)
+	now := time.Now().UTC().Truncate(time.Second)
+	st := UpdateStatus{TenantID: tenant.ID, AgentID: agent.ID, Source: "windows", ScannedAt: now, Data: []byte(`{"a":1}`),
+		ManagedBy: "wsus", Important: 3, Behind: 2, Reboot: true, RebootSince: &now}
+	if err := s.PutUpdateStatus(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	old := st
+	old.ScannedAt, old.Important = now.Add(-time.Hour), 9
+	if err := s.PutUpdateStatus(ctx, old); err != ErrStaleReport {
+		t.Fatalf("stale: %v", err)
+	}
+	s.PutUpdateStatus(ctx, UpdateStatus{TenantID: tenant.ID, AgentID: agent.ID, Source: "winget", ScannedAt: now, Data: []byte(`{}`), ThirdParty: 4})
+	list, err := s.ListUpdateStatus(ctx, tenant.ID, "")
+	if err != nil || len(list) != 2 || list[0].Source != "windows" || list[0].Important != 3 || list[0].RebootSince == nil ||
+		list[0].ManagedBy != "wsus" || list[1].ThirdParty != 4 {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+	if mine, _ := s.ListUpdateStatus(ctx, tenant.ID, agent.ID); len(mine) != 2 {
+		t.Fatal("by agent")
+	}
+	if other, _ := s.ListUpdateStatus(ctx, ids.NewUUID(), ""); len(other) != 0 {
+		t.Fatal("visible from another tenant")
+	}
+}

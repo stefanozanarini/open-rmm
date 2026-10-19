@@ -34,9 +34,10 @@ Phase 0 (foundations):
 - [x] Signed policies: periodic module actions with declarative conditions (conditional plugins), approved with MFA once per version
 - [x] `inventory` module: hardware, BitLocker, battery, software, Supremo/AnyDesk/TeamViewer ids; change history; Clients and Servers sections
 - [x] Security plugins: `trendmicro`, `protection-status`, `accesslog` with unusual-logon alerts (RDP outside the LAN subnets, password spraying, lockouts); checks and alerts; Trend Vision One connector (EU)
+- [x] Updates: `winupdate` (WSUS/Intune observation mode), `winget`, `reboot`; maintenance windows in policies; Patch dashboard ranking endpoints by how far behind they are
 - [ ] Validation on real Windows
 
-Next: Windows and third-party updates with dashboards, software distribution, setup wizard, federation. See the [roadmap](docs/ARCHITECTURE.md#13-roadmap).
+Next: software distribution, setup wizard, federation. See the [roadmap](docs/ARCHITECTURE.md#13-roadmap).
 
 ## Documentation
 

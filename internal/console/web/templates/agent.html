@@ -45,6 +45,32 @@
 </table>
 {{else}}<p class="muted">Nessun controllo. I controlli arrivano dai moduli eseguiti dalle policy (ad esempio <code>trendmicro</code> e <code>protection-status</code>).</p>{{end}}
 
+<h2>Aggiornamenti</h2>
+{{with .Data.Updates}}
+{{with .Windows}}
+<p class="muted">Windows Update verificato il {{fmtTime .ScannedAt}} · gestione: {{label .ManagedBy}}{{if ne .ManagedBy "none"}} (open-rmm osserva soltanto{{with .WSUSServer}}, server {{.}}{{end}}){{end}}{{with .LastSuccess}} · ultima installazione riuscita {{isoDate .}}{{end}}</p>
+{{if .PendingReboot.Required}}<p><span class="badge chk-warning">riavvio in sospeso</span>{{with .PendingReboot.Since}} dal {{isoDate .}}{{end}} <span class="muted">({{range $i, $r := .PendingReboot.Reasons}}{{if $i}}, {{end}}{{label $r}}{{end}})</span></p>{{end}}
+{{if .Updates}}
+<table>
+<thead><tr><th>Aggiornamento</th><th>KB</th><th>Tipo</th><th>Uscito</th></tr></thead>
+<tbody>{{range .Updates}}<tr><td>{{.Title}}</td><td>{{range .KBs}}{{.}} {{end}}</td>
+<td>{{if .Important}}<span class="badge chk-failing">{{if eq .Classification "critical"}}critico{{else}}sicurezza{{end}}</span>{{else}}{{label .Classification}}{{end}}{{with .Severity}} <span class="muted">{{.}}</span>{{end}}</td>
+<td>{{isoDate .Released}}</td></tr>{{end}}</tbody>
+</table>
+{{else}}<p><span class="badge chk-ok">aggiornato</span> nessun aggiornamento di Windows mancante.</p>{{end}}
+{{end}}
+{{with .Winget}}
+<h3>Applicazioni da aggiornare (winget)</h3>
+{{if .Upgrades}}
+<table>
+<thead><tr><th>Applicazione</th><th>Id</th><th>Installata</th><th>Disponibile</th></tr></thead>
+<tbody>{{range .Upgrades}}<tr><td>{{.Name}}</td><td><code>{{.ID}}</code></td><td>{{.Version}}</td><td>{{.Available}}</td></tr>{{end}}</tbody>
+</table>
+{{else}}<p class="muted">Nessuna applicazione da aggiornare (verificato il {{fmtTime .ScannedAt}}).</p>{{end}}
+{{end}}
+{{if not .HasReport}}<p class="muted">Nessuna verifica. Crea una policy con i moduli <code>winupdate</code> (azione <code>scan</code>) e <code>winget</code> (azione <code>scan</code>).</p>{{end}}
+{{end}}
+
 <h2>Inventario</h2>
 {{with .Data.Inv}}
 <p class="muted">Raccolto il {{fmtTime .CollectedAt}} · ricevuto il {{fmtTime $.Data.InvAt}}</p>

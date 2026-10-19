@@ -244,7 +244,7 @@ func (m *Manager) RunDue() {
 		}
 		for _, r := range a.pol.Rules {
 			key := a.pol.ID + "/" + r.ID
-			if m.running[key] || now.Before(m.due(key, r, now)) {
+			if m.running[key] || now.Before(m.due(key, r, now)) || !r.Window.Contains(now.Local()) {
 				continue
 			}
 			if !m.condition(key, r, now) {

@@ -143,6 +143,7 @@ type agentData struct {
 	Checks   []store.Check
 	Alerts   []alertView
 	Logons   []store.LogonEvent
+	Updates  agentUpdates
 }
 
 func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +194,10 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Alerts = s.alertViews(r, t, alerts)
 	if d.Logons, err = s.store.ListLogonEvents(r.Context(), t, id, 100); err != nil {
+		s.fail(w, err)
+		return
+	}
+	if d.Updates, err = s.agentUpdates(r, t, id); err != nil {
 		s.fail(w, err)
 		return
 	}
@@ -608,7 +613,7 @@ func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
 			d.Problems = append(d.Problems, a)
 		}
 	}
-	s.render(w, r, "updates", "Aggiornamenti dell'agente", d)
+	s.render(w, r, "updates", "Versioni dell'agente", d)
 }
 
 type resultView struct {

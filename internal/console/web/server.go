@@ -201,6 +201,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /tokens", s.role(authn.RoleAdmin, s.handleCreateToken))
 	mux.Handle("GET /audit", s.auth(s.handleAudit))
 	mux.Handle("GET /alerts", s.auth(s.handleAlerts))
+	mux.Handle("GET /patches", s.auth(s.handlePatches))
 	mux.Handle("POST /alerts/{id}/ack", s.role(authn.RoleOperator, s.handleAckAlert))
 	mux.Handle("GET /settings", s.role(authn.RoleAdmin, s.handleSettings))
 	mux.Handle("POST /settings", s.role(authn.RoleAdmin, s.handleSaveSettings))
@@ -395,6 +396,9 @@ var labels = map[string]string{
 	"check.failing": "controllo non superato", "rdp.outside_lan": "RDP fuori dalle reti consentite",
 	"rdp.new_source": "RDP da indirizzo nuovo", "logon.failures": "accessi falliti ripetuti",
 	"logon.spray": "password spraying", "account.lockout": "account bloccato", "logon.truncated": "eventi troncati",
-	"logon": "accesso", "logon_failed": "accesso fallito", "lockout": "blocco account", "rdp_auth": "autenticazione RDP",
+	"logon": "accesso", "security": "sicurezza", "rollup": "cumulativo", "update": "aggiornamento",
+	"definition": "definizioni", "feature_pack": "feature pack", "service_pack": "service pack", "upgrade": "nuova versione",
+	"tools": "strumenti", "driver": "driver", "wsus": "WSUS", "intune": "Intune", "none": "open-rmm",
+	"windows_update": "Windows Update", "component_servicing": "componenti di Windows", "file_rename": "file da sostituire", "logon_failed": "accesso fallito", "lockout": "blocco account", "rdp_auth": "autenticazione RDP",
 	"rdp_session_logon": "sessione RDP", "rdp_disconnect": "RDP disconnesso", "rdp_reconnect": "RDP riconnesso",
 }

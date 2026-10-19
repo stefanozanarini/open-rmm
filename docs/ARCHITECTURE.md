@@ -179,6 +179,7 @@ Recurring work (inventory every 24 h, Trend Micro status every 15 min, logon eve
 - The core evaluates only **declarative conditions**: `service_exists`, `file_exists`, `registry_key_exists` (HKLM), `os_family`, combined with `all`, `any`, `not` (depth ≤ 4). No product-specific logic enters the core. Results are cached for 5 minutes.
 - The module is fetched only when a rule is due and its condition holds: endpoints without Trend Micro never download the Trend module. This is how "agent detects Trend Micro → downloads and enables the plugin" works without enlarging the core. Modules are pinned by manifest hash.
 - The agent refuses policies for another tenant, with an invalid signature, or older than a version it has already seen (no rollback by a compromised console). Policies are stored in `policies.json` and keep running offline; results go through the outbox and are shown on the agent page.
+- A rule may have a **maintenance window** in the endpoint's local time, e.g. `"window": {"days": ["sat","sun"], "start": "22:00", "end": "05:00"}` (a window crossing midnight belongs to the day it starts); a due rule waits for the next window.
 - Intervals are between 1 minute and 7 days; the first run of a new rule is delayed by a random amount (up to 2 minutes) so a fleet does not run it all at once.
 - Modules with the `adhoc_script` capability are refused in policies, both by the console and by the agent.
 
@@ -361,15 +362,19 @@ The installation type is also sent by the core on connect (one field), so the co
 - **Checks convention:** any module may add `"checks": [{"id": "sep", "status": "ok|warning|failing", "summary": "…"}]` to its result. The console stores the latest status per agent as `<module>/<id>` (module from the console's own records) and shows them on the agent page and, as the worst status, in the agent lists. A check that starts failing raises an alert.
 - **Alerts** have a severity (info, warning, critical), are merged while open (same key: count and last time) and are taken in charge by an Operator (audited). The number of open alerts is shown in the navigation.
 
-### 8.5 `winupdate` 📋
+### 8.5 `winupdate` ✅
 
-WUA COM API (`scan`, `download`, `install`, `history`); categories and rings, KB blocking, maintenance windows; WSUS/Intune detection with **managed** and **observation** modes; error-code translation and a separate `wu-repair` module.
+- Windows Update Agent COM API. `scan`: missing updates (classification by category id, so it works on any display language; KB, severity, release date), pending reboot and since when, last successful installation, **who manages updates** (WSUS from the Group Policy keys, Intune from the MDM policy keys, or nobody). `install`: downloads and installs by classification (default security, critical, rollup, update, definition), with `include_kbs`/`exclude_kbs`; skips updates that need user input; **never reboots**.
+- **WSUS/Intune coexistence:** on a managed endpoint open-rmm only **observes** (scan, dashboards); `install` refuses unless the policy sets `allow_managed`.
+- Checks: `winupdate/updates` (failing when security/critical updates released more than `max_age_days`, default 30, are missing) and `winupdate/reboot` (warning when a reboot has been pending for 3 days).
+- 📋 Later: error-code translation, `wu-repair`, drivers and firmware through Windows Update, rings and KB blocking at console level.
 
-### 8.6 `winget` and third-party updates 📋
+### 8.6 `winget` and third-party updates ✅ (first version)
 
-- On clients: `Microsoft.WinGet.Client` / COM API (never parsing text output); approved package list; rings; pinning; per-user apps through the user helper; `bootstrap` installs App Installer where missing.
-- **Console-side catalog:** the console imports the winget community index and matches it against each endpoint's software inventory, so outdated software is detected also where winget is not available (Windows Server 2019, LTSC). This drives the update dashboards (§11).
-- 📋 Private REST source for internal packages.
+- The module runs the App Installer `winget.exe` directly (it is not on the system account's PATH). `scan` lists the applications with an available upgrade; `upgrade` upgrades given ids, or all except `exclude`. Package ids are validated before being passed to winget.
+- winget has no machine-readable output for upgrades: this first version parses its table by the column positions of the header (independent of the display language); rows with truncated ids are skipped and logged. 📋 Move to `Microsoft.WinGet.Client` / the COM API, which need extra components on the endpoint.
+- Check `winget/thirdparty`: warning when upgrades are available.
+- 📋 **Console-side catalog:** import the winget community index and match it against each endpoint's software inventory, so outdated software is detected also where winget is not available (Windows Server 2019, LTSC). 📋 Per-user apps through the user helper; `bootstrap` installing App Installer where missing; private REST source.
 
 ### 8.7 Software distribution and removal (`msi-install`, `software-uninstall`) 📋
 
@@ -382,9 +387,23 @@ WUA COM API (`scan`, `download`, `install`, `history`); categories and rings, KB
 
 `firmware-dell` (Dell Command | Update), `firmware-lenovo` (Thin Installer), Windows Update firmware for other brands. Preconditions: AC power, battery level, **BitLocker recovery key escrowed**, BitLocker suspended for one reboot. Never automatic by default.
 
-### 8.9 `reboot` 📋
+### 8.9 `reboot` ✅
 
-Modules never reboot by themselves; they report "reboot required" and the `reboot` module applies the group's reboot policy (never / notify with deferrals / maintenance window only / immediate with notice), quiet hours, presentation mode, battery threshold, pre/post scripts.
+Modules never reboot by themselves; they report a pending reboot and the `reboot` module applies the reboot policy. **When** is decided by the policy rule's maintenance window (§3.7); the module decides **whether**:
+
+- `only_if_pending` (default true) and `min_pending_hours`;
+- `notice_minutes` (default 15): Windows shows the countdown and message to logged-on users; with nobody logged on the reboot happens after one minute;
+- `skip_if_user`: never reboot while someone is logged on (e.g. RDS servers);
+- `min_battery_percent` (default 30): a laptop on battery below this is skipped.
+
+**Proposed defaults** (to adjust per customer; they are ordinary policies):
+
+| | Install | Reboot |
+|---|---|---|
+| Clients | `winupdate`·`install` every 24 h, window Mon–Fri 10:00–16:00 | `reboot` every 1 h, window Mon–Fri 12:30–14:00 and 18:00–21:00, `min_pending_hours: 24`, `notice_minutes: 15` |
+| Servers | `winupdate`·`install` weekly, window Sun 02:00–05:00 | `reboot` every 1 h, window Sun 02:00–06:00, `notice_minutes: 5` |
+
+📋 Later: user deferrals and presentation mode through the user helper, pre/post scripts.
 
 ### 8.10 Further proposed plugins 📋
 
@@ -451,7 +470,7 @@ Implemented ✅: agents (pending/active/revoked, approve, revoke), command and s
 Planned 📋:
 
 - ✅ **Separate Clients and Servers sections**, by OS installation type, with search by name, user, model, serial and remote-access id. 📋 Filters by site and OU; different default policies.
-- **Update dashboards:** endpoints ranked by an update score — missing Windows updates and their age relative to Patch Tuesday, outdated third-party software (winget and console-side catalog), pending reboots; most-outdated applications ("Chrome outdated on 37 PCs"); compliance by site/OU.
+- ✅ **Update dashboard (Patch):** endpoints ranked by an update score — missing security updates and their age in days and Patch Tuesdays, other updates, pending reboot and for how long, outdated third-party applications — with compliance, counters and the most widespread outdated applications ("Chrome outdated on 37 PCs"); filters Clients/Servers. 📋 Console-side catalog, compliance by site/OU.
 - **Package library**, software distribution and **uninstall from the Software tab** (§8.7).
 - **Policies** editor with per-version MFA approval (§3.7).
 - ✅ Inventory on the agent page (hardware, BitLocker, battery, network, software, change history). 📋 Alerts, federation (tenant switcher across local and federated tenants).
@@ -482,7 +501,7 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | 2 | Policies with scheduling and conditional plugins | ✅ |
 | 3 | `inventory` (incl. Supremo/AnyDesk/TeamViewer ids), OS installation type, Clients/Servers sections | ✅ |
 | 4 | Security plugins: `trendmicro`, `protection-status`, `accesslog` with unusual-logon detection, checks and alerts, Vision One connector | ✅ (to be validated on real endpoints) |
-| 5 | `winupdate`, `winget`, console-side catalog, update dashboards, `reboot`, user helper | 📋 |
+| 5 | `winupdate`, `winget`, update dashboard, `reboot`, maintenance windows | ✅ (console-side catalog and user helper 📋) |
 | 6 | Package library, `msi-install`, `software-uninstall`; console layout (tree, tabs, bottom panel); setup wizard with code signing and optional AD | 📋 |
 | 7 | Federation with full central operations | 📋 |
 | Later | Firmware, further plugins (§8.10), Linux agent packages, interactive shell | 📋 |

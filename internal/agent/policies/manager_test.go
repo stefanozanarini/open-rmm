@@ -199,3 +199,25 @@ func waitRuns(t *testing.T, st *fakeStarter, n int) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+func TestWindowDefersRules(t *testing.T) {
+	FirstRunSpread = time.Millisecond
+	f := newFixture(t)
+	st := &fakeStarter{}
+	m := f.manager(t, fakeProbe{}, st)
+	now := time.Date(2026, 10, 19, 10, 0, 0, 0, time.Local) // Monday 10:00
+	m.now = func() time.Time { return now }
+	r := rule("night", nil)
+	r.Window = &policy.Window{Start: "22:00", End: "05:00"}
+	m.Apply(set(f.seal(t, f.pol(ids.NewUUID(), 1, policy.AppliesAll, r))))
+	now = now.Add(time.Minute)
+	m.RunDue()
+	time.Sleep(20 * time.Millisecond)
+	if len(st.ran()) != 0 {
+		t.Fatal("rule ran outside its window")
+	}
+	now = time.Date(2026, 10, 19, 22, 30, 0, 0, time.Local)
+	m.RunDue()
+	waitRuns(t, st, 1)
+	time.Sleep(50 * time.Millisecond) // let the completion persist the state
+}

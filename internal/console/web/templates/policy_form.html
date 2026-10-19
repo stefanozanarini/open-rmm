@@ -16,7 +16,7 @@
   </label>
   <details>
     <summary>Formato ed esempio</summary>
-    <p class="muted">Ogni regola indica il modulo (id e versione pubblicati), l'azione e l'intervallo (<code>15m</code>, <code>24h</code>; minimo 1m, massimo 7 giorni). Condizioni facoltative in <code>when</code>: <code>service_exists</code>, <code>file_exists</code>, <code>registry_key_exists</code> (<code>HKLM\…</code>), <code>os_family</code> (<code>client</code>/<code>server</code>), combinabili con <code>all</code>, <code>any</code>, <code>not</code>.</p>
+    <p class="muted">Ogni regola indica il modulo (id e versione pubblicati), l'azione e l'intervallo (<code>15m</code>, <code>24h</code>; minimo 1m, massimo 7 giorni). Condizioni facoltative in <code>when</code>: <code>service_exists</code>, <code>file_exists</code>, <code>registry_key_exists</code> (<code>HKLM\…</code>), <code>os_family</code> (<code>client</code>/<code>server</code>), combinabili con <code>all</code>, <code>any</code>, <code>not</code>. Finestra facoltativa in <code>window</code>, nell'ora locale dell'endpoint: <code>{"days":["sat","sun"],"start":"22:00","end":"05:00"}</code> (giorni <code>mon</code>…<code>sun</code>, vuoto = ogni giorno; una fine prima dell'inizio attraversa la mezzanotte).</p>
     <pre>{{.Example}}</pre>
   </details>
   <p class="muted">Salvando, ti verrà chiesto di autenticarti di nuovo con Microsoft per approvare esattamente questa versione.</p>

@@ -10,6 +10,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/inventory"
 	"github.com/stefanozanarini/open-rmm/internal/policy"
+	"github.com/stefanozanarini/open-rmm/internal/updates"
 )
 
 // jobOrigin returns the module and action of a job of agent a, from the
@@ -49,6 +50,8 @@ func (s *Server) afterSuccess(ctx context.Context, a store.Agent, module, action
 		s.ingestInventory(ctx, a, raw)
 	case module == accesslog.ModuleID && action == accesslog.Action:
 		s.ingestLogons(ctx, a, raw)
+	case updates.SourceOf(module, action) != "":
+		s.ingestUpdates(ctx, a, updates.SourceOf(module, action), raw)
 	}
 }
 
@@ -91,5 +94,44 @@ func (s *Server) ingestInventory(ctx context.Context, a store.Agent, raw []byte)
 		s.log.Info("older inventory ignored", "agent", a.ID)
 	default:
 		s.log.Error("store inventory", "agent", a.ID, "err", err)
+	}
+}
+
+// ingestUpdates stores a winupdate or winget report.
+func (s *Server) ingestUpdates(ctx context.Context, a store.Agent, source string, raw []byte) {
+	now := s.now()
+	st := store.UpdateStatus{TenantID: a.TenantID, AgentID: a.ID, Source: source, ManagedBy: "none"}
+	var data any
+	switch source {
+	case updates.SourceWindows:
+		r, err := updates.ParseWindows(raw, now)
+		if err != nil {
+			s.log.Warn("invalid windows update report", "agent", a.ID, "err", err)
+			return
+		}
+		sum := r.Summarize(now)
+		st.ScannedAt, st.ManagedBy, data = r.ScannedAt, r.ManagedBy, r
+		st.Important, st.Other, st.OldestDays, st.Behind = sum.Important, sum.Other, sum.OldestDays, sum.Behind
+		st.Reboot, st.RebootSince = sum.Reboot, sum.RebootSince
+	case updates.SourceWinget:
+		r, err := updates.ParseWinget(raw, now)
+		if err != nil {
+			s.log.Warn("invalid winget report", "agent", a.ID, "err", err)
+			return
+		}
+		st.ScannedAt, st.ThirdParty, data = r.ScannedAt, len(r.Upgrades), r
+	default:
+		return
+	}
+	b, err := json.Marshal(data)
+	if err != nil {
+		s.log.Error("encode update report", "err", err)
+		return
+	}
+	st.Data = b
+	switch err := s.store.PutUpdateStatus(ctx, st); {
+	case err == nil, errors.Is(err, store.ErrStaleReport):
+	default:
+		s.log.Error("store update report", "agent", a.ID, "err", err)
 	}
 }

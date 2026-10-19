@@ -157,6 +157,9 @@ Details in [ENTRA.md](ENTRA.md). The full text of scripts goes to the audit log.
 | `accesslog` 1.0.0 | Windows | `collect`: new logon events since the previous run (local, RDP, failures, lockouts). The console stores them and raises alerts for unusual logons |
 | `trendmicro` 1.0.0 | Windows | `status`: Trend Micro products installed, versions, services; one check per product. Parameters: `expect`, `products`, `definitions` (override service names) |
 | `protection-status` 1.0.0 | Windows | `status`: antivirus in Windows Security Center, Defender, firewall; checks `antivirus`, `defender`, `firewall` |
+| `winupdate` 1.0.0 | Windows | `scan`: missing updates, pending reboot, WSUS/Intune management; `install`: by classification or KB, never reboots, refuses on managed endpoints unless `allow_managed` |
+| `winget` 1.0.0 | Windows | `scan`: applications with an available upgrade; `upgrade`: `{"ids":[…]}` or `{"all":true,"exclude":[…]}` |
+| `reboot` 1.0.0 | Windows | `reboot`: only if pending, with notice to logged-on users, skipped on low battery; use it in a policy with a maintenance window |
 | `script` 1.0.0 | Windows | `run`: runs `params.script` (PowerShell) and returns output, errors and duration. Capability `adhoc_script` |
 
 ## Policies

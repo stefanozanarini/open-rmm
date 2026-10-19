@@ -1,0 +1,14 @@
+{
+  "id": "winget",
+  "version": "1.0.0",
+  "description": "Third-party application updates with winget, run as the system account.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "scan": { "description": "Applications with an available upgrade", "timeout_seconds": 900 },
+    "upgrade": { "description": "Upgrade the given applications (ids) or all of them", "timeout_seconds": 7200 }
+  }
+}

@@ -30,6 +30,7 @@ type formRule struct {
 	Every   string            `json:"every"` // Go duration, e.g. "15m", "24h"
 	Params  json.RawMessage   `json:"params,omitempty"`
 	When    *policy.Condition `json:"when,omitempty"`
+	Window  *policy.Window    `json:"window,omitempty"`
 }
 
 type policyView struct {
@@ -105,7 +106,7 @@ func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 		rules := make([]formRule, 0, len(p.Rules))
 		for _, ru := range p.Rules {
 			rules = append(rules, formRule{ID: ru.ID, Module: ru.Module, Version: ru.ModuleVersion, Action: ru.Action,
-				Every: ru.Every().String(), Params: ru.Params, When: ru.When})
+				Every: ru.Every().String(), Params: ru.Params, When: ru.When, Window: ru.Window})
 		}
 		b, _ := json.MarshalIndent(rules, "", "  ")
 		d = policyFormData{ID: p.ID, Name: p.Name, AppliesTo: p.AppliesTo, Version: p.Version, Rules: string(b), Example: exampleRules}
@@ -162,7 +163,7 @@ func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request
 		}
 		p.Rules = append(p.Rules, policy.Rule{ID: fr.ID, Module: fr.Module, ModuleVersion: fr.Version,
 			ModuleSHA256: hex.EncodeToString(mod.ManifestSHA256), Action: fr.Action, Params: fr.Params,
-			EverySeconds: int64(every / time.Second), When: fr.When})
+			EverySeconds: int64(every / time.Second), When: fr.When, Window: fr.Window})
 	}
 	if err := p.Validate(); err != nil {
 		return nil, nil, err

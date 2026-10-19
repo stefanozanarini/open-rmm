@@ -1,0 +1,14 @@
+{
+  "id": "winupdate",
+  "version": "1.0.0",
+  "description": "Windows Update through the Windows Update Agent API: scan, install (never reboots), WSUS/Intune detection.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "scan": { "description": "Missing updates, pending reboot, management (WSUS/Intune)", "timeout_seconds": 1800 },
+    "install": { "description": "Download and install the selected updates (no reboot)", "timeout_seconds": 14400 }
+  }
+}

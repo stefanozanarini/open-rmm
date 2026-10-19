@@ -18,6 +18,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/web"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/inventory"
+	"github.com/stefanozanarini/open-rmm/internal/updates"
 )
 
 // TestPreview serves the console with a fake identity provider and sample
@@ -115,6 +116,21 @@ func previewInventory(t *testing.T, e *consoleEnv, agentID string, i int) {
 	if i == 1 {
 		e.store.RaiseAlert(ctx, store.Alert{TenantID: e.tenant, AgentID: agentID, Severity: store.SeverityWarning, Kind: "check.failing",
 			Summary: "Controllo trendmicro/sep non superato: servizio tmlisten Stopped", DedupeKey: "b", FirstSeen: now, LastSeen: now})
+	}
+	winRaw := []string{windowsReport(now.Add(-70 * 24 * time.Hour)), `{"managed_by":"none","updates":[]}`,
+		`{"managed_by":"wsus","wsus_server":"http://wsus01:8530","updates":[]}`, windowsReport(now.Add(-20 * 24 * time.Hour))}[i]
+	if wr, err := updates.ParseWindows([]byte(winRaw), now); err == nil {
+		sum := wr.Summarize(now)
+		b, _ := json.Marshal(wr)
+		e.store.PutUpdateStatus(ctx, store.UpdateStatus{TenantID: e.tenant, AgentID: agentID, Source: "windows", ScannedAt: wr.ScannedAt,
+			Data: b, ManagedBy: wr.ManagedBy, Important: sum.Important, Other: sum.Other, OldestDays: sum.OldestDays, Behind: sum.Behind,
+			Reboot: sum.Reboot, RebootSince: sum.RebootSince})
+	}
+	if i != 2 {
+		wg, _ := updates.ParseWinget([]byte(wingetReport), now)
+		b, _ := json.Marshal(wg)
+		e.store.PutUpdateStatus(ctx, store.UpdateStatus{TenantID: e.tenant, AgentID: agentID, Source: "winget", ScannedAt: wg.ScannedAt,
+			Data: b, ThirdParty: len(wg.Upgrades)})
 	}
 	e.store.PutInventory(context.Background(), store.Inventory{TenantID: e.tenant, AgentID: agentID, Data: data,
 		Summary: store.InventorySummary{CollectedAt: inv.CollectedAt, Manufacturer: inv.System.Manufacturer, Model: inv.System.Model,

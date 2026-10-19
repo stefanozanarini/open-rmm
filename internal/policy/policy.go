@@ -64,6 +64,8 @@ type Rule struct {
 	Params        json.RawMessage `json:"params,omitempty"`
 	EverySeconds  int64           `json:"every_seconds"`
 	When          *Condition      `json:"when,omitempty"`
+	// Window, when set, lets the rule run only inside it.
+	Window *Window `json:"window,omitempty"`
 }
 
 // Every returns the rule interval.
@@ -129,6 +131,11 @@ func (p *Policy) Validate() error {
 		}
 		if r.When != nil {
 			if err := r.When.validate(0); err != nil {
+				return fmt.Errorf("rule %s: %w", r.ID, err)
+			}
+		}
+		if r.Window != nil {
+			if err := r.Window.validate(); err != nil {
 				return fmt.Errorf("rule %s: %w", r.ID, err)
 			}
 		}

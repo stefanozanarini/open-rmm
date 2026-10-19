@@ -111,6 +111,7 @@ type Store interface {
 	PolicyStore
 	InventoryStore
 	SecurityStore
+	UpdateStore
 }
 
 // HashToken returns the value stored in place of an enrollment token.

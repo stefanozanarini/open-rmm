@@ -65,3 +65,9 @@ h3 + table, table + table { margin-top:8px; }
 .badge.chk-warning, .badge.sev-warning { background:#fff1c2; color:#8a5a00; }
 .badge.chk-failing, .badge.sev-critical { background:#fee4e2; color:var(--danger); }
 .badge.sev-info { background:#e0eaff; }
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:12px; margin:12px 0 4px; }
+.card { background:var(--card); border:1px solid var(--line); padding:10px 14px; font-size:13px; }
+.card .num { display:block; font-size:26px; font-weight:700; }
+.card.bad { border-color:#f2b8b5; background:#fff6f5; }
+.card.bad .num { color:var(--danger); }
+.card.warn { border-color:#f5d48f; background:var(--warn); }

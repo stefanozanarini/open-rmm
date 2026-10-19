@@ -1,0 +1,13 @@
+{
+  "id": "reboot",
+  "version": "1.0.0",
+  "description": "Reboots the endpoint according to the reboot policy: only when needed, with notice to logged-on users, not on low battery.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "reboot": { "description": "Schedule a reboot (see parameters)", "timeout_seconds": 120 }
+  }
+}
