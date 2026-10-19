@@ -28,6 +28,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/agent/identity"
 	"github.com/stefanozanarini/open-rmm/internal/console/audit"
 	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
+	"github.com/stefanozanarini/open-rmm/internal/console/relay"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/pki"
@@ -43,6 +44,8 @@ type env struct {
 	jobSigner     *signing.Signer
 	moduleSigner  *signing.Signer
 	releaseSigner *signing.Signer
+	relayGateway  *relay.Gateway
+	restartCore   func()
 	root          *pki.CA
 	ca            *pki.CA
 	store         *store.Memory
@@ -81,16 +84,23 @@ func start(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gs := gw.GRPCServer(tlsconf.Server(srv, []*x509.Certificate{ca.Cert}, srvKey, ca.Cert))
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go gs.Serve(lis)
-	t.Cleanup(gs.Stop)
 	runCtx, stopRun := context.WithCancel(context.Background())
-	go gw.Run(runCtx)
 	t.Cleanup(stopRun)
+	agentTLS := tlsconf.Server(srv, []*x509.Certificate{ca.Cert}, srvKey, ca.Cert)
+	var lis net.Listener
+	if viaRelay {
+		// Agents talk to the relay; the core opens the tunnels to it.
+		lis = startRelay(t, runCtx, e, gw, root, ca, agentTLS)
+	} else {
+		gs := gw.GRPCServer(agentTLS)
+		lis, err = net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		go gs.Serve(lis)
+		t.Cleanup(gs.Stop)
+	}
+	go gw.Run(runCtx)
 	e.jobSigner, e.moduleSigner, e.releaseSigner = newSigner(t), newSigner(t), newSigner(t)
 	_, port, _ := net.SplitHostPort(lis.Addr().String())
 	e.root, e.ca, e.store, e.gw, e.addr, e.tenant = root, ca, st, gw, "localhost:"+port, tenant
@@ -383,7 +393,12 @@ func enrollReq(t *testing.T, token string) *openrmmv1.EnrollRequest {
 
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	waitForWithin(t, cond, 5*time.Second)
+}
+
+func waitForWithin(t *testing.T, cond func() bool, d time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(d)
 	for !cond() {
 		if time.Now().After(deadline) {
 			t.Fatal("condition not met")

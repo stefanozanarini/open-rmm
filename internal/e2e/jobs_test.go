@@ -114,11 +114,16 @@ func (e *env) queue(t *testing.T, agentID string, v *modules.Verified, action, p
 
 func (e *env) waitFinal(t *testing.T, jobID string) store.Job {
 	t.Helper()
+	return e.waitFinalWithin(t, jobID, 5*time.Second)
+}
+
+func (e *env) waitFinalWithin(t *testing.T, jobID string, d time.Duration) store.Job {
+	t.Helper()
 	var j store.Job
-	waitFor(t, func() bool {
+	waitForWithin(t, func() bool {
 		j, _ = e.store.GetJob(context.Background(), e.tenant, jobID)
 		return j.State.Final()
-	})
+	}, d)
 	return j
 }
 

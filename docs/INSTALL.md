@@ -4,15 +4,14 @@ The console runs in containers on a Linux host with Docker and the Compose plugi
 
 | Container | Role | Exposed |
 |---|---|---|
-| `gateway` | Agents endpoint (mTLS) | Yes, port `OPENRMM_PUBLIC_PORT` (default 443) |
+| `gateway` | Agents endpoint (mTLS relay): no database, no CA private key | Yes, port `OPENRMM_PUBLIC_PORT` (default 443) |
+| `core` | Agent sessions, enrollment, certificate issuance, job dispatch; opens the tunnel to the gateway | No |
 | `db` | PostgreSQL 16 | No: internal network without outside access |
 | `server` | Operators' web console | LAN only (`OPENRMM_CONSOLE_BIND`) |
 | `signer` | Command signing, the only holder of the key | No: reachable only by `server` through a local socket |
 | `admin` | Administration commands, on demand | No |
 
-Every service runs as an unprivileged user (65532), with a read-only file system, no Linux capabilities, and memory and process limits. The gateway, the only internet-facing service, has no access to the signer socket.
-
-> The gateway still connects to the database directly. Splitting it into a DMZ relay and an internal core is the next step ([ARCHITECTURE.md](ARCHITECTURE.md) §6.7); until then run the whole stack on one host.
+Every service runs as an unprivileged user (65532), with a read-only file system, no Linux capabilities, and memory and process limits. The gateway, the only internet-facing service, has no database credentials, no CA private key and no access to the signer socket: it only relays agent traffic over the tunnel that `core` opens towards it ([ARCHITECTURE.md](ARCHITECTURE.md) §6.7).
 
 ## 1. Configuration
 
@@ -33,11 +32,22 @@ docker compose build
 The script creates:
 
 - `pki/ca/`: the whole PKI. Distribute `root-ca.crt` to the agents (MSI or GPO).
-- `pki/gateway/`: the four files the gateway needs, mounted read-only.
+- `pki/gateway/`: the files the gateway needs (its certificate and key, the public agents CA certificate), mounted read-only.
+- `pki/core/`: the files the core needs (agents CA with its key, the core tunnel certificate, the root CA), mounted read-only.
 
 **Move `pki/ca/root-ca.key` off the server** (e.g. to an encrypted USB key kept in a safe) and delete it from the host. It is needed only to issue a new agents CA.
 
 The DNS name (`agent.example.com`) must resolve to the host both on the LAN and on the internet. TLS is terminated by the gateway: a firewall or reverse proxy in front of it must forward the TCP connection as is (passthrough), without decrypting it.
+
+### Gateway on a separate DMZ host
+
+The default stack runs gateway and core on the same host. To put the gateway in a DMZ:
+
+1. On the DMZ host: copy `deploy/dmz/compose.yaml` and the folder `deploy/pki/gateway` (no private CA key in it) to `./pki/gateway`, set `OPENRMM_TUNNEL_BIND` to the DMZ host's internal-facing address, and `docker compose up -d`.
+2. On the internal host: remove the `gateway` service from the stack (or do not start it) and set in `.env` `OPENRMM_GATEWAY_TUNNEL=<dmz-host>:8444` and `OPENRMM_GATEWAY_NAME=agent.example.com` (the DNS name in the gateway certificate).
+3. Firewall: internet → DMZ host port 443; internal network (core host) → DMZ host port 8444. **No rule from the DMZ to the internal network.**
+
+The image for the DMZ host must be built (`docker compose build`) and pushed to a registry you control, or loaded with `docker save` / `docker load`; set `OPENRMM_IMAGE` accordingly.
 
 ## 3. Entra ID and secrets
 
@@ -61,7 +71,7 @@ docker compose up -d
 docker compose ps
 ```
 
-Database migrations are applied automatically at startup.
+Database migrations are applied automatically at startup. `docker compose logs core` should show `tunnel to gateway open`.
 
 ## 5. Tenant and enrollment tokens
 

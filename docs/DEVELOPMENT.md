@@ -54,11 +54,14 @@ bin/openrmm-admin db migrate
 TENANT=$(bin/openrmm-admin tenant create -name "Test")
 bin/openrmm-admin token create -tenant "$TENANT" -auto-approve -description "local test"
 
-# 3. Gateway
-OPENRMM_LISTEN=127.0.0.1:8443 \
+# 3. Core and gateway (the gateway relays agents to the core over a tunnel)
 OPENRMM_TLS_CERT=dev-pki/gateway.crt OPENRMM_TLS_KEY=dev-pki/gateway.key \
+OPENRMM_AGENTS_CA_CERT=dev-pki/agents-ca.crt \
+OPENRMM_LISTEN=127.0.0.1:8443 OPENRMM_TUNNEL_LISTEN=127.0.0.1:8444 bin/openrmm-gateway &
+
 OPENRMM_AGENTS_CA_CERT=dev-pki/agents-ca.crt OPENRMM_AGENTS_CA_KEY=dev-pki/agents-ca.key \
-bin/openrmm-gateway
+OPENRMM_ROOT_CA=dev-pki/root-ca.crt OPENRMM_CORE_CERT=dev-pki/core.crt OPENRMM_CORE_KEY=dev-pki/core.key \
+OPENRMM_GATEWAY_TUNNEL=127.0.0.1:8444 OPENRMM_GATEWAY_NAME=localhost bin/openrmm-core
 ```
 
 In another terminal, configure and start the agent:

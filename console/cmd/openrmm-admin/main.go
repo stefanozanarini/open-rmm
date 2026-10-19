@@ -174,6 +174,14 @@ func pkiInit(args []string) error {
 	if err != nil {
 		return err
 	}
+	coreCert, coreKey, err := agentsCA.IssueCore(now)
+	if err != nil {
+		return err
+	}
+	corePEM, err := pki.EncodeKeyPEM(coreKey)
+	if err != nil {
+		return err
+	}
 	files := []struct {
 		name string
 		data []byte
@@ -184,6 +192,8 @@ func pkiInit(args []string) error {
 		{"agents-ca.key", caKey},
 		{"gateway.crt", pki.EncodeCertPEM(srv, agentsCA.Cert)},
 		{"gateway.key", gwKey},
+		{"core.crt", pki.EncodeCertPEM(coreCert, agentsCA.Cert)},
+		{"core.key", corePEM},
 	}
 	for _, f := range files {
 		if err := writeNew(filepath.Join(*dir, f.name), f.data); err != nil {

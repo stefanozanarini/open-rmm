@@ -26,27 +26,57 @@ services:
       retries: 10
     security_opt: ["no-new-privileges:true"]
 
+  # Internet-facing agents endpoint (relay). No database, no CA private key.
+  # When it runs on a separate DMZ host, use deploy/dmz/compose.yaml there
+  # and point OPENRMM_GATEWAY_TUNNEL at it.
   gateway:
     image: ${OPENRMM_IMAGE:-open-rmm:dev}
     build:
       context: ..
     restart: unless-stopped
+    environment:
+      OPENRMM_LISTEN: ":8443"
+      OPENRMM_TUNNEL_LISTEN: ":8444"
+      OPENRMM_TLS_CERT: /run/openrmm/pki/gateway.crt
+      OPENRMM_TLS_KEY: /run/openrmm/pki/gateway.key
+      OPENRMM_AGENTS_CA_CERT: /run/openrmm/pki/agents-ca.crt
+    volumes:
+      - ./pki/gateway:/run/openrmm/pki:ro
+    ports:
+      - "${OPENRMM_PUBLIC_PORT:-443}:8443"
+    networks: [public, tunnel]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 256m
+
+  # Internal side of the agents endpoint: sessions, enrollment, certificate
+  # issuance, job dispatch. Opens the tunnel to the gateway; publishes nothing.
+  core:
+    image: ${OPENRMM_IMAGE:-open-rmm:dev}
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/openrmm-core"]
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/openrmm-core", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on:
       db:
         condition: service_healthy
     environment:
       OPENRMM_DATABASE_URL: postgres://openrmm:${OPENRMM_DB_PASSWORD}@db:5432/openrmm?sslmode=disable
-      OPENRMM_LISTEN: ":8443"
-      OPENRMM_TLS_CERT: /run/openrmm/pki/gateway.crt
-      OPENRMM_TLS_KEY: /run/openrmm/pki/gateway.key
       OPENRMM_AGENTS_CA_CERT: /run/openrmm/pki/agents-ca.crt
       OPENRMM_AGENTS_CA_KEY: /run/openrmm/pki/agents-ca.key
+      OPENRMM_ROOT_CA: /run/openrmm/pki/root-ca.crt
+      OPENRMM_CORE_CERT: /run/openrmm/pki/core.crt
+      OPENRMM_CORE_KEY: /run/openrmm/pki/core.key
+      OPENRMM_GATEWAY_TUNNEL: ${OPENRMM_GATEWAY_TUNNEL:-gateway:8444}
+      OPENRMM_GATEWAY_NAME: ${OPENRMM_GATEWAY_NAME:-}
     volumes:
-      # Only the four files the gateway needs; the root CA key never goes here.
-      - ./pki/gateway:/run/openrmm/pki:ro
-    ports:
-      - "${OPENRMM_PUBLIC_PORT:-443}:8443"
-    networks: [internal, public]
+      - ./pki/core:/run/openrmm/pki:ro
+    networks: [internal, tunnel]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -150,6 +180,9 @@ networks:
   public: {}
   # Outbound only (nothing publishes ports on it): the signer's way to Microsoft.
   signer-egress: {}
+  # Core → gateway tunnel. With a separate DMZ host the core reaches the
+  # gateway over the network instead (OPENRMM_GATEWAY_TUNNEL).
+  tunnel: {}
 
 volumes:
   db-data: {}

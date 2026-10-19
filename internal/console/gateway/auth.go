@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/open-rmm/internal/console/relay"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/pki"
 )
@@ -54,15 +55,10 @@ func (s *Server) authenticate(ctx context.Context, method string) (context.Conte
 	if unauthenticatedMethods[method] {
 		return ctx, nil
 	}
-	p, ok := peer.FromContext(ctx)
-	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "no peer")
+	leaf, err := s.clientCert(ctx)
+	if err != nil {
+		return nil, err
 	}
-	ti, ok := p.AuthInfo.(credentials.TLSInfo)
-	if !ok || len(ti.State.VerifiedChains) == 0 || len(ti.State.VerifiedChains[0]) == 0 {
-		return nil, status.Error(codes.Unauthenticated, "client certificate required")
-	}
-	leaf := ti.State.VerifiedChains[0][0]
 	if !hasClientAuth(leaf) {
 		return nil, status.Error(codes.Unauthenticated, "certificate not valid for client auth")
 	}
@@ -98,6 +94,38 @@ func (s *Server) authenticate(ctx context.Context, method string) (context.Conte
 		return nil, status.Error(codes.PermissionDenied, "certificate superseded")
 	}
 	return context.WithValue(ctx, identityKey{}, caller{agent: a, fingerprint: fp, leaf: leaf}), nil
+}
+
+// clientCert returns the verified agent certificate of the call: from the TLS
+// connection for direct calls, or from the metadata of a call relayed by the
+// gateway. The relayed chain is verified again here against the agents CA,
+// so a compromised gateway cannot make up an identity.
+func (s *Server) clientCert(ctx context.Context) (*x509.Certificate, error) {
+	if relay.IsRelayed(ctx) {
+		f, err := relay.FromContext(ctx)
+		if err != nil || len(f.Chain) == 0 {
+			return nil, status.Error(codes.Unauthenticated, "client certificate required")
+		}
+		inter := x509.NewCertPool()
+		for _, c := range f.Chain[1:] {
+			inter.AddCert(c)
+		}
+		chains, err := f.Chain[0].Verify(x509.VerifyOptions{Roots: s.agentsPool, Intermediates: inter,
+			CurrentTime: s.now(), KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}})
+		if err != nil || len(chains) == 0 {
+			return nil, status.Error(codes.Unauthenticated, "forwarded certificate not trusted")
+		}
+		return f.Chain[0], nil
+	}
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "no peer")
+	}
+	ti, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok || len(ti.State.VerifiedChains) == 0 || len(ti.State.VerifiedChains[0]) == 0 {
+		return nil, status.Error(codes.Unauthenticated, "client certificate required")
+	}
+	return ti.State.VerifiedChains[0][0], nil
 }
 
 func hasClientAuth(c *x509.Certificate) bool {
@@ -139,8 +167,13 @@ func (s *Server) logDenied(ctx context.Context, method string, err error) {
 		slog.String("method", method), slog.String("peer", peerIP(ctx).String()), slog.String("reason", status.Convert(err).Message()))
 }
 
-// peerIP returns the remote address of the call, or the zero Addr.
+// peerIP returns the remote address of the call (for relayed calls, the
+// agent's address seen by the gateway), or the zero Addr.
 func peerIP(ctx context.Context) netip.Addr {
+	if relay.IsRelayed(ctx) {
+		f, _ := relay.FromContext(ctx)
+		return f.Peer
+	}
 	p, ok := peer.FromContext(ctx)
 	if !ok || p.Addr == nil {
 		return netip.Addr{}

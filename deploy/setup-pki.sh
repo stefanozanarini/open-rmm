@@ -5,8 +5,9 @@
 #
 # Result:
 #   deploy/pki/ca/        all PKI files, including root-ca.key: MOVE THAT KEY OFFLINE
-#   deploy/pki/gateway/   the four files mounted read-only into the gateway,
-#                         owned by the container user (65532), mode 0400
+#   deploy/pki/gateway/   files mounted into the gateway (DMZ): no private CA key
+#   deploy/pki/core/      files mounted into the core (internal network)
+#                         both owned by the container user (65532), mode 0400
 #
 # The ownership change runs in a throwaway container, so only access to
 # Docker is required (no sudo).
@@ -24,17 +25,21 @@ docker compose run --rm --no-deps --user "$(id -u):$(id -g)" admin \
   pki init -dir /pki/ca -gateway-dns "$DNS"
 docker run --rm --network none -v "$HERE/pki:/pki" --entrypoint sh postgres:16-alpine -c '
   set -e
-  mkdir -p /pki/gateway
-  for f in gateway.crt gateway.key agents-ca.crt agents-ca.key; do
-    install -o 65532 -g 65532 -m 0400 "/pki/ca/$f" "/pki/gateway/$f"
-  done
-  chown 65532:65532 /pki/gateway
-  chmod 0500 /pki/gateway
+  copy() { dir=$1; shift
+    mkdir -p "/pki/$dir"
+    for f in "$@"; do install -o 65532 -g 65532 -m 0400 "/pki/ca/$f" "/pki/$dir/$f"; done
+    chown 65532:65532 "/pki/$dir"; chmod 0500 "/pki/$dir"
+  }
+  # Gateway (DMZ): its own certificate and the PUBLIC agents CA certificate.
+  copy gateway gateway.crt gateway.key agents-ca.crt
+  # Core (internal): agents CA with its key, tunnel certificate, root CA.
+  copy core agents-ca.crt agents-ca.key core.crt core.key root-ca.crt
 '
 
 cat <<MSG
 
-Gateway files ready in deploy/pki/gateway.
+Gateway files ready in deploy/pki/gateway, core files in deploy/pki/core.
+If the gateway runs on a separate DMZ host, copy deploy/pki/gateway there.
 Distribute deploy/pki/ca/root-ca.crt to the agents (MSI / GPO).
 Now move deploy/pki/ca/root-ca.key OFFLINE and delete it from this host.
 MSG

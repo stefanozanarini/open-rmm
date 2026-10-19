@@ -73,6 +73,46 @@ func IdentityFromCert(c *x509.Certificate) (Identity, error) {
 	return found[0], nil
 }
 
+// coreURI marks the client certificate of the internal core, used to open
+// the tunnels to the gateway. It is distinct from any agent identity.
+const coreURI = "openrmm://core"
+
+// IsCore reports whether c is a core certificate (already verified).
+func IsCore(c *x509.Certificate) bool {
+	if len(c.URIs) != 1 || c.URIs[0].String() != coreURI {
+		return false
+	}
+	for _, u := range c.ExtKeyUsage {
+		if u == x509.ExtKeyUsageClientAuth {
+			return true
+		}
+	}
+	return false
+}
+
+// IssueCore issues the core's tunnel client certificate.
+func (ca *CA) IssueCore(now time.Time) (*x509.Certificate, crypto.Signer, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	u, _ := url.Parse(coreURI)
+	tmpl := &x509.Certificate{
+		Subject:        pkix.Name{CommonName: "open-rmm core", Organization: []string{"open-rmm"}},
+		URIs:           []*url.URL{u},
+		NotBefore:      now.Add(-clockSkew),
+		NotAfter:       minTime(now.Add(ServerValidity), ca.Cert.NotAfter),
+		KeyUsage:       x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:    []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		AuthorityKeyId: ca.Cert.SubjectKeyId,
+	}
+	cert, err := create(tmpl, ca, key.Public(), nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cert, key, nil
+}
+
 // CA is a certificate authority with its signing key.
 type CA struct {
 	Cert *x509.Certificate

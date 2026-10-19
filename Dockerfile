@@ -11,7 +11,7 @@ RUN go mod download && go mod verify
 COPY . .
 ARG VERSION=0.0.0-dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
-      -o /out/ ./console/cmd/openrmm-gateway ./console/cmd/openrmm-server \
+      -o /out/ ./console/cmd/openrmm-gateway ./console/cmd/openrmm-core ./console/cmd/openrmm-server \
                ./console/cmd/openrmm-signer ./console/cmd/openrmm-admin
 
 # Mount points of the signer's volumes, owned by the runtime user: Docker

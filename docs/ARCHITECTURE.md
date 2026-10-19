@@ -1,6 +1,6 @@
 # open-rmm — Architecture
 
-> Status: draft v1.0 — 2026-10-19
+> Status: draft v1.1 — 2026-10-19
 > First customer: ~200 Windows endpoints (clients and servers), mixed Dell / Lenovo / Acer fleet, BitLocker widely used, laptops also working off-site, console hosted at the customer and reachable from the internet. A managed-service-provider deployment (one central console federating several customer consoles) is a design goal from day one.
 
 Legend: ✅ implemented · 🔜 next · 📋 planned
@@ -55,7 +55,7 @@ Legend: ✅ implemented · 🔜 next · 📋 planned
                                      │ gRPC over HTTP/2, mTLS, port 443
                                      │ (always opened by the agent)
 ┌──────────────── DMZ ───────────────▼───────────────────────────────────┐
-│ openrmm-gateway  (relay: no database credentials, no CA key) — target   │
+│ openrmm-gateway  (relay: no database credentials, no CA key)            │
 └────────────────────────────────────▲───────────────────────────────────┘
                                      │ mTLS, opened from the LAN side
 ┌──────────────── LAN ───────────────┴───────────────────────────────────┐
@@ -65,7 +65,7 @@ Legend: ✅ implemented · 🔜 next · 📋 planned
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-Today (✅) `openrmm-gateway` still contains what will become `openrmm-core` and talks to PostgreSQL directly; the split is the next step (🔜, §6.7).
+The DMZ / internal split is implemented ✅ (§6.7): `openrmm-gateway` is a relay, `openrmm-core` holds the logic, the database credentials and the agents CA key.
 
 ### 2.1 Endpoint
 
@@ -80,7 +80,8 @@ Today (✅) `openrmm-gateway` still contains what will become `openrmm-core` and
 
 | Component | Technology |
 |---|---|
-| `openrmm-gateway` ✅ | Go, gRPC; agents endpoint (§4) |
+| `openrmm-gateway` ✅ | Go, gRPC; internet-facing relay for the agents (§6.7) |
+| `openrmm-core` ✅ | Go; agent sessions, enrollment and certificate issuance, job dispatch; opens the tunnel to the gateway |
 | `openrmm-server` ✅ | Go web console: server-rendered pages (html/template), no third-party JavaScript, strict CSP |
 | `openrmm-signer` ✅ | Separate container holding the job signing key, reachable only through a local socket (§6.3) |
 | `openrmm-admin` ✅ | Administration CLI (bootstrap, PKI, releases, modules) |
@@ -93,12 +94,13 @@ Today (✅) `openrmm-gateway` still contains what will become `openrmm-core` and
 /proto                 protobuf definitions (agent ↔ console, signer)
 /gen                   generated code (committed)
 /agent/cmd             openrmm-agent, openrmm-watchdog
-/console/cmd           openrmm-gateway, openrmm-server, openrmm-signer, openrmm-admin
+/console/cmd           openrmm-gateway, openrmm-core, openrmm-server, openrmm-signer, openrmm-admin
 /internal
   /pki /signing /tlsconf /ids /release /modules   shared crypto, identity, release and module formats
   /agent/...           agent core: config, identity, client, jobs, executor, runner, modcache,
                        updater, watchdog, svcctl, winsvc, health, secfile, hostinfo
-  /console/...         gateway, store, audit, authn, jobreq, signer, web
+  /console/...         gateway (agent service run by the core), relay, store, audit, authn,
+                       jobreq, signer, web
   /e2e                 end-to-end tests (real TLS, fake identity provider)
 /modules               modules and SDKs (PowerShell, sh)
 /packaging             wix (MSI), admx (GPO templates), linux (systemd units)
@@ -237,7 +239,7 @@ Details: [UPDATES.md](UPDATES.md).
 | Threat | Mitigation |
 |---|---|
 | Compromised console used to run code everywhere | Jobs signed only by the signer after per-job MFA (§6.3); modules and releases signed offline; local policies the console cannot change (§6.4) |
-| Compromised DMZ host | 🔜 the DMZ relay holds no database credentials and no CA key; the LAN side opens the connection (§6.7) |
+| Compromised DMZ host | The DMZ relay holds no database credentials and no CA key; the LAN side opens the connection; forwarded identities are re-verified by the core (§6.7) |
 | Rogue agent enrollment | Tenant-bound, expiring, use-limited tokens; new agents pending approval |
 | Man-in-the-middle | mTLS, pinned private root CA |
 | Local tampering with the agent | Restricted ACLs on files, registry and pipes; module cache re-verified before each run; 📋 Authenticode-signed binaries |
@@ -251,7 +253,7 @@ Details: [UPDATES.md](UPDATES.md).
 | Key | Where | Signs |
 |---|---|---|
 | Root CA | Offline | Agents CA |
-| Agents CA | Console (🔜 internal core only) | Agent and gateway certificates |
+| Agents CA | `openrmm-core` only (the gateway has the public certificate) | Agent, gateway and core certificates |
 | Module release | Offline | Module manifests |
 | Agent release | Offline | Agent releases |
 | Job signing | `openrmm-signer` only (📋 HSM) | Jobs and policies |
@@ -280,11 +282,9 @@ Set by MSI or GPO, never by the console: `AllowAdHocScripts` (default on), `MaxC
 
 Setup: [ENTRA.md](ENTRA.md).
 
-### 6.7 Exposure: DMZ and internal network 🔜
+### 6.7 Exposure: DMZ and internal network ✅
 
 Only the agents endpoint is meant for the internet; the web console stays on the operators' LAN/VPN (📋 or behind Entra Application Proxy).
-
-**Target layout (next step):**
 
 ```
 internet ──► [DMZ] openrmm-gateway  ◄──── mTLS, opened from the LAN ──── [LAN] openrmm-core ──► PostgreSQL
@@ -293,11 +293,13 @@ internet ──► [DMZ] openrmm-gateway  ◄──── mTLS, opened from the 
                    no DB credentials, no CA key
 ```
 
-- `openrmm-core` (LAN) opens a long-lived mTLS connection **to** the gateway; the firewall allows no connection from the DMZ to the LAN.
-- The gateway terminates the agents' mTLS, checks client certificates against the agents CA certificate (public part only) and relays streams, enrollment requests (CSR) and downloads to the core.
-- Certificate issuance, agent authorization (revocation, approval), database access and job dispatch live in the core.
-- A compromised gateway can delay or drop traffic and read what passes through it; it cannot forge jobs (signed), modules or releases (signed offline), issue certificates or reach the database. 📋 End-to-end encryption of job results between agent and core would also close the read side.
-- Single-host deployments keep working: core and gateway in the same Compose stack.
+- `openrmm-core` (LAN) opens a long-lived mTLS tunnel **to** the gateway (port 8444); the firewall allows no connection from the DMZ to the LAN. On the tunnel the roles are reversed: the gateway is the gRPC client, the core the server. One tunnel at a time, reopened within seconds when it drops; keepalives detect dead tunnels.
+- Tunnel authentication: the core presents a dedicated certificate (`openrmm://core`, issued by the agents CA, not usable as an agent identity) and pins the open-rmm root; the gateway accepts only core certificates on the tunnel port.
+- The gateway terminates the agents' mTLS, checks client certificates against the agents CA certificate (public part only) and relays an **allow-list** of methods (enrollment, agent stream, renewal, module and release downloads) as **opaque frames**: it never decodes payloads, so new RPCs need no gateway change, and internal services are unreachable from the internet.
+- The verified client chain and the agent's address travel as metadata built from scratch by the gateway (nothing sent by the agent is forwarded). The core honours that metadata **only on calls received through a tunnel** and **verifies the chain again** against the agents CA, then applies the usual checks (current certificate, not revoked).
+- Certificate issuance, agent authorization, database access and job dispatch live in the core. Enrollment is rate-limited both at the gateway and in the core.
+- A compromised gateway can delay or drop traffic and read what passes through it; it cannot forge jobs (signed), modules or releases (signed offline), issue certificates, reach the database, or claim an identity whose certificate it has never seen. 📋 Agent-signed messages and end-to-end encryption of results between agent and core would also close the impersonation-with-observed-certificate and read sides.
+- Single-host deployments: core and gateway in the same Compose stack. Separate DMZ host: `deploy/dmz/compose.yaml` ([INSTALL.md](INSTALL.md)).
 
 ---
 
@@ -362,11 +364,12 @@ WUA COM API (`scan`, `download`, `install`, `history`); categories and rings, KB
 - **Console-side catalog:** the console imports the winget community index and matches it against each endpoint's software inventory, so outdated software is detected also where winget is not available (Windows Server 2019, LTSC). This drives the update dashboards (§11).
 - 📋 Private REST source for internal packages.
 
-### 8.6 Software distribution (`msi-install`) 📋
+### 8.6 Software distribution and removal (`msi-install`, `software-uninstall`) 📋
 
 - Operators upload an MSI to the console's **package library**: the console stores it (file system / object storage, not the database), computes its SHA-256, reads ProductName/Version/ProductCode and checks its Authenticode signature (warning if unsigned).
 - Deployment to PCs or groups is a normal job, approved with per-command MFA; the signed job pins the package hash.
-- The generic `msi-install` module downloads the package over the agent connection, verifies the hash and runs `msiexec /i … /qn /norestart /l*v`; reboots go through the reboot policy. Uninstall by ProductCode. The same flow covers winget packages.
+- The generic `msi-install` module downloads the package over the agent connection, verifies the hash and runs `msiexec /i … /qn /norestart /l*v`; reboots go through the reboot policy. The same flow covers winget packages.
+- **Uninstall from the console:** from an endpoint's software inventory (or for a whole group, e.g. "remove 7-Zip 9.20 everywhere"), the operator picks an application and approves with per-command MFA. The `software-uninstall` module removes it the right way for its type: `msiexec /x {ProductCode} /qn /norestart` for MSI products, `winget uninstall --id` when winget manages it, or the registered `QuietUninstallString` (never the interactive `UninstallString` without a silent switch). The result is verified against the inventory afterwards; reboots go through the reboot policy. Uninstalling the open-rmm agent itself is refused.
 
 ### 8.7 Firmware 📋
 
@@ -430,11 +433,19 @@ Details: [AGENT-INSTALL.md](AGENT-INSTALL.md).
 
 Implemented ✅: agents (pending/active/revoked, approve, revoke), command and script execution with step-up, jobs with live refresh, modules, enrollment tokens, agent updates, audit log.
 
+**Layout (📋, inspired by Tactical RMM's console, no code reused):**
+
+- left: tree of **tenants → sites** (and OUs when AD is integrated), with an "all" node;
+- top of the main area: tabs **Servers · Workstations · Mixed**, a search box and filters;
+- agent table with status icons (online, pending reboot, alerts, patches needed, maintenance mode), tenant, site, hostname, description, logged-on user, last contact, boot time; multi-select for bulk actions (run command, install/uninstall software, reboot, set ring);
+- bottom panel for the selected agent, with tabs **Summary · Checks · Tasks/Policies · Patches · Software · History · Notes · Assets · Audit**;
+- dark and light themes; still server-rendered with no third-party JavaScript (a small first-party script may be added for table interactions, under the same strict CSP).
+
 Planned 📋:
 
 - **Separate Clients and Servers sections**, by OS installation type; filters by site and OU; different default policies.
 - **Update dashboards:** endpoints ranked by an update score — missing Windows updates and their age relative to Patch Tuesday, outdated third-party software (winget and console-side catalog), pending reboots; most-outdated applications ("Chrome outdated on 37 PCs"); compliance by site/OU.
-- **Package library** and software distribution (§8.6).
+- **Package library**, software distribution and **uninstall from the Software tab** (§8.6).
 - **Policies** editor with per-version MFA approval (§3.7).
 - Inventory views, alerts, federation (tenant switcher across local and federated tenants).
 
@@ -460,12 +471,12 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | Step | Content | Status |
 |---|---|---|
 | Phase 0 — foundations | PKI and enrollment, mTLS gateway, agent core, modules and SDKs, job queue, signer with per-command MFA, web console with Entra ID, watchdog and A/B updates, MSI and ADMX | ✅ (to be validated on real Windows) |
-| 1 | DMZ / internal split (gateway as relay, `openrmm-core`) | 🔜 |
-| 2 | Policies with scheduling and conditional plugins | 📋 |
+| 1 | DMZ / internal split (gateway as relay, `openrmm-core`) | ✅ |
+| 2 | Policies with scheduling and conditional plugins | 🔜 |
 | 3 | `inventory` (incl. Supremo/AnyDesk/TeamViewer ids), OS installation type, Clients/Servers sections | 📋 |
 | 4 | Security plugins: `trendmicro-endpoint`, `trendmicro-ztia`, Vision One connector, `accesslog` with unusual-logon detection, `protection-status` | 📋 |
 | 5 | `winupdate`, `winget`, console-side catalog, update dashboards, `reboot`, user helper | 📋 |
-| 6 | Package library and `msi-install`; setup wizard with code signing and optional AD | 📋 |
+| 6 | Package library, `msi-install`, `software-uninstall`; console layout (tree, tabs, bottom panel); setup wizard with code signing and optional AD | 📋 |
 | 7 | Federation with full central operations | 📋 |
 | Later | Firmware, further plugins (§8.9), Linux agent packages, interactive shell | 📋 |
 
@@ -509,3 +520,5 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | 2026-10-19 | **Federation with full operations from the central console**; commands signed by the customer's signer |
 | 2026-10-19 | Separate Clients/Servers views; MSI software distribution; update dashboards with winget and console-side catalog; Supremo/AnyDesk/TeamViewer ids in inventory |
 | 2026-10-19 | **Setup wizard**: code signing via enterprise CA, dedicated CA or public certificate; **optional** Active Directory integration |
+| 2026-10-19 | DMZ split implemented: gateway relays opaque frames for an allow-list of methods; the core opens one mTLS tunnel and re-verifies forwarded identities |
+| 2026-10-19 | Console layout inspired by Tactical RMM (tenant/site tree, Servers/Workstations/Mixed tabs, per-agent bottom panel); **software uninstall from the console** |

@@ -4,6 +4,7 @@ package gateway
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"log/slog"
@@ -14,11 +15,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/console/audit"
+	"github.com/stefanozanarini/open-rmm/internal/console/relay"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/pki"
@@ -58,6 +61,8 @@ type Server struct {
 	heartbeat time.Duration
 	enrollLim *ipLimiter
 	now       func() time.Time
+	// agentsPool verifies certificates forwarded by the gateway.
+	agentsPool *x509.CertPool
 
 	mu       sync.Mutex
 	sessions map[string]*session // by tenant/agent
@@ -101,7 +106,37 @@ func New(cfg Config) (*Server, error) {
 		burst = 5
 	}
 	s.enrollLim = newIPLimiter(perMin, burst)
+	s.agentsPool = x509.NewCertPool()
+	s.agentsPool.AddCert(cfg.AgentsCA.Cert)
 	return s, nil
+}
+
+// TunnelGRPCServer builds the server the core runs on the tunnels it opens
+// to the gateway. Transport security is provided by the tunnel itself (mTLS
+// between core and gateway), and every call is marked as relayed so the
+// agent identity is taken from the forwarded, re-verified certificate.
+func (s *Server) TunnelGRPCServer() *grpc.Server {
+	mark := func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		return handler(relay.MarkRelayed(ctx), req)
+	}
+	markStream := func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		return handler(srv, &wrappedStream{ServerStream: ss, ctx: relay.MarkRelayed(ss.Context())})
+	}
+	gs := grpc.NewServer(
+		grpc.Creds(insecure.NewCredentials()), // #nosec G402 -- inside the core↔gateway mTLS tunnel
+		grpc.MaxRecvMsgSize(maxMessageBytes),
+		grpc.MaxSendMsgSize(maxMessageBytes),
+		// One tunnel carries the streams of many agents.
+		grpc.MaxConcurrentStreams(20000),
+		grpc.ConnectionTimeout(30*time.Second),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
+		grpc.KeepaliveParams(keepalive.ServerParameters{Time: time.Minute, Timeout: 20 * time.Second}),
+		grpc.ChainUnaryInterceptor(mark, s.unaryAuth),
+		grpc.ChainStreamInterceptor(markStream, s.streamAuth),
+	)
+	openrmmv1.RegisterEnrollmentServiceServer(gs, s)
+	openrmmv1.RegisterAgentServiceServer(gs, s)
+	return gs
 }
 
 // GRPCServer builds a gRPC server with TLS, limits and authentication.

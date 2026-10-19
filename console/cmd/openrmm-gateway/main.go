@@ -1,23 +1,25 @@
-// Command openrmm-gateway serves the agents endpoint (the only component
-// meant to be exposed to the internet). TLS is terminated here, never on a
-// proxy in front of it, so client certificates are verified by the gateway.
+// Command openrmm-gateway is the internet-facing agents endpoint, meant for
+// a DMZ. It terminates the agents' mTLS (verifying their certificates with
+// the public agents CA certificate) and relays the allowed calls, as opaque
+// frames, over the tunnels opened by openrmm-core. It has no database
+// credentials and no CA private key.
 //
 // Configuration (environment):
 //
-//	OPENRMM_DATABASE_URL     PostgreSQL connection string
-//	OPENRMM_LISTEN           listen address (default :8443)
+//	OPENRMM_LISTEN           agents listener (default :8443)
+//	OPENRMM_TUNNEL_LISTEN    tunnel listener for openrmm-core (default :8444);
+//	                         allow it only from the internal network
 //	OPENRMM_TLS_CERT         gateway certificate chain (gateway.crt)
 //	OPENRMM_TLS_KEY          gateway key (gateway.key)
-//	OPENRMM_AGENTS_CA_CERT   agents CA certificate (agents-ca.crt)
-//	OPENRMM_AGENTS_CA_KEY    agents CA key (agents-ca.key)
+//	OPENRMM_AGENTS_CA_CERT   agents CA certificate (agents-ca.crt), public part only
 //
-// "openrmm-gateway healthcheck" exits 0 if the listener accepts TCP
-// connections; it is meant for container health checks, where the image has
-// no shell or curl.
+// "openrmm-gateway healthcheck" exits 0 if the agents listener accepts TCP
+// connections.
 package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -27,8 +29,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"google.golang.org/grpc/credentials"
+
+	"github.com/stefanozanarini/open-rmm/internal/console/relay"
 	"github.com/stefanozanarini/open-rmm/internal/pki"
 	"github.com/stefanozanarini/open-rmm/internal/tlsconf"
 )
@@ -44,23 +47,6 @@ func main() {
 	}
 }
 
-func healthcheck() int {
-	addr := env("OPENRMM_LISTEN", ":8443")
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return 1
-	}
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = "127.0.0.1"
-	}
-	c, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 3*time.Second)
-	if err != nil {
-		return 1
-	}
-	_ = c.Close()
-	return 0
-}
-
 func env(name, def string) string {
 	if v := os.Getenv(name); v != "" {
 		return v
@@ -68,91 +54,93 @@ func env(name, def string) string {
 	return def
 }
 
-func mustEnv(name string) (string, error) {
-	v := os.Getenv(name)
-	if v == "" {
-		return "", fmt.Errorf("%s is required", name)
+func healthcheck() int {
+	_, port, err := net.SplitHostPort(env("OPENRMM_LISTEN", ":8443"))
+	if err != nil {
+		return 1
 	}
-	return v, nil
+	c, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", port), 3*time.Second)
+	if err != nil {
+		return 1
+	}
+	_ = c.Close()
+	return 0
 }
 
-func readFiles(names ...string) ([][]byte, error) {
-	var out [][]byte
-	for _, n := range names {
-		path, err := mustEnv(n)
-		if err != nil {
-			return nil, err
-		}
-		b, err := os.ReadFile(path) // #nosec G304 -- path from the operator-controlled environment
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, b)
+func readEnvFile(name string) ([]byte, error) {
+	path := os.Getenv(name)
+	if path == "" {
+		return nil, fmt.Errorf("%s is required", name)
 	}
-	return out, nil
+	return os.ReadFile(path) // #nosec G304,G703 -- path from the operator-controlled environment
 }
 
 func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	files, err := readFiles("OPENRMM_TLS_CERT", "OPENRMM_TLS_KEY", "OPENRMM_AGENTS_CA_CERT", "OPENRMM_AGENTS_CA_KEY")
+	certPEM, err := readEnvFile("OPENRMM_TLS_CERT")
 	if err != nil {
 		return err
 	}
-	srvCerts, err := pki.ParseCertsPEM(files[0])
+	keyPEM, err := readEnvFile("OPENRMM_TLS_KEY")
+	if err != nil {
+		return err
+	}
+	caPEM, err := readEnvFile("OPENRMM_AGENTS_CA_CERT")
+	if err != nil {
+		return err
+	}
+	certs, err := pki.ParseCertsPEM(certPEM)
 	if err != nil {
 		return fmt.Errorf("gateway certificate: %w", err)
 	}
-	srvKey, err := pki.ParseKeyPEM(files[1])
+	key, err := pki.ParseKeyPEM(keyPEM)
 	if err != nil {
 		return fmt.Errorf("gateway key: %w", err)
 	}
-	ca, err := pki.LoadCA(files[2], files[3])
+	cas, err := pki.ParseCertsPEM(caPEM)
 	if err != nil {
 		return fmt.Errorf("agents CA: %w", err)
 	}
+	agentsCA := cas[0]
+	agentTLS := tlsconf.Server(certs[0], certs[1:], key, agentsCA)
 
-	dbURL, err := mustEnv("OPENRMM_DATABASE_URL")
+	pool := relay.NewTunnelPool(log)
+	rawTunnel, err := net.Listen("tcp", env("OPENRMM_TUNNEL_LISTEN", ":8444"))
 	if err != nil {
 		return err
 	}
-	db, err := store.OpenPostgres(ctx, dbURL)
+	go func() {
+		if err := pool.Serve(ctx, tls.NewListener(rawTunnel, relay.TunnelTLS(agentTLS.Certificates[0], agentsCA))); err != nil {
+			log.Error("tunnel listener", "err", err)
+		}
+	}()
+
+	g, err := relay.NewGateway(pool, log)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	if err := db.Migrate(ctx); err != nil {
-		return err
-	}
-
-	gw, err := gateway.New(gateway.Config{Store: db, AgentsCA: ca, Logger: log})
-	if err != nil {
-		return err
-	}
-	gs := gw.GRPCServer(tlsconf.Server(srvCerts[0], srvCerts[1:], srvKey, ca.Cert))
-	// Wakes agent sessions when jobs are queued (PostgreSQL LISTEN/NOTIFY).
-	go gw.Run(ctx)
-
+	defer g.Close()
+	as := g.AgentServer(credentials.NewTLS(agentTLS))
 	lis, err := net.Listen("tcp", env("OPENRMM_LISTEN", ":8443"))
 	if err != nil {
 		return err
 	}
-	log.Info("gateway listening", "addr", lis.Addr().String())
+	log.Info("gateway listening", "agents", lis.Addr().String(), "tunnel", rawTunnel.Addr().String())
 	errCh := make(chan error, 1)
-	go func() { errCh <- gs.Serve(lis) }()
+	go func() { errCh <- as.Serve(lis) }()
 	select {
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
 	}
-	log.Info("shutting down")
 	stopped := make(chan struct{})
-	go func() { gs.GracefulStop(); close(stopped) }()
+	go func() { as.GracefulStop(); close(stopped) }()
 	select {
 	case <-stopped:
 	case <-time.After(15 * time.Second):
-		gs.Stop()
+		as.Stop()
 	}
 	if err := <-errCh; err != nil && !errors.Is(err, net.ErrClosed) {
 		return err

@@ -1,0 +1,34 @@
+# open-rmm gateway alone, for a separate DMZ host.
+#
+# Copy deploy/pki/gateway from the internal host into ./pki/gateway here
+# (it contains no private CA key), then:
+#
+#   docker compose up -d
+#
+# Firewall: internet → this host on OPENRMM_PUBLIC_PORT (agents);
+# internal network → this host on OPENRMM_TUNNEL_PORT (the core opens the
+# tunnel). No connection from this host to the internal network is needed.
+
+name: open-rmm-dmz
+
+services:
+  gateway:
+    image: ${OPENRMM_IMAGE:-ghcr.io/stefanozanarini/open-rmm:latest}
+    restart: unless-stopped
+    environment:
+      OPENRMM_LISTEN: ":8443"
+      OPENRMM_TUNNEL_LISTEN: ":8444"
+      OPENRMM_TLS_CERT: /run/openrmm/pki/gateway.crt
+      OPENRMM_TLS_KEY: /run/openrmm/pki/gateway.key
+      OPENRMM_AGENTS_CA_CERT: /run/openrmm/pki/agents-ca.crt
+    volumes:
+      - ./pki/gateway:/run/openrmm/pki:ro
+    ports:
+      - "${OPENRMM_PUBLIC_PORT:-443}:8443"
+      # Bind to the interface facing the internal network only.
+      - "${OPENRMM_TUNNEL_BIND:?set OPENRMM_TUNNEL_BIND to <internal-facing IP>:8444}:8444"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 256m
