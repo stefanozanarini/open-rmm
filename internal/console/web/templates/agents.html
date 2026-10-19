@@ -1,19 +1,33 @@
 {{define "agentrows"}}
 <table>
-<thead><tr><th>Nome</th><th>Sistema</th><th>Versione agente</th><th>Ultimo contatto</th><th>Registrato</th></tr></thead>
+<thead><tr><th>Nome</th><th>Utente</th><th>Modello</th><th>Sistema</th><th>Supremo</th><th>Agente</th><th>Ultimo contatto</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-  <td><a href="/agents/{{.ID}}">{{.Host.Hostname}}</a></td>
+  <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}} <a href="/agents/{{.ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}</td>
+  <td>{{.Inv.LoggedOnUser}}</td>
+  <td>{{.Inv.Manufacturer}} {{.Inv.Model}}{{with .Inv.Serial}}<br><span class="muted">{{.}}</span>{{end}}</td>
   <td>{{.Host.OSVersion}}</td>
+  <td>{{with .Inv.SupremoID}}<code>{{.}}</code>{{end}}</td>
   <td>{{.Host.AgentVersion}}</td>
   <td>{{fmtTime .LastSeenAt}}</td>
-  <td>{{fmtTime .EnrolledAt}}</td>
 </tr>{{end}}
 </tbody>
 </table>
 {{end}}
 {{define "content"}}
 {{with .Data}}
+<div class="toolbar">
+  <nav class="tabs">
+    <a href="/agents" {{if eq .Family ""}}class="current"{{end}}>Tutti ({{index .Counts ""}})</a>
+    <a href="/agents?family=client" {{if eq .Family "client"}}class="current"{{end}}>Client ({{index .Counts "client"}})</a>
+    <a href="/agents?family=server" {{if eq .Family "server"}}class="current"{{end}}>Server ({{index .Counts "server"}})</a>
+  </nav>
+  <form method="get" action="/agents" class="search">
+    {{if .Family}}<input type="hidden" name="family" value="{{.Family}}">{{end}}
+    <input type="search" name="q" value="{{.Query}}" placeholder="Nome, utente, modello, seriale, ID Supremo…">
+    <button>Cerca</button>
+  </form>
+</div>
 {{if .Pending}}
 <section class="warn">
 <h2>In attesa di approvazione ({{len .Pending}})</h2>
@@ -22,7 +36,7 @@
 </section>
 {{end}}
 <h2>Attivi ({{len .Active}})</h2>
-{{if .Active}}{{template "agentrows" .Active}}{{else}}<p class="muted">Nessun agente attivo.</p>{{end}}
+{{if .Active}}{{template "agentrows" .Active}}{{else}}<p class="muted">Nessun agente attivo{{if .Query}} corrispondente alla ricerca{{end}}.</p>{{end}}
 {{if .Revoked}}
 <h2>Revocati ({{len .Revoked}})</h2>
 {{template "agentrows" .Revoked}}

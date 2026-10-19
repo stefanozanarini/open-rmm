@@ -1,0 +1,149 @@
+{
+ "network": [
+  {
+   "dhcp": true,
+   "ipv4": [
+    "192.168.1.20"
+   ],
+   "ipv6": [
+    "fe80::1"
+   ],
+   "dns": [
+    "192.168.1.2"
+   ],
+   "name": "Intel Wi-Fi 6E",
+   "gateway": [
+    "192.168.1.1"
+   ],
+   "mac": "AA:BB:CC:DD:EE:FF"
+  }
+ ],
+ "collected_at": "2026-10-19T07:38:41.9536547Z",
+ "cpus": [
+  {
+   "name": "12th Gen Intel(R) Core(TM) i5-1245U",
+   "cores": 10,
+   "threads": 12
+  }
+ ],
+ "disks": [
+  {
+   "size_bytes": 512110190592,
+   "bus": "NVMe",
+   "serial": "S1",
+   "health": "Healthy",
+   "media_type": "SSD",
+   "model": "SAMSUNG MZVL2512"
+  }
+ ],
+ "firmware": {
+  "vendor": "LENOVO",
+  "date": "2025-03-01",
+  "uefi": true,
+  "version": "R23ET70W (1.48 )",
+  "secure_boot": true
+ },
+ "memory": {
+  "modules": [
+   {
+    "slot": "DIMM 0",
+    "serial": "1234",
+    "capacity_bytes": 17179869184,
+    "manufacturer": "Samsung",
+    "part_number": "M471A2G43CB2",
+    "speed_mhz": 3200
+   }
+  ],
+  "total_bytes": 17179869184
+ },
+ "volumes": [
+  {
+   "label": "OS",
+   "fs": "NTFS",
+   "mount": "C:",
+   "encryption": "XTS-AES-256",
+   "free_bytes": 200000000000,
+   "bitlocker": "on",
+   "size_bytes": 511000000000
+  }
+ ],
+ "monitors": [],
+ "remote_access": {
+  "supremo_id": "123 456 789",
+  "anydesk_id": "",
+  "teamviewer_id": ""
+ },
+ "schema": 1,
+ "tpm": {
+  "version": "2.0",
+  "present": true,
+  "ready": true
+ },
+ "software": [
+  {
+   "name": "7-Zip 23.01 (x64)",
+   "version": "23.01",
+   "publisher": "Igor Pavlov",
+   "install_date": "20240110",
+   "arch": "x64",
+   "scope": "machine",
+   "product_code": "",
+   "quiet_uninstall": true,
+   "system_component": false
+  },
+  {
+   "name": "Google Chrome",
+   "version": "129.0.6668.90",
+   "publisher": "Google LLC",
+   "install_date": "",
+   "arch": "x86",
+   "scope": "machine",
+   "product_code": "{6B2E1A63-2C2A-3A1B-9E0B-9C8E2C1E0F10}",
+   "quiet_uninstall": false,
+   "system_component": false
+  },
+  {
+   "name": "Supremo",
+   "version": "4.11.0",
+   "publisher": "Nanosystems S.r.l.",
+   "install_date": "20240501",
+   "arch": "x86",
+   "scope": "machine",
+   "product_code": "",
+   "quiet_uninstall": false,
+   "system_component": false
+  }
+ ],
+ "system": {
+  "manufacturer": "LENOVO",
+  "chassis": "laptop",
+  "sku": "21AH00ABIX",
+  "model": "ThinkPad T14 Gen 3",
+  "serial": "PF3ABCDE",
+  "domain": "corp.local",
+  "virtual": false,
+  "part_of_domain": true
+ },
+ "os": {
+  "name": "Microsoft Windows 11 Pro",
+  "version": "10.0.26100",
+  "build": "26100.2033",
+  "display_version": "24H2",
+  "family": "client",
+  "installation_type": "Client",
+  "architecture": "64-bit",
+  "install_date": "2024-11-02T00:00:00.0000000Z",
+  "last_boot": "2026-10-19T02:38:41.9536547Z",
+  "logged_on_user": "CORP\\mario"
+ },
+ "batteries": [
+  {
+   "cycle_count": 210,
+   "full_charge_capacity": 48450,
+   "charge_percent": 81,
+   "health_percent": 85,
+   "name": "5B10W51867",
+   "design_capacity": 57000
+  }
+ ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "inventory",
+  "version": "1.0.0",
+  "description": "Hardware and software inventory, including remote-access tool ids (Supremo, AnyDesk, TeamViewer).",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" },
+    "linux/amd64": { "type": "sh", "path": "main.sh" },
+    "linux/arm64": { "type": "sh", "path": "main.sh" }
+  },
+  "actions": {
+    "collect": { "description": "Full hardware and software inventory", "timeout_seconds": 600 }
+  }
+}

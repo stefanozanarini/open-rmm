@@ -141,10 +141,13 @@ Details in [ENTRA.md](ENTRA.md). The full text of scripts goes to the audit log.
 | Module | Platforms | Actions |
 |---|---|---|
 | `sysinfo` 1.0.0 | Windows, Linux | `info`: hostname, operating system, uptime |
+| `inventory` 1.0.0 | Windows, Linux | `collect`: hardware, OS, BitLocker, battery, network, installed software, Supremo/AnyDesk/TeamViewer ids. Results become the agent's inventory in the console |
 | `script` 1.0.0 | Windows | `run`: runs `params.script` (PowerShell) and returns output, errors and duration. Capability `adhoc_script` |
 
 ## Policies
 
 To run a module action periodically, or only on endpoints where a condition holds, create a **policy** in the web console (**Policy**, Admin role). Each rule names a module version, an action, parameters, an interval and an optional condition. Saving asks for a new MFA sign-in; the signer signs that exact version and the agents receive it at once. Results of the latest run of each rule appear on the agent page. Modules with the `adhoc_script` capability cannot be used in policies.
+
+For example, a policy with one rule `{"id": "inventory", "module": "inventory", "version": "1.0.0", "action": "collect", "every": "24h"}` keeps every endpoint's inventory up to date; new endpoints send it within a couple of minutes of receiving the policy.
 
 Planned plugins and how they are activated automatically by policies: [ARCHITECTURE.md](ARCHITECTURE.md) §3.7 and §8.

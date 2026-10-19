@@ -14,6 +14,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/open-rmm/internal/inventory"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
 )
 
@@ -40,8 +41,33 @@ func (s *Server) handleSelectTenant(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/agents", http.StatusSeeOther)
 }
 
+// agentRow is an agent in a list, with its inventory summary.
+type agentRow struct {
+	store.Agent
+	Inv    store.InventorySummary
+	Online bool
+}
+
 type agentsData struct {
-	Pending, Active, Revoked []store.Agent
+	Family                   string // "", client, server
+	Query                    string
+	Counts                   map[string]int
+	Pending, Active, Revoked []agentRow
+}
+
+// online reports whether an agent was seen recently.
+func (s *Server) online(a store.Agent) bool {
+	return a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) < 10*time.Minute
+}
+
+func (r agentRow) matches(q string) bool {
+	for _, f := range []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser,
+		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion} {
+		if strings.Contains(strings.ToLower(f), q) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
@@ -55,18 +81,39 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	var d agentsData
+	sums, err := s.store.InventorySummaries(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	d := agentsData{Family: r.URL.Query().Get("family"), Query: strings.TrimSpace(r.URL.Query().Get("q")), Counts: map[string]int{}}
+	if d.Family != "client" && d.Family != "server" {
+		d.Family = ""
+	}
+	q := strings.ToLower(d.Query)
 	for _, a := range agents {
+		d.Counts[""]++
+		if a.Host.OSFamily == "client" || a.Host.OSFamily == "server" {
+			d.Counts[a.Host.OSFamily]++
+		}
+		if d.Family != "" && a.Host.OSFamily != d.Family {
+			continue
+		}
+		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a)}
+		if q != "" && !row.matches(q) {
+			continue
+		}
 		switch a.Status {
 		case store.AgentPending:
-			d.Pending = append(d.Pending, a)
+			d.Pending = append(d.Pending, row)
 		case store.AgentActive:
-			d.Active = append(d.Active, a)
+			d.Active = append(d.Active, row)
 		default:
-			d.Revoked = append(d.Revoked, a)
+			d.Revoked = append(d.Revoked, row)
 		}
 	}
-	s.render(w, r, "agents", "Agenti", d)
+	title := map[string]string{"": "Agenti", "client": "Client", "server": "Server"}[d.Family]
+	s.render(w, r, "agents", title, d)
 }
 
 // runnable is a module action that can run on an agent.
@@ -83,6 +130,10 @@ type agentData struct {
 	Commands []runnable // regular module actions
 	Scripts  []runnable // ad-hoc script actions
 	Online   bool
+	Inv      *inventory.Inventory
+	InvAt    time.Time
+	Software []inventory.Software
+	Changes  []store.InventoryChange
 }
 
 func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +157,22 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	d := agentData{Agent: a, Jobs: jobs, Online: a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) < 10*time.Minute}
+	d := agentData{Agent: a, Jobs: jobs, Online: s.online(a)}
+	switch inv, err := s.store.GetInventory(r.Context(), t, id); {
+	case err == nil:
+		if d.Inv, err = inventory.Parse(inv.Data); err != nil {
+			s.log.Error("stored inventory unreadable", "agent", id, "err", err)
+		} else {
+			d.InvAt, d.Software = inv.ReceivedAt, d.Inv.VisibleSoftware()
+		}
+	case !errors.Is(err, store.ErrNotFound):
+		s.fail(w, err)
+		return
+	}
+	if d.Changes, err = s.store.ListInventoryChanges(r.Context(), t, id, 100); err != nil {
+		s.fail(w, err)
+		return
+	}
 	d.Results, err = s.policyResults(r, t, id)
 	if err != nil {
 		s.fail(w, err)

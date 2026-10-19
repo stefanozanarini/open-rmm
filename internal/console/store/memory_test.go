@@ -325,3 +325,53 @@ func testPolicyVersions(t *testing.T, s Store) {
 		t.Fatal("deleted policy still current")
 	}
 }
+
+func TestInventories(t *testing.T) { testInventories(t, NewMemory()) }
+
+func testInventories(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	agent := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "pc"},
+		CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, agent)
+	t0 := time.Now().UTC().Truncate(time.Second)
+	inv := func(at time.Time, model string) Inventory {
+		return Inventory{TenantID: tenant.ID, AgentID: agent.ID, Data: []byte(`{"model":"` + model + `"}`),
+			Summary: InventorySummary{CollectedAt: at, Model: model, SupremoID: "123456789"}}
+	}
+	if _, err := s.GetInventory(ctx, tenant.ID, agent.ID); err != ErrNotFound {
+		t.Fatalf("missing inventory: %v", err)
+	}
+	if err := s.PutInventory(ctx, inv(t0, "A"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutInventory(ctx, inv(t0.Add(time.Hour), "B"), []InventoryChange{
+		{At: t0.Add(time.Hour), Kind: "hardware", Detail: "first"},
+		{At: t0.Add(time.Hour), Kind: "hardware", Detail: "second"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutInventory(ctx, inv(t0.Add(time.Minute), "old"), nil); err != ErrStaleInventory {
+		t.Fatalf("stale inventory: %v", err)
+	}
+	got, err := s.GetInventory(ctx, tenant.ID, agent.ID)
+	if err != nil || got.Summary.Model != "B" || !got.Summary.CollectedAt.Equal(t0.Add(time.Hour)) ||
+		!strings.Contains(string(got.Data), `"B"`) || got.Summary.AgentID != agent.ID {
+		t.Fatalf("inventory = %+v, %v", got, err)
+	}
+	sums, _ := s.InventorySummaries(ctx, tenant.ID)
+	if sums[agent.ID].SupremoID != "123456789" {
+		t.Fatalf("summaries = %+v", sums)
+	}
+	if other, _ := s.InventorySummaries(ctx, ids.NewUUID()); len(other) != 0 {
+		t.Fatal("inventory visible from another tenant")
+	}
+	ch, _ := s.ListInventoryChanges(ctx, tenant.ID, agent.ID, 10)
+	if len(ch) != 2 || ch[0].Detail != "second" {
+		t.Fatalf("changes = %+v", ch)
+	}
+	if err := s.PutInventory(ctx, Inventory{TenantID: tenant.ID, AgentID: ids.NewUUID(), Data: []byte(`{}`),
+		Summary: InventorySummary{CollectedAt: t0}}, nil); err != ErrNotFound {
+		t.Fatalf("unknown agent: %v", err)
+	}
+}

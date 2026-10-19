@@ -70,7 +70,12 @@ func (s *Server) recordPolicyResult(ctx context.Context, a store.Agent, r *openr
 	}
 	err := s.store.PutPolicyResult(ctx, res)
 	switch {
-	case err == nil, errors.Is(err, store.ErrNotFound):
+	case err == nil:
+		if res.State == store.JobSucceeded && s.isInventoryRule(ctx, a.TenantID, res.PolicyID, res.RuleID) {
+			s.ingestInventory(ctx, a, res.Result)
+		}
+		return true
+	case errors.Is(err, store.ErrNotFound):
 		return true
 	default:
 		s.log.Error("store policy result", "err", err)

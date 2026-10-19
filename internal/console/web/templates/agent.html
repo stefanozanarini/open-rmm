@@ -32,6 +32,91 @@
 </div>
 {{end}}
 
+<h2>Inventario</h2>
+{{with .Data.Inv}}
+<p class="muted">Raccolto il {{fmtTime .CollectedAt}} · ricevuto il {{fmtTime $.Data.InvAt}}</p>
+<div class="grid2">
+<dl class="facts">
+  <dt>Produttore e modello</dt><dd>{{.System.Manufacturer}} {{.System.Model}}{{with .System.SKU}} <span class="muted">({{.}})</span>{{end}}</dd>
+  <dt>Numero di serie</dt><dd>{{with .System.Serial}}<code>{{.}}</code>{{else}}-{{end}}</dd>
+  <dt>Tipo</dt><dd>{{with .System.Chassis}}{{label .}}{{else}}-{{end}}{{if .System.Virtual}} · macchina virtuale{{end}}</dd>
+  <dt>Dominio</dt><dd>{{if .System.PartOfDomain}}{{.System.Domain}}{{else}}non in dominio{{with .System.Domain}} ({{.}}){{end}}{{end}}</dd>
+  <dt>Utente connesso</dt><dd>{{with .OS.LoggedOnUser}}{{.}}{{else}}-{{end}}</dd>
+  <dt>Sistema operativo</dt><dd>{{.OS.Name}} {{.OS.DisplayVersion}} <span class="muted">build {{.OS.Build}} · {{.OS.Architecture}}</span></dd>
+  <dt>Installato il</dt><dd>{{isoDate .OS.InstallDate}}</dd>
+  <dt>Ultimo avvio</dt><dd>{{isoDate .OS.LastBoot}}</dd>
+</dl>
+<dl class="facts">
+  <dt>BIOS/UEFI</dt><dd>{{.Firmware.Vendor}} {{.Firmware.Version}}{{with .Firmware.Date}} <span class="muted">({{.}})</span>{{end}}</dd>
+  <dt>UEFI · Secure Boot</dt><dd>{{yesNo .Firmware.UEFI}} · {{yesNo .Firmware.SecureBoot}}</dd>
+  <dt>TPM</dt><dd>{{if .TPM.Present}}{{.TPM.Version}}{{if not .TPM.Ready}} (non pronto){{end}}{{else}}assente o non rilevato{{end}}</dd>
+  <dt>CPU</dt><dd>{{range .CPUs}}{{.Name}} <span class="muted">({{.Cores}} core, {{.Threads}} thread)</span><br>{{else}}-{{end}}</dd>
+  <dt>Memoria</dt><dd>{{bytes .Memory.TotalBytes}}{{with .Memory.Modules}} <span class="muted">· {{range $i, $m := .}}{{if $i}}, {{end}}{{bytes $m.CapacityByte}}{{with $m.SpeedMHz}} {{.}} MHz{{end}}{{end}}</span>{{end}}</dd>
+  <dt>Assistenza remota</dt><dd>
+    {{with .RemoteAccess.SupremoID}}Supremo <code>{{.}}</code><br>{{end}}
+    {{with .RemoteAccess.AnyDeskID}}AnyDesk <code>{{.}}</code><br>{{end}}
+    {{with .RemoteAccess.TeamViewerID}}TeamViewer <code>{{.}}</code>{{end}}
+    {{if not (or .RemoteAccess.SupremoID .RemoteAccess.AnyDeskID .RemoteAccess.TeamViewerID)}}-{{end}}</dd>
+</dl>
+</div>
+
+<h3>Dischi e volumi</h3>
+<table>
+<thead><tr><th>Disco</th><th>Tipo</th><th>Dimensione</th><th>Stato</th></tr></thead>
+<tbody>{{range .Disks}}<tr><td>{{.Model}}{{with .Serial}} <span class="muted">{{.}}</span>{{end}}</td><td>{{.MediaType}} {{.Bus}}</td><td>{{bytes .SizeBytes}}</td>
+<td>{{if eq .Health "Healthy"}}<span class="badge succeeded">ok</span>{{else if .Health}}<span class="badge failed">{{.Health}}</span>{{else}}-{{end}}</td></tr>{{end}}</tbody>
+</table>
+<table>
+<thead><tr><th>Volume</th><th>File system</th><th>Dimensione</th><th>Libero</th><th>BitLocker</th></tr></thead>
+<tbody>{{range .Volumes}}<tr><td>{{.Mount}} {{.Label}}</td><td>{{.FS}}</td><td>{{bytes .SizeBytes}}</td>
+<td>{{bytes .FreeBytes}} <span class="muted">({{pctFree .FreeBytes .SizeBytes}}%)</span></td>
+<td>{{with .BitLocker}}<span class="badge bl-{{.}}">{{label .}}</span>{{else}}-{{end}}{{with .Encryption}} <span class="muted">{{.}}</span>{{end}}</td></tr>{{end}}</tbody>
+</table>
+
+{{if .Batteries}}
+<h3>Batteria</h3>
+<table>
+<thead><tr><th>Batteria</th><th>Salute</th><th>Capacità (attuale / progetto)</th><th>Cicli</th><th>Carica</th></tr></thead>
+<tbody>{{range .Batteries}}<tr><td>{{.Name}}</td><td>{{if .HealthPercent}}{{if lt .HealthPercent 60}}<span class="badge failed">{{.HealthPercent}}%</span>{{else}}{{.HealthPercent}}%{{end}}{{else}}-{{end}}</td>
+<td>{{.FullChargeCapacity}} / {{.DesignCapacity}} mWh</td><td>{{with .CycleCount}}{{.}}{{else}}-{{end}}</td><td>{{.ChargePercent}}%</td></tr>{{end}}</tbody>
+</table>
+{{end}}
+
+<h3>Rete</h3>
+<table>
+<thead><tr><th>Scheda</th><th>MAC</th><th>Indirizzi</th><th>Gateway</th><th>DNS</th></tr></thead>
+<tbody>{{range .Network}}<tr><td>{{.Name}}{{if .DHCP}} <span class="muted">DHCP</span>{{end}}</td><td><code>{{.MAC}}</code></td>
+<td>{{range .IPv4}}{{.}}<br>{{end}}{{range .IPv6}}<span class="muted">{{.}}</span><br>{{end}}</td><td>{{range .Gateway}}{{.}}<br>{{end}}</td><td>{{range .DNS}}{{.}}<br>{{end}}</td></tr>{{end}}</tbody>
+</table>
+
+{{if .Monitors}}
+<h3>Monitor</h3>
+<table>
+<thead><tr><th>Produttore</th><th>Modello</th><th>Numero di serie</th></tr></thead>
+<tbody>{{range .Monitors}}<tr><td>{{.Manufacturer}}</td><td>{{.Model}}</td><td>{{.Serial}}</td></tr>{{end}}</tbody>
+</table>
+{{end}}
+
+<h3>Software installato ({{len $.Data.Software}})</h3>
+<details>
+<summary>mostra l'elenco</summary>
+<table>
+<thead><tr><th>Nome</th><th>Versione</th><th>Editore</th><th>Installato</th><th>Ambito</th></tr></thead>
+<tbody>{{range $.Data.Software}}<tr><td>{{.Name}}</td><td>{{.Version}}</td><td>{{.Publisher}}</td><td>{{.InstallDate}}</td><td>{{label .Scope}}{{with .Arch}} {{.}}{{end}}</td></tr>{{end}}</tbody>
+</table>
+</details>
+{{else}}
+<p class="muted">Nessun inventario ricevuto. Crea una policy con il modulo <code>inventory</code> (azione <code>collect</code>), oppure eseguilo come comando.</p>
+{{end}}
+
+{{if .Data.Changes}}
+<h3>Modifiche rilevate</h3>
+<table>
+<thead><tr><th>Quando</th><th>Tipo</th><th>Dettaglio</th></tr></thead>
+<tbody>{{range .Data.Changes}}<tr><td>{{fmtTime .At}}</td><td>{{label .Kind}}</td><td>{{.Detail}}</td></tr>{{end}}</tbody>
+</table>
+{{end}}
+
 {{if and .CanRun .Data.Actions}}
 {{$csrf := .CSRF}}{{$id := .Data.Agent.ID}}
 <h2>Esegui un comando</h2>

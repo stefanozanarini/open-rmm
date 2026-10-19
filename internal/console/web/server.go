@@ -21,6 +21,7 @@ import (
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/open-rmm/internal/inventory"
 )
 
 //go:embed templates/*.html static/*
@@ -111,6 +112,33 @@ func (s *Server) parseTemplates() error {
 				return l
 			}
 			return fmt.Sprint(v)
+		},
+		"bytes": func(n int64) string {
+			if n <= 0 {
+				return "-"
+			}
+			return inventory.Bytes(n)
+		},
+		"pctFree": func(free, size int64) int {
+			if size <= 0 {
+				return 0
+			}
+			return int(100 * free / size)
+		},
+		"isoDate": func(t *time.Time) string {
+			if t == nil || t.IsZero() {
+				return "-"
+			}
+			return t.Local().Format("02/01/2006 15:04")
+		},
+		"yesNo": func(b *bool) string {
+			switch {
+			case b == nil:
+				return "-"
+			case *b:
+				return "sì"
+			}
+			return "no"
 		},
 		"short": func(s string) string {
 			if len(s) > 8 {
@@ -332,4 +360,10 @@ var labels = map[string]string{
 	"succeeded": "completato", "failed": "fallito", "rejected": "rifiutato", "expired": "scaduto",
 	"downloading": "download", "staged": "pronto", "applied": "installato", "rolled_back": "ripristinato",
 	"all": "tutti", "clients": "solo client", "servers": "solo server", "client": "client", "server": "server", "unknown": "non noto",
+	"on": "attivo", "off": "non attivo", "suspended": "sospeso", "encrypting": "cifratura in corso", "decrypting": "decifratura in corso",
+	"machine": "computer", "user": "utente", "laptop": "portatile", "desktop": "desktop", "all-in-one": "all-in-one",
+	"mini-pc": "mini PC", "tablet": "tablet",
+	"software.added": "software installato", "software.removed": "software rimosso", "software.updated": "software aggiornato",
+	"hardware": "hardware", "os": "sistema operativo", "firmware": "firmware", "disk.health": "stato disco",
+	"encryption": "cifratura", "remote_access": "accesso remoto",
 }

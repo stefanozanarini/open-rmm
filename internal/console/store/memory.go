@@ -21,12 +21,13 @@ type Memory struct {
 	modules map[string]Module // by id@version
 	jobs    map[string]Job    // by tenant/job
 
-	listeners []func(string)
-	sessions  map[string]WebSession // by session hash
-	releases  map[string]Release    // by version@platform
-	targets   map[string]ReleaseTarget
-	policies  []PolicyVersion
-	results   map[string]PolicyResult
+	listeners   []func(string)
+	sessions    map[string]WebSession // by session hash
+	releases    map[string]Release    // by version@platform
+	targets     map[string]ReleaseTarget
+	policies    []PolicyVersion
+	results     map[string]PolicyResult
+	inventories map[string]*memInventory
 }
 
 func NewMemory() *Memory {
@@ -38,10 +39,11 @@ func NewMemory() *Memory {
 		modules: map[string]Module{},
 		jobs:    map[string]Job{},
 
-		sessions: map[string]WebSession{},
-		releases: map[string]Release{},
-		targets:  map[string]ReleaseTarget{},
-		results:  map[string]PolicyResult{},
+		sessions:    map[string]WebSession{},
+		releases:    map[string]Release{},
+		targets:     map[string]ReleaseTarget{},
+		results:     map[string]PolicyResult{},
+		inventories: map[string]*memInventory{},
 	}
 }
 

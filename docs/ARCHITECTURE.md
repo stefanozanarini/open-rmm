@@ -310,23 +310,27 @@ internet ──► [DMZ] openrmm-gateway  ◄──── mTLS, opened from the 
 
 All modules are signed plugins outside the agent core, assigned by jobs or policies (§3.7).
 
-### 8.1 `inventory` 📋 (next)
+### 8.1 `inventory` ✅
 
 | Area | Data | Windows source |
 |---|---|---|
-| System | Manufacturer, model, SKU, serial, chassis, hypervisor | `Win32_ComputerSystem(Product)`, `Win32_SystemEnclosure` |
-| OS | Edition, version/build, **installation type (client/server/core)**, install date, activation, last boot | `Win32_OperatingSystem`, registry |
-| BIOS/UEFI | Version, date, UEFI/legacy, Secure Boot, **2023 Secure Boot certificates**, ESRT | `Win32_BIOS`, registry |
-| CPU, memory | Model, cores; memory per slot | `Win32_Processor`, `Win32_PhysicalMemory` |
-| Disks, volumes | Model, serial, type, **health**, wear; volumes, free space, **BitLocker** | `MSFT_PhysicalDisk`, `Win32_EncryptableVolume` |
-| Network | Adapters, MAC, IP, gateway, DNS | `MSFT_NetAdapter` |
-| Monitors, battery, TPM | Monitor serials, **battery health**, TPM version | `WmiMonitorID`, battery WMI, `Win32_Tpm` |
-| Software | `Uninstall` keys (32/64-bit, HKLM and every HKCU), MSIX; never `Win32_Product` | registry |
-| **Remote-access tools** | **Supremo ID**, AnyDesk ID, TeamViewer ID | registry / config files (exact Supremo location to be verified) |
+| System | Manufacturer, model (Lenovo marketing name), SKU, serial, chassis, domain, virtual machine | `Win32_ComputerSystem(Product)`, `Win32_BIOS`, `Win32_SystemEnclosure` |
+| OS | Edition, version, build with UBR, display version (24H2), **installation type (client/server)**, install date, last boot, logged-on user | `Win32_OperatingSystem`, registry |
+| BIOS/UEFI | Vendor, version, date, UEFI/legacy, Secure Boot | `Win32_BIOS`, `Confirm-SecureBootUEFI` |
+| CPU, memory | Model, cores, threads; memory per slot | `Win32_Processor`, `Win32_PhysicalMemory` |
+| Disks, volumes | Model, serial, type, bus, **health**; volumes, free space, **BitLocker** state and method | `Get-PhysicalDisk`, `Win32_LogicalDisk`, `Win32_EncryptableVolume` |
+| Network | Adapters, MAC, IP, gateway, DNS, DHCP | `Win32_NetworkAdapterConfiguration` |
+| Monitors, battery, TPM | Monitor serials, **battery health** and cycles, TPM version | `WmiMonitorID`, battery WMI classes, `Win32_Tpm` |
+| Software | `Uninstall` keys (64/32-bit HKLM and the loaded user hives), MSI product code, silent uninstall available; never `Win32_Product` | registry |
+| **Remote-access tools** | **Supremo ID** (`HKLM\SOFTWARE\WOW6432Node\Supremo\ClientID`), AnyDesk ID (`%ProgramData%\AnyDesk*\system.conf`), TeamViewer ID (`ClientID`) | registry / config files |
 
-Sent in full at enrollment, then daily as differences; the console keeps the change history (RAM removed, disk degrading) and raises alerts.
+- The module is read-only; each section is collected on its own, so a failing WMI class leaves only that section empty (with a warning in the job log).
+- The Linux entrypoint collects a subset: system, OS, firmware, CPU, memory, disks, packages (dpkg/rpm).
+- It runs through a policy (e.g. daily) or as a command. The console treats a result as an inventory only when its own records say it comes from `inventory`/`collect` (job or policy rule), never on the agent's word.
+- The console decodes only known fields, clips strings and bounds lists, and stores the normalized document. It keeps the latest inventory per agent and a **change history** (software installed/removed/updated, memory, disks, disk health, BIOS, OS build, BitLocker state, remote-access ids), at most 2000 entries per agent.
+- 📋 Later: MSIX packages, 2023 Secure Boot certificates and ESRT, disk wear, alerts on changes.
 
-The installation type is also sent by the core on connect (one field), so the console can split **clients and servers** before any inventory runs.
+The installation type is also sent by the core on connect (one field), so the console splits **clients and servers** before any inventory runs.
 
 ### 8.2 `accesslog` — local and RDP logons 📋
 
@@ -437,11 +441,11 @@ Implemented ✅: agents (pending/active/revoked, approve, revoke), command and s
 
 Planned 📋:
 
-- **Separate Clients and Servers sections**, by OS installation type; filters by site and OU; different default policies.
+- ✅ **Separate Clients and Servers sections**, by OS installation type, with search by name, user, model, serial and remote-access id. 📋 Filters by site and OU; different default policies.
 - **Update dashboards:** endpoints ranked by an update score — missing Windows updates and their age relative to Patch Tuesday, outdated third-party software (winget and console-side catalog), pending reboots; most-outdated applications ("Chrome outdated on 37 PCs"); compliance by site/OU.
 - **Package library**, software distribution and **uninstall from the Software tab** (§8.6).
 - **Policies** editor with per-version MFA approval (§3.7).
-- Inventory views, alerts, federation (tenant switcher across local and federated tenants).
+- ✅ Inventory on the agent page (hardware, BitLocker, battery, network, software, change history). 📋 Alerts, federation (tenant switcher across local and federated tenants).
 
 ---
 
@@ -467,7 +471,7 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | Phase 0 — foundations | PKI and enrollment, mTLS gateway, agent core, modules and SDKs, job queue, signer with per-command MFA, web console with Entra ID, watchdog and A/B updates, MSI and ADMX | ✅ (to be validated on real Windows) |
 | 1 | DMZ / internal split (gateway as relay, `openrmm-core`) | ✅ |
 | 2 | Policies with scheduling and conditional plugins | ✅ |
-| 3 | `inventory` (incl. Supremo/AnyDesk/TeamViewer ids), OS installation type, Clients/Servers sections | 📋 |
+| 3 | `inventory` (incl. Supremo/AnyDesk/TeamViewer ids), OS installation type, Clients/Servers sections | ✅ |
 | 4 | Security plugins: `trendmicro-endpoint`, `trendmicro-ztia`, Vision One connector, `accesslog` with unusual-logon detection, `protection-status` | 📋 |
 | 5 | `winupdate`, `winget`, console-side catalog, update dashboards, `reboot`, user helper | 📋 |
 | 6 | Package library, `msi-install`, `software-uninstall`; console layout (tree, tabs, bottom panel); setup wizard with code signing and optional AD | 📋 |
