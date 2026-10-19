@@ -19,9 +19,11 @@ build-windows:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/openrmm-agent.exe ./agent/cmd/openrmm-agent
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build -trimpath -ldflags '$(LDFLAGS)' -o bin/openrmm-watchdog.exe ./agent/cmd/openrmm-watchdog
 
-# Windows installer (needs VERSION=x.y.z; built with msitools/wixl).
+# Windows installer (needs VERSION=x.y.z; built with msitools/wixl). Signed
+# with Authenticode when SIGN_CERT and SIGN_KEY are given (openrmm-admin
+# codesign); SIGN_TIMESTAMP overrides the timestamp server.
 msi: build-windows
-	packaging/wix/build.sh $(VERSION)
+	SIGN_CERT='$(SIGN_CERT)' SIGN_KEY='$(SIGN_KEY)' SIGN_TIMESTAMP='$(SIGN_TIMESTAMP)' packaging/wix/build.sh $(VERSION)
 
 test:
 	$(GO) test -race -count=1 ./...

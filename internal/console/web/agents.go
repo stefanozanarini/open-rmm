@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stefanozanarini/open-rmm/internal/accesslog"
+	"github.com/stefanozanarini/open-rmm/internal/adinv"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/updates"
@@ -21,6 +22,7 @@ type agentRow struct {
 	Online     bool
 	Checks     string // worst check status
 	Site       string
+	OU         string // Active Directory container
 	Alerts     int
 	Reboot     bool
 	Missing    int // missing security updates
@@ -41,10 +43,11 @@ type panelTab struct {
 }
 
 type agentsData struct {
-	Family, Query, Site      string
+	Family, Query, Site, OU  string
 	Counts                   map[string]int
 	Sites                    []siteView
 	NoSite                   int
+	OUs                      []ouView // Active Directory containers holding agents
 	Pending, Active, Revoked []agentRow
 	Selected                 *agentData
 	Tab                      string
@@ -59,7 +62,7 @@ func (s *Server) online(a store.Agent) bool {
 
 func (r agentRow) matches(q string) bool {
 	for _, f := range []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser,
-		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion, r.Site} {
+		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion, r.Site, r.OU} {
 		if strings.Contains(strings.ToLower(f), q) {
 			return true
 		}
@@ -144,7 +147,14 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	d := agentsData{Family: q.Get("family"), Query: strings.TrimSpace(q.Get("q")), Site: q.Get("site"), Counts: map[string]int{}}
+	snaps, err := s.adSnapshots(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	places := adPlaces(snaps)
+	d := agentsData{Family: q.Get("family"), Query: strings.TrimSpace(q.Get("q")), Site: q.Get("site"), OU: q.Get("ou"),
+		Counts: map[string]int{}}
 	if d.Family != "client" && d.Family != "server" {
 		d.Family = ""
 	}
@@ -156,12 +166,17 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	all := q.Get("select") == "all"
 	matcher := newSiteMatcher(sites)
 	siteCount := map[string]int{}
+	var ouKeys []string
 	needle := strings.ToLower(d.Query)
 	for _, a := range agents {
 		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a), Checks: worst[a.ID], Alerts: alerts[a.ID],
 			Current: a.ID == selected}
 		var siteID string
 		siteID, row.Site = matcher.match(a, row.Inv)
+		ouKey := ""
+		if pl, ok := places[adinv.HostKey(a.Host.Hostname)]; ok {
+			row.OU, ouKey = pl.OU(), pl.Key()
+		}
 		for _, st := range statuses {
 			if st.AgentID != a.ID {
 				continue
@@ -173,8 +188,10 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 				row.ThirdParty = st.ThirdParty
 			}
 		}
-		// Counters follow the site filter; the site tree follows the family.
-		if d.Site == "" || d.Site == siteID || (d.Site == "none" && siteID == "") {
+		// Counters follow the site and OU filters; the trees follow the family.
+		inSite := d.Site == "" || d.Site == siteID || (d.Site == "none" && siteID == "")
+		inUnit := d.OU == "" || inOU(ouKey, d.OU)
+		if inSite && inUnit {
 			d.Counts[""]++
 			if a.Host.OSFamily == "client" || a.Host.OSFamily == "server" {
 				d.Counts[a.Host.OSFamily]++
@@ -186,9 +203,11 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 			} else {
 				siteCount[siteID]++
 			}
+			if ouKey != "" {
+				ouKeys = append(ouKeys, ouKey)
+			}
 		}
-		if (d.Family != "" && a.Host.OSFamily != d.Family) || (d.Site == "none" && siteID != "") ||
-			(d.Site != "" && d.Site != "none" && d.Site != siteID) || (needle != "" && !row.matches(needle)) {
+		if (d.Family != "" && a.Host.OSFamily != d.Family) || !inSite || !inUnit || (needle != "" && !row.matches(needle)) {
 			continue
 		}
 		row.Checked = checked[a.ID] || (all && a.Status == store.AgentActive)
@@ -204,8 +223,9 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	for _, st := range sites {
 		d.Sites = append(d.Sites, siteView{Site: st, Count: siteCount[st.ID]})
 	}
+	d.OUs = ouTree(ouKeys)
 	base := url.Values{}
-	for _, k := range []string{"family", "q", "site"} {
+	for _, k := range []string{"family", "q", "site", "ou"} {
 		if v := q.Get(k); v != "" {
 			base.Set(k, v)
 		}
@@ -264,6 +284,9 @@ func rowLink(d agentsData, agentID string) string {
 	}
 	if d.Site != "" {
 		v.Set("site", d.Site)
+	}
+	if d.OU != "" {
+		v.Set("ou", d.OU)
 	}
 	if d.Tab != "" {
 		v.Set("tab", d.Tab)

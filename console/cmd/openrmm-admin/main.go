@@ -12,6 +12,9 @@
 //	openrmm-admin agents revoke -tenant UUID -agent UUID
 //	openrmm-admin audit verify -tenant UUID
 //	openrmm-admin signing keygen -out FILE
+//	openrmm-admin codesign ca -dir DIR -org NAME [-cn NAME] [-country CC]    (dedicated code-signing CA)
+//	openrmm-admin codesign csr -dir DIR -org NAME [-cn NAME] [-country CC]   (request for AD CS or a public CA)
+//	openrmm-admin codesign check -cert FILE [-key FILE]
 //	openrmm-admin module sign -dir DIR -key FILE [-out FILE] [-sdk modules/sdk]
 //	openrmm-admin module publish -file BUNDLE      (needs OPENRMM_MODULE_KEYS)
 //	openrmm-admin module list
@@ -68,6 +71,12 @@ func run(args []string) error {
 		return pkiRootB64(rest)
 	case "signing keygen":
 		return signingKeygen(rest)
+	case "codesign ca":
+		return codesignCA(rest)
+	case "codesign csr":
+		return codesignCSR(rest)
+	case "codesign check":
+		return codesignCheck(rest)
 	case "module sign":
 		return moduleSign(rest)
 	case "release sign":

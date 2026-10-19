@@ -62,6 +62,7 @@ type Server struct {
 	pages    map[string]*template.Template
 	packages pkgfiles.Dir
 	winget   *wingetcat.Client
+	ad       adCache
 }
 
 // New returns a Server.
@@ -250,6 +251,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /sites", s.auth(s.handleSites))
 	mux.Handle("POST /sites", s.role(authn.RoleAdmin, s.handleSaveSite))
 	mux.Handle("POST /theme", s.auth(s.handleTheme))
+	mux.Handle("GET /ad", s.auth(s.handleAD))
+	mux.Handle("GET /setup", s.role(authn.RoleAdmin, s.handleSetup))
+	mux.Handle("POST /setup/codesign", s.role(authn.RoleAdmin, s.handleSaveCodeSigning))
+	mux.Handle("GET /setup/{file}", s.auth(s.handleCodeSigningCert))
 	mux.Handle("POST /alerts/{id}/ack", s.role(authn.RoleOperator, s.handleAckAlert))
 	mux.Handle("GET /settings", s.role(authn.RoleAdmin, s.handleSettings))
 	mux.Handle("POST /settings", s.role(authn.RoleAdmin, s.handleSaveSettings))

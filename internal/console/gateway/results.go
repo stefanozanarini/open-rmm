@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stefanozanarini/open-rmm/internal/accesslog"
+	"github.com/stefanozanarini/open-rmm/internal/adinv"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/inventory"
 	"github.com/stefanozanarini/open-rmm/internal/policy"
@@ -52,6 +53,33 @@ func (s *Server) afterSuccess(ctx context.Context, a store.Agent, module, action
 		s.ingestLogons(ctx, a, raw)
 	case updates.SourceOf(module, action) != "":
 		s.ingestUpdates(ctx, a, updates.SourceOf(module, action), raw)
+	case module == adinv.ModuleID && action == adinv.Action:
+		s.ingestAD(ctx, a, raw)
+	}
+}
+
+// ingestAD stores the computer list of a domain.
+func (s *Server) ingestAD(ctx context.Context, a store.Agent, raw []byte) {
+	snap, err := adinv.Parse(raw)
+	if err != nil {
+		s.log.Warn("invalid Active Directory report", "agent", a.ID, "err", err)
+		return
+	}
+	if now := s.now(); snap.CollectedAt.After(now.Add(5 * time.Minute)) {
+		snap.CollectedAt = now
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		s.log.Error("encode Active Directory report", "err", err)
+		return
+	}
+	switch err := s.store.PutADDomain(ctx, store.ADDomain{TenantID: a.TenantID, Domain: snap.Domain, AgentID: a.ID,
+		CollectedAt: snap.CollectedAt, Data: data}); {
+	case err == nil:
+		s.log.Info("Active Directory report stored", "agent", a.ID, "domain", snap.Domain, "computers", len(snap.Computers))
+	case errors.Is(err, store.ErrStaleADReport):
+	default:
+		s.log.Error("store Active Directory report", "agent", a.ID, "err", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"github.com/stefanozanarini/open-rmm/internal/adinv"
 	"net/http"
 	"slices"
 	"sort"
@@ -68,6 +69,7 @@ type agentData struct {
 	// the winget catalog.
 	Outdated map[string]string
 	Notes    []store.Note
+	AD       *adPlace // computer object in Active Directory
 	// Return is where forms on this agent go back to; Panel is set when the
 	// agent is shown in the bottom panel of the agent list.
 	Return string
@@ -133,6 +135,13 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 	}
 	if d.Notes, err = s.store.ListNotes(r.Context(), t, id, 100); err != nil {
 		return nil, err
+	}
+	snaps, err := s.adSnapshots(r.Context(), t)
+	if err != nil {
+		return nil, err
+	}
+	if pl, ok := adPlaces(snaps)[adinv.HostKey(a.Host.Hostname)]; ok {
+		d.AD = &pl
 	}
 	d.Outdated = map[string]string{}
 	if d.Inv != nil {

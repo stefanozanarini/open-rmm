@@ -617,3 +617,33 @@ func testSitesAndNotes(t *testing.T, s Store) {
 		t.Fatalf("note for unknown agent: %v", err)
 	}
 }
+
+func TestADDomains(t *testing.T) { testADDomains(t, NewMemory()) }
+
+func testADDomains(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	agent := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "srv01"},
+		CertFingerprint: ids.NewUUID(), CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, agent)
+	at := time.Now().UTC().Truncate(time.Second)
+	d := ADDomain{TenantID: tenant.ID, Domain: "corp.local", AgentID: agent.ID, CollectedAt: at, Data: []byte(`{"n": 1}`)}
+	if err := s.PutADDomain(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutADDomain(ctx, d); err != ErrStaleADReport {
+		t.Fatalf("same report twice: %v", err)
+	}
+	d.CollectedAt, d.Data = at.Add(time.Hour), []byte(`{"n": 2}`)
+	if err := s.PutADDomain(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutADDomain(ctx, ADDomain{TenantID: tenant.ID, Domain: "x.local", AgentID: ids.NewUUID(), CollectedAt: at, Data: []byte(`{}`)}); err != ErrNotFound {
+		t.Fatalf("unknown agent: %v", err)
+	}
+	got, err := s.ListADDomains(ctx, tenant.ID)
+	if err != nil || len(got) != 1 || string(got[0].Data) != `{"n": 2}` || !got[0].CollectedAt.Equal(at.Add(time.Hour)) || got[0].AgentID != agent.ID {
+		t.Fatalf("domains = %+v, %v", got, err)
+	}
+}

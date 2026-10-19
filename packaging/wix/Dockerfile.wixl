@@ -1,6 +1,7 @@
-# Build environment for the Windows installer on Linux (msitools/wixl, LGPL).
+# Build environment for the Windows installer on Linux (msitools/wixl, LGPL;
+# osslsigncode, GPL, for Authenticode signatures).
 FROM debian:bookworm-slim
 RUN apt-get update \
- && apt-get install -y --no-install-recommends wixl msitools \
+ && apt-get install -y --no-install-recommends wixl msitools osslsigncode \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /src

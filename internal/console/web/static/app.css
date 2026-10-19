@@ -79,6 +79,9 @@ main { max-width:1500px; }
 .tree a.current { background:var(--sel); font-weight:600; }
 .tree a:hover { background:var(--sel); }
 .tree-title { margin:0 0 6px; font-weight:700; }
+.tree a.small + p.tree-title { margin-top:12px; }
+.tree a.depth-1 { padding-left:20px; } .tree a.depth-2 { padding-left:32px; } .tree a.depth-3 { padding-left:44px; }
+.tree a.depth-4 { padding-left:56px; }
 .small { font-size:12px; }
 .main { min-width:0; }
 table.agents tr.current td { background:var(--sel); }

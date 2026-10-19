@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/stefanozanarini/open-rmm/internal/adinv"
 	"github.com/stefanozanarini/open-rmm/internal/console/audit"
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
@@ -59,6 +61,7 @@ func TestPreview(t *testing.T) {
 	e.store.AppendAudit(ctx, audit.Event{TenantID: e.tenant, Actor: "agent:x", Action: "agent.enrolled", Target: e.agentID,
 		Details: map[string]any{"hostname": "pc01"}})
 
+	previewAD(t, e)
 	cfgV := e.idp.srv.URL
 	v, err := authn.NewVerifier(ctx, authn.Config{Issuer: cfgV, ClientID: "console-app", MFAClaim: "amr",
 		TenantMap: map[string][]string{e.idp.tid: {e.tenant}}, MaxAuthAge: 10 * time.Minute})
@@ -144,5 +147,35 @@ func previewInventory(t *testing.T, e *consoleEnv, agentID string, i int) {
 	if i == 0 {
 		e.store.AddNote(ctx, store.Note{TenantID: e.tenant, ID: ids.NewUUID(), AgentID: agentID, Author: "Mario Rossi (mario@cliente.it)",
 			Body: "Portatile del responsabile amministrativo. Sostituita la batteria a settembre."})
+	}
+}
+
+// previewAD stores a sample Active Directory report for the preview agents.
+func previewAD(t *testing.T, e *consoleEnv) {
+	ctx := context.Background()
+	agents, _ := e.store.ListAgents(ctx, e.tenant)
+	var reporter string
+	now := time.Now().UTC()
+	recent, old := now.Add(-48*time.Hour), now.Add(-160*24*time.Hour)
+	var comps []adinv.Computer
+	for _, a := range agents {
+		ou := "OU=PC,OU=Bologna,OU=Sedi"
+		switch {
+		case strings.HasPrefix(a.Host.Hostname, "SRV"):
+			ou, reporter = "OU=Server", a.ID
+		case strings.Contains(a.Host.Hostname, "MAGAZZINO"):
+			ou = "OU=PC,OU=Milano,OU=Sedi"
+		case a.Status != store.AgentActive:
+			continue
+		}
+		comps = append(comps, adinv.Computer{Name: a.Host.Hostname, DN: "CN=" + a.Host.Hostname + "," + ou + ",DC=corp,DC=local",
+			OS: "Windows 11 Pro", Enabled: true, LastLogon: &recent})
+	}
+	comps = append(comps,
+		adinv.Computer{Name: "PC-AMMIN-03", DN: "CN=PC-AMMIN-03,OU=PC,OU=Bologna,OU=Sedi,DC=corp,DC=local", OS: "Windows 11 Pro", Enabled: true, LastLogon: &recent},
+		adinv.Computer{Name: "PC-VECCHIO", DN: "CN=PC-VECCHIO,CN=Computers,DC=corp,DC=local", OS: "Windows 7 Professional", Enabled: true, LastLogon: &old})
+	raw, _ := json.Marshal(adinv.Snapshot{Schema: 1, Domain: "corp.local", CollectedAt: now, Computers: comps})
+	if err := e.store.PutADDomain(ctx, store.ADDomain{TenantID: e.tenant, Domain: "corp.local", AgentID: reporter, CollectedAt: now, Data: raw}); err != nil {
+		t.Fatal(err)
 	}
 }

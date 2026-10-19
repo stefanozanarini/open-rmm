@@ -27,21 +27,26 @@
 <div class="workspace">
 <aside class="tree" aria-label="Sedi">
   <p class="tree-title">{{$.Tenant.Name}}</p>
-  <a href="/agents{{qs "family" .Family "q" .Query}}" {{if not .Site}}class="current"{{end}}>Tutte le sedi</a>
-  {{range .Sites}}<a href="/agents{{qs "site" .ID "family" $.Data.Family "q" $.Data.Query}}" {{if eq $.Data.Site .ID}}class="current"{{end}}>{{.Name}} <span class="muted">{{.Count}}</span></a>{{end}}
-  <a href="/agents{{qs "site" "none" "family" .Family "q" .Query}}" {{if eq .Site "none"}}class="current"{{end}}>Senza sede <span class="muted">{{.NoSite}}</span></a>
+  <a href="/agents{{qs "family" .Family "q" .Query "ou" .OU}}" {{if not .Site}}class="current"{{end}}>Tutte le sedi</a>
+  {{range .Sites}}<a href="/agents{{qs "site" .ID "family" $.Data.Family "q" $.Data.Query "ou" $.Data.OU}}" {{if eq $.Data.Site .ID}}class="current"{{end}}>{{.Name}} <span class="muted">{{.Count}}</span></a>{{end}}
+  <a href="/agents{{qs "site" "none" "family" .Family "q" .Query "ou" .OU}}" {{if eq .Site "none"}}class="current"{{end}}>Senza sede <span class="muted">{{.NoSite}}</span></a>
   <a class="muted small" href="/sites">{{if $.IsAdmin}}gestisci le sedi{{else}}sedi{{end}}</a>
+  {{if .OUs}}<p class="tree-title">Active Directory</p>
+  {{if .OU}}<a href="/agents{{qs "family" .Family "q" .Query "site" .Site}}">Tutte le OU</a>{{end}}
+  {{range .OUs}}<a href="/agents{{qs "ou" .Key "family" $.Data.Family "q" $.Data.Query "site" $.Data.Site}}" class="depth-{{.Depth}}{{if eq $.Data.OU .Key}} current{{end}}" title="{{.Key}}">{{.Label}} <span class="muted">{{.Count}}</span></a>{{end}}
+  <a class="muted small" href="/ad">confronto con AD</a>{{end}}
 </aside>
 <div class="main">
 <div class="toolbar">
   <nav class="tabs">
-    <a href="/agents{{qs "site" .Site "q" .Query}}" {{if eq .Family ""}}class="current"{{end}}>Tutti ({{index .Counts ""}})</a>
-    <a href="/agents{{qs "family" "client" "site" .Site "q" .Query}}" {{if eq .Family "client"}}class="current"{{end}}>Client ({{index .Counts "client"}})</a>
-    <a href="/agents{{qs "family" "server" "site" .Site "q" .Query}}" {{if eq .Family "server"}}class="current"{{end}}>Server ({{index .Counts "server"}})</a>
+    <a href="/agents{{qs "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family ""}}class="current"{{end}}>Tutti ({{index .Counts ""}})</a>
+    <a href="/agents{{qs "family" "client" "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family "client"}}class="current"{{end}}>Client ({{index .Counts "client"}})</a>
+    <a href="/agents{{qs "family" "server" "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family "server"}}class="current"{{end}}>Server ({{index .Counts "server"}})</a>
   </nav>
   <form method="get" action="/agents" class="search">
     {{if .Family}}<input type="hidden" name="family" value="{{.Family}}">{{end}}
     {{if .Site}}<input type="hidden" name="site" value="{{.Site}}">{{end}}
+    {{if .OU}}<input type="hidden" name="ou" value="{{.OU}}">{{end}}
     <input type="search" name="q" value="{{.Query}}" placeholder="Nome, utente, modello, seriale, ID Supremo, sede…">
     <button>Cerca</button>
   </form>

@@ -22,7 +22,26 @@ make msi VERSION=1.0.0
 
 The package is built on Linux with msitools/wixl (in a container, or with `wixl` installed). CI builds it on every push and publishes it as an artifact.
 
-> **Before production:** sign both the executables and the MSI with Authenticode. Without a signature SmartScreen and some antivirus products may block them. Code-signing options (enterprise CA, dedicated CA, public certificate) are described in [ARCHITECTURE.md](ARCHITECTURE.md) §12; signing can be done on Linux with `osslsigncode`.
+> **Before production:** sign the executables and the MSI with Authenticode. Without a signature SmartScreen and some antivirus products may block them.
+
+### Signing
+
+Create the key and certificate on the build machine (options in [ARCHITECTURE.md](ARCHITECTURE.md) §12.1):
+
+```bash
+openrmm-admin codesign ca -dir codesign -org "Cliente Srl"       # dedicated CA
+openrmm-admin codesign csr -dir codesign -org "Cliente Srl"      # or: request for AD CS / a public CA
+```
+
+```bash
+openrmm-admin codesign check -cert codesign/codesign.crt -key codesign/codesign.key
+```
+
+```bash
+make msi VERSION=1.0.0 SIGN_CERT=codesign/codesign.crt SIGN_KEY=codesign/codesign.key
+```
+
+Both executables are signed before they go into the MSI, then the MSI itself, with an RFC 3161 timestamp (`SIGN_TIMESTAMP` changes the server). Paste `codesign.crt` in the console (**Configurazione → Firma del codice**) to download the certificates for Group Policy and get a warning before expiry. With a dedicated CA, deploy `codesign-ca.cer` to *Trusted Root Certification Authorities* and `codesign.cer` to *Trusted Publishers*; with AD CS only `codesign.cer` is needed.
 
 ## Group Policy deployment (recommended)
 

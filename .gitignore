@@ -1,5 +1,6 @@
 /bin/
 /dist/
+/build/
 *.exe
 *.test
 *.out
@@ -7,6 +8,8 @@ coverage.*
 # Never commit key material.
 *.key
 *.pem
+*.csr
+/codesign/
 !**/testdata/**
 .env
 /dev-pki/

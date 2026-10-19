@@ -1,0 +1,13 @@
+{
+  "id": "adinventory",
+  "version": "1.0.0",
+  "description": "Active Directory computer objects (OU, operating system, last logon), read with the computer account of a domain member. Run it on one server per domain.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "collect": { "description": "List the computer objects of the endpoint's domain", "timeout_seconds": 600 }
+  }
+}

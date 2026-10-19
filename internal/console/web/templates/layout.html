@@ -24,7 +24,7 @@
     <a href="/alerts">Avvisi{{if .OpenAlerts}} <span class="badge sev-critical">{{.OpenAlerts}}</span>{{end}}</a>
     <a href="/audit">Attività</a>
     <a href="/updates">Versioni agente</a>
-    {{if .IsAdmin}}<a href="/settings">Impostazioni</a>{{end}}
+    {{if .IsAdmin}}<a href="/settings">Impostazioni</a> <a href="/setup">Configurazione</a>{{end}}
   </nav>
   <div class="who">
     {{if gt (len .Tenants) 1}}

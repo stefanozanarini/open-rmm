@@ -34,6 +34,7 @@ type Memory struct {
 	catalog     map[string]CatalogApp
 	sites       map[string]Site
 	notes       []Note
+	adDomains   map[string]ADDomain
 }
 
 func NewMemory() *Memory {

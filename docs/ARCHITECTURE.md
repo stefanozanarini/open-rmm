@@ -30,7 +30,7 @@ Legend: ✅ implemented · 🔜 next · 📋 planned
 | R17 | Software distribution by uploading an MSI | §8.7 |
 | R18 | Dashboards of the endpoints that most need updates (Windows and third-party) | §11 |
 | R19 | **Everything doable on a customer console is doable from the central console** | §9 |
-| R20 | Guided first-time setup (web wizard), optional enterprise CA and Active Directory integration | §12 |
+| R20 | Guided first-time setup, optional enterprise CA and Active Directory integration | §12 |
 
 **Guiding principles**
 
@@ -237,7 +237,7 @@ Details: [UPDATES.md](UPDATES.md).
 | Compromised DMZ host | The DMZ relay holds no database credentials and no CA key; the LAN side opens the connection; forwarded identities are re-verified by the core (§6.7) |
 | Rogue agent enrollment | Tenant-bound, expiring, use-limited tokens; new agents pending approval |
 | Man-in-the-middle | mTLS, pinned private root CA |
-| Local tampering with the agent | Restricted ACLs on files, registry and pipes; module cache re-verified before each run; 📋 Authenticode-signed binaries |
+| Local tampering with the agent | Restricted ACLs on files, registry and pipes; module cache re-verified before each run; Authenticode-signed binaries and MSI (§12) |
 | Tampered module, package or release | Ed25519 signatures and SHA-256 checked **before** anything runs |
 | Job replay | Nonce, expiry and agent id in the signed payload; persistent replay cache |
 | Operator abuse | Roles, per-job MFA, immutable hash-chained audit log; 📋 four-eyes approval for mass actions |
@@ -452,7 +452,7 @@ A console can manage **local tenants** (its own agents) and **federated tenants*
 - With Group Policy the MSI is assigned unchanged and configured through the **ADMX** templates (`HKLM\SOFTWARE\Policies\open-rmm`, Italian and English).
 - Services re-apply at every start what wixl cannot express: recovery actions, delayed start, scheduled check, registry and folder ACLs. Without a complete configuration they keep running and retry every minute. They are registered with an explicit `-service` flag.
 - Removal deletes services, scheduled task, update-installed versions and agent state including its private key (not during upgrades).
-- 📋 Authenticode signing of executables and MSI (§12), uninstall protection, Linux packages.
+- ✅ Authenticode signing of executables and MSI at build time (§12). 📋 Uninstall protection, Linux packages.
 
 Details: [AGENT-INSTALL.md](AGENT-INSTALL.md).
 
@@ -464,7 +464,7 @@ Implemented ✅: agents (pending/active/revoked, approve, revoke), command and s
 
 **Layout ✅ (inspired by Tactical RMM's console, no code reused):**
 
-- left: tree of **sites** with an "all" node and "no site"; a site is a list of subnets, and an agent belongs to the first site containing one of its adapter addresses (from the inventory) or the address it last connected from. Sites are managed by Admins. 📋 OUs when AD is integrated; tenants when federated.
+- left: tree of **sites** with an "all" node and "no site"; a site is a list of subnets, and an agent belongs to the first site containing one of its adapter addresses (from the inventory) or the address it last connected from. Sites are managed by Admins. ✅ Below the sites, the **Active Directory containers (OUs)** holding agents, when AD is integrated (§12); 📋 tenants when federated.
 - top of the main area: tabs **All · Clients · Servers**, a search box (name, user, model, serial, remote-access id);
 - agent table with status icons (online, alerts, failing checks, missing patches, pending reboot, outdated applications), site, logged-on user, model, OS, Supremo id, last contact; multi-select for **bulk actions**: a command or script on up to 500 agents with **one MFA approval** (one signed job per agent, only actions available on every selected platform), or a package deployment with the selection preselected;
 - bottom panel for the selected agent, with tabs **Summary · Checks · Patches · Software · Inventory · Logons · Policies · History · Notes · Commands**; the full agent page stays available;
@@ -473,7 +473,7 @@ Implemented ✅: agents (pending/active/revoked, approve, revoke), command and s
 
 Planned 📋:
 
-- ✅ **Separate Clients and Servers sections**, by OS installation type, with search by name, user, model, serial and remote-access id. ✅ Filter by site. 📋 OU; different default policies.
+- ✅ **Separate Clients and Servers sections**, by OS installation type, with search by name, user, model, serial and remote-access id. ✅ Filter by site and by OU. 📋 Different default policies.
 - ✅ **Update dashboard (Patch):** endpoints ranked by an update score — missing security updates and their age in days and Patch Tuesdays, other updates, pending reboot and for how long, outdated third-party applications — with compliance, counters and the most widespread outdated applications ("Chrome outdated on 37 PCs"); filters Clients/Servers. 📋 Console-side catalog, compliance by site/OU.
 - **Package library**, software distribution and **uninstall from the Software tab** (§8.7).
 - **Policies** editor with per-version MFA approval (§3.7).
@@ -481,18 +481,45 @@ Planned 📋:
 
 ---
 
-## 12. First-time setup wizard 📋
+## 12. First-time setup ✅
 
-A web wizard runs on the first start of the console, protected by a one-time code printed in the container logs, and disables itself when done. It covers:
+The bootstrap stays on the command line (`deploy/setup-pki.sh`, `deploy/setup-secrets.sh`, `openrmm-admin`): it creates the agents PKI, the signing keys and the Entra ID configuration before the console can start. Offline keys (root CA, module and release keys) are created on the operator's machine and never reach the server.
 
-- **Agents PKI** (root CA, agents CA, gateway certificate). Offline keys created by the wizard are offered for download **once** and then deleted from the server, with a clear warning; keys can also be generated on the offline machine and only their public part uploaded.
-- **Code signing (Authenticode)**, selectable:
-  1. **enterprise CA (AD CS):** the wizard generates a CSR, the operator gets it signed by the domain CA and uploads the certificate;
-  2. **dedicated CA:** the wizard creates a small code-signing CA and certificate, and provides the certificate to distribute by GPO (Trusted Publishers, Trusted Root);
-  3. **public certificate:** upload of a purchased certificate, or Microsoft Trusted Signing.
-- **Entra ID** settings and first tenant, first enrollment token.
-- **Active Directory integration (optional):** read-only LDAPS service account, used to compare domain computers with agents (computers without agent, stale objects) and to group endpoints by OU. Operator sign-in stays on Entra ID.
-- **Federation (optional):** link to a central console.
+Once Entra ID sign-in works, the **Configurazione** page (Admin role) is a checklist computed from the console's state, each item with a link to where it is done:
+
+- Entra ID sign-in with MFA;
+- **sites** and their subnets (§11);
+- **subnets RDP is allowed from** (§8);
+- **modules** published, against the list of recommended ones;
+- **baseline policy**: the policy editor prefilled with the published modules — inventory, Windows and winget scans, protection status, logons, Trend Micro where its services exist, Active Directory on domain controllers — approved with MFA like any policy;
+- **agent distribution**: enrollment token, active and pending agents;
+- **code signing**;
+- **Active Directory** (optional).
+
+### 12.1 Code signing (Authenticode)
+
+Keys are created by `openrmm-admin` on the machine that builds the MSI, **never by the console**, which is reachable from the internet. Three options:
+
+1. **Enterprise CA (AD CS)**, recommended with a domain: `openrmm-admin codesign csr` creates an RSA 3072 key and a request; `certreq -submit -attrib "CertificateTemplate:CodeSigning"` gets it signed. Domain computers already trust the CA.
+2. **Dedicated CA**: `openrmm-admin codesign ca` creates a code-signing CA (10 years, can only issue end-entity certificates) and a signing certificate (3 years). The CA key is needed only for renewal and goes offline.
+3. **Public certificate** (purchased, or Microsoft Trusted Signing): `codesign csr`, then the CA's procedure.
+
+`openrmm-admin codesign check` verifies the chain, the code-signing usage and that the key matches. `make msi SIGN_CERT=… SIGN_KEY=…` signs both executables and the MSI with `osslsigncode` (SHA-256, RFC 3161 timestamp so that signatures outlive the certificate).
+
+The console keeps only the **public certificate** (keys are refused): it offers `codesign.cer` (Trusted Publishers) and, for a dedicated CA, `codesign-ca.cer` (Trusted Root) for Group Policy, and warns 60 days before expiry.
+
+### 12.2 Active Directory (optional)
+
+The `adinventory` module lists the computer objects of the domain through ADSI, with the **computer account** of the endpoint it runs on (SYSTEM): the console holds **no AD credentials** and needs no LDAPS access to the domain controllers. It runs from the baseline policy on the domain controllers (condition `service_exists: NTDS`) or on any member server.
+
+The console matches computers and agents by host name and shows:
+
+- **active computers without an agent** (enabled, logged on to the domain in the last 30 days) — usually the GPO did not apply;
+- **stale objects** (enabled, no logon for over 90 days);
+- Windows agents not found in the directory (workgroup, other domains);
+- the **OU tree** of the agents in the agent list, and each agent's OU and domain logon in its summary.
+
+📋 Later: policies applied by OU; a central console for federation (§9.2).
 
 ---
 
@@ -507,8 +534,8 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | 4 | Security plugins: `trendmicro`, `protection-status`, `accesslog` with unusual-logon detection, checks and alerts, Vision One connector | ✅ (to be validated on real endpoints) |
 | 5 | `winupdate`, `winget`, update dashboard, `reboot`, maintenance windows | ✅ (console-side catalog and user helper 📋) |
 | 6 | Package library, winget catalog on the console, `software` (install/uninstall), multi-agent approval | ✅ |
-| 7 | Console layout (site tree, tabs, bottom panel, bulk actions, notes, themes) ✅; setup wizard with code signing and optional AD 📋 | 🔜 |
-| 8 | Federation with full central operations | 📋 |
+| 7 | Console layout (site and OU tree, tabs, bottom panel, bulk actions, notes, themes); setup checklist, Authenticode signing, optional Active Directory | ✅ |
+| 8 | Federation with full central operations | 🔜 |
 | Later | Firmware, further plugins (§8.10), Linux agent packages, interactive shell | 📋 |
 
 ---
@@ -554,3 +581,5 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | 2026-10-19 | DMZ split implemented: gateway relays opaque frames for an allow-list of methods; the core opens one mTLS tunnel and re-verifies forwarded identities |
 | 2026-10-19 | Console layout inspired by Tactical RMM (tenant/site tree, Servers/Workstations/Mixed tabs, per-agent bottom panel); **software uninstall from the console** |
 | 2026-10-19 | Third-party software on servers without winget: **no Chocolatey** for now (community scripts run as SYSTEM; it does not see software installed by hand); the console uses the **winget manifests** to detect outdated software from the inventory and distributes the installers itself, hash-checked, with manual approval |
+| 2026-10-19 | Code-signing keys are created by `openrmm-admin` on the build machine, never by the internet-facing console, which keeps only the public certificate; the setup is a checklist page after the command-line bootstrap rather than a one-time-code wizard |
+| 2026-10-19 | Active Directory is read by the `adinventory` module with a domain member's computer account instead of an LDAPS service account on the console |

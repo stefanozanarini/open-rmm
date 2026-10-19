@@ -5,6 +5,7 @@
   <dt>Sistema</dt><dd>{{.Agent.Host.OSVersion}} ({{.Agent.Host.OS}}/{{.Agent.Host.Arch}}, {{label .Agent.Host.OSFamily}})</dd>
   <dt>Versione agente</dt><dd>{{.Agent.Host.AgentVersion}}</dd>
   <dt>Ultimo contatto</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} da {{.}}{{end}}</dd>
+  {{with .AD}}<dt>Active Directory</dt><dd>{{.Domain}}{{with .OU}} · <a href="/agents{{qs "ou" $.Data.AD.Key}}">{{.}}</a>{{end}}{{if not .Enabled}} <span class="badge chk-failing">account disabilitato</span>{{end}}{{with .LastLogon}} · ultimo accesso al dominio {{fmtTime .}}{{end}}</dd>{{end}}
   <dt>Registrato</dt><dd>{{fmtTime .Agent.EnrolledAt}}</dd>
   <dt>Approvato</dt><dd>{{fmtTime .Agent.ApprovedAt}} {{.Agent.ApprovedBy}}</dd>
   <dt>Anello aggiornamenti</dt><dd>{{.Agent.UpdateRing}}</dd>

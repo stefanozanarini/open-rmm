@@ -164,6 +164,7 @@ Details in [ENTRA.md](ENTRA.md). The full text of scripts goes to the audit log.
 | `reboot` 1.0.0 | Windows | `reboot`: only if pending, with notice to logged-on users, skipped on low battery; use it in a policy with a maintenance window |
 | `software` 1.0.0 | Windows | `install`: the package of the job (MSI, Inno, NSIS, burn, exe with silent switches), Authenticode check; `uninstall`: `{"product_code":"{…}"}` or `{"name":"…","version":"…"}`, silent only. Used by the *Software* page and the uninstall buttons |
 | `script` 1.0.0 | Windows | `run`: runs `params.script` (PowerShell) and returns output, errors and duration. Capability `adhoc_script` |
+| `adinventory` 1.0.0 | Windows | `collect`: computer objects of the endpoint's domain (name, OU, operating system, enabled, last domain logon) read with the computer account; at most 10,000. Run it on the domain controllers or one member server. Results feed the *Active Directory* page and the OU tree |
 
 ## Policies
 

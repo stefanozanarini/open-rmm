@@ -22,6 +22,10 @@ type Settings struct {
 	// RDPAllowedSubnets lists the networks RDP is expected from (CIDR).
 	// Empty means the private ranges (RFC 1918, RFC 4193) and loopback.
 	RDPAllowedSubnets []string `json:"rdp_allowed_subnets,omitempty"`
+	// CodeSigningCert is the public Authenticode certificate (PEM, with its
+	// CAs) the agent's MSI is signed with: offered for Group Policy and
+	// watched for expiry. Never a key.
+	CodeSigningCert string `json:"code_signing_cert,omitempty"`
 }
 
 // Check statuses.

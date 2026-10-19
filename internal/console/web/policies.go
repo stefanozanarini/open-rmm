@@ -92,6 +92,14 @@ const exampleRules = `[
 func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 	t, _ := tenantOf(r)
 	d := policyFormData{AppliesTo: policy.AppliesAll, Rules: "[]", Example: exampleRules}
+	if r.URL.Query().Get("template") == "baseline" && r.PathValue("id") == "" {
+		rules, err := s.baselineRules(r)
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		d.Name, d.Rules = "Base", rules
+	}
 	if id := r.PathValue("id"); id != "" {
 		cur, err := s.store.GetPolicy(r.Context(), t, id)
 		if err != nil {

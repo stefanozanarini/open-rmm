@@ -1,0 +1,88 @@
+package codesign
+
+import (
+	"crypto/x509"
+	"encoding/pem"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stefanozanarini/open-rmm/internal/pki"
+)
+
+func TestDedicatedCAChain(t *testing.T) {
+	now := time.Now()
+	s := Subject{Organization: "Cliente Srl", Country: "it"}
+	ca, err := NewCA(s, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := ca.Issue(s, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if leaf.Cert.Subject.CommonName != "Cliente Srl" || ca.Cert.Subject.CommonName != "Cliente Srl Code Signing CA" ||
+		leaf.Cert.Subject.Country[0] != "IT" {
+		t.Fatalf("subjects: %s / %s", leaf.Cert.Subject, ca.Cert.Subject)
+	}
+	if !MatchesKey(leaf.Cert, leaf.Key) || MatchesKey(leaf.Cert, ca.Key) {
+		t.Fatal("MatchesKey")
+	}
+	ch, err := ParseChain(pki.EncodeCertPEM(leaf.Cert, ca.Cert), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ch.Root() == nil || ch.Root().Subject.CommonName != ca.Cert.Subject.CommonName || ch.Expiring(now) {
+		t.Fatalf("chain = %+v", ch)
+	}
+	if !ch.Expiring(now.Add(SigningValidity - 30*24*time.Hour)) {
+		t.Fatal("expiry warning")
+	}
+	if i := ch.LeafInfo(); len(i.Thumbprint) != 40 || i.SelfSigned {
+		t.Fatalf("info = %+v", i)
+	}
+	// The CA itself cannot sign code.
+	if _, err := ParseChain(pki.EncodeCertPEM(ca.Cert), now); err == nil || !strings.Contains(err.Error(), "CA certificate") {
+		t.Fatalf("CA accepted as signing certificate: %v", err)
+	}
+	// A chain to another CA is refused.
+	other, _ := NewCA(s, now)
+	if _, err := ParseChain(pki.EncodeCertPEM(leaf.Cert, other.Cert), now); err == nil {
+		t.Fatal("wrong CA accepted")
+	}
+	// Keys are never accepted.
+	key, _ := pki.EncodeKeyPEM(leaf.Key)
+	if _, err := ParseChain(append(pki.EncodeCertPEM(leaf.Cert), key...), now); err == nil || !strings.Contains(err.Error(), "never a key") {
+		t.Fatalf("key accepted: %v", err)
+	}
+	if _, err := ParseChain(pki.EncodeCertPEM(leaf.Cert), now.Add(4*SigningValidity)); err == nil {
+		t.Fatal("expired certificate accepted")
+	}
+}
+
+func TestRequest(t *testing.T) {
+	key, csrPEM, err := NewRequest(Subject{Organization: "Cliente Srl", CommonName: "Cliente Srl IT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := pem.Decode(csrPEM)
+	csr, err := x509.ParseCertificateRequest(b.Bytes)
+	if err != nil || csr.CheckSignature() != nil || csr.Subject.CommonName != "Cliente Srl IT" {
+		t.Fatalf("csr: %v", err)
+	}
+	if key == nil {
+		t.Fatal("no key")
+	}
+	if _, _, err := NewRequest(Subject{}); err == nil {
+		t.Fatal("empty organization accepted")
+	}
+}
+
+func TestServerCertificateRefused(t *testing.T) {
+	root, _ := pki.NewRootCA("r", time.Now())
+	ca, _ := pki.NewIntermediateCA(root, "i", time.Now())
+	srv, _, _ := ca.IssueServer([]string{"a.example"}, time.Now())
+	if err := CheckSigning(srv, time.Now()); err == nil || !strings.Contains(err.Error(), "code signing") {
+		t.Fatalf("server certificate accepted: %v", err)
+	}
+}
