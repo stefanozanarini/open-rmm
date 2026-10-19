@@ -4,7 +4,9 @@
 package client
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -466,6 +468,53 @@ func (s *session) FetchRelease(ctx context.Context, version, platform string) (m
 		}
 		files[chunk.GetFile()] = append(files[chunk.GetFile()], chunk.GetData()...)
 	}
+}
+
+// FetchPackage downloads a package to dest, checking size and SHA-256; a
+// partial or wrong file is removed.
+func (s *session) FetchPackage(ctx context.Context, jobID string, ref *openrmmv1.PackageRef, dest string) (err error) {
+	// At least 1 MB/s, never less than 15 minutes.
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute+time.Duration(ref.GetSize()/(1<<20))*time.Second)
+	defer cancel()
+	stream, err := openrmmv1.NewAgentServiceClient(s.conn).GetPackage(ctx, &openrmmv1.GetPackageRequest{JobId: jobID, Sha256: ref.GetSha256()})
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) // #nosec G304 -- validated file name in the job work directory
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err != nil {
+			_ = os.Remove(dest)
+		}
+	}()
+	h := sha256.New()
+	var n int64
+	for {
+		chunk, rerr := stream.Recv()
+		if errors.Is(rerr, io.EOF) {
+			break
+		}
+		if rerr != nil {
+			return rerr
+		}
+		n += int64(len(chunk.GetData()))
+		if n > ref.GetSize() {
+			return errors.New("package larger than announced")
+		}
+		h.Write(chunk.GetData())
+		if _, err := f.Write(chunk.GetData()); err != nil {
+			return err
+		}
+	}
+	if n != ref.GetSize() || !bytes.Equal(h.Sum(nil), ref.GetSha256()) {
+		return errors.New("package size or SHA-256 mismatch")
+	}
+	return nil
 }
 
 // FetchModule downloads a module over the authenticated connection.

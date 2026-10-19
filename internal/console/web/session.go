@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
@@ -125,11 +126,22 @@ func (s *Server) destroy(ctx context.Context, w http.ResponseWriter, sess *sessi
 
 var errCSRF = errors.New("invalid CSRF token")
 
+// validCSRF compares a token with the session's.
+func validCSRF(sess *session, tok string) bool {
+	return tok != "" && subtle.ConstantTimeCompare([]byte(tok), []byte(sess.data.CSRF)) == 1
+}
+
 // checkCSRF validates state-changing requests: the form token must match the
 // session, and the Origin header, when sent, must be ours.
 func (s *Server) checkCSRF(r *http.Request, sess *session) error {
 	if o := r.Header.Get("Origin"); o != "" && o != s.origin {
 		return errCSRF
+	}
+	if r.URL.Path == uploadPath && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		// The upload handler reads the token from the first part, before
+		// the file (parsing the form here would buffer the whole upload),
+		// and refuses the request without it.
+		return nil
 	}
 	tok := r.PostFormValue("csrf")
 	if tok == "" || subtle.ConstantTimeCompare([]byte(tok), []byte(sess.data.CSRF)) != 1 {

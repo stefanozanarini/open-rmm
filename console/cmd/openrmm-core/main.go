@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
+	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
 	"github.com/stefanozanarini/open-rmm/internal/console/relay"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/console/visionone"
@@ -143,7 +144,8 @@ func run(log *slog.Logger) error {
 	if err := db.Migrate(ctx); err != nil {
 		return err
 	}
-	gw, err := gateway.New(gateway.Config{Store: db, AgentsCA: ca, Logger: log})
+	gw, err := gateway.New(gateway.Config{Store: db, AgentsCA: ca, Logger: log,
+		Packages: pkgfiles.Dir{Path: env("OPENRMM_PACKAGES_DIR", "/var/lib/openrmm/packages")}})
 	if err != nil {
 		return err
 	}

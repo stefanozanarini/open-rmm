@@ -35,9 +35,11 @@ import (
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
 	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
+	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
 	"github.com/stefanozanarini/open-rmm/internal/console/signer"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/console/web"
+	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
 	"github.com/stefanozanarini/open-rmm/internal/policy"
@@ -145,6 +147,10 @@ type consoleEnv struct {
 	tenant    string
 	agentID   string
 	module    *modules.Verified
+	packages  pkgfiles.Dir
+	winget    *httptest.Server
+	// installer is what the fake winget repository serves for 7zip.7zip.
+	installer []byte
 }
 
 var admin = opIdentity{OID: ids.NewUUID(), Name: "Mario Rossi", Username: "mario@cliente.it",
@@ -193,8 +199,13 @@ func startConsole(t *testing.T) *consoleEnv {
 	console := httptest.NewUnstartedServer(nil)
 	console.StartTLS()
 	t.Cleanup(console.Close)
+	installer := []byte(strings.Repeat("7-Zip MSI ", 1000))
+	wg := fakeWinget(t, installer)
+	wc := wingetcat.New()
+	wc.HTTP, wc.APIBase, wc.RawBase = wg.Client(), wg.URL, wg.URL
+	pkgDir := pkgfiles.Dir{Path: t.TempDir()}
 	ws, err := web.New(web.Config{Store: st, Verifier: v, Signer: sc, PublicURL: console.URL, ClientSecret: "secret",
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPClient: http.DefaultClient})
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPClient: http.DefaultClient, Packages: pkgDir, Winget: wc})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +216,8 @@ func startConsole(t *testing.T) *consoleEnv {
 	st.CreateAgent(ctx, store.Agent{TenantID: tenant, ID: agentID, Status: store.AgentPending,
 		Host:            store.HostInfo{Hostname: "pc01", OS: "linux", Arch: "amd64", OSVersion: "Ubuntu"},
 		CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)})
-	e := &consoleEnv{store: st, idp: idp, console: console, signer: sc, tenant: tenant, agentID: agentID, jobSigner: jobSigner}
+	e := &consoleEnv{store: st, idp: idp, console: console, signer: sc, tenant: tenant, agentID: agentID, jobSigner: jobSigner,
+		packages: pkgDir, winget: wg, installer: installer}
 	e.jobKeys = signing.NewKeyring()
 	pub, _ := signing.ParsePublicKey(pubKey(jobSigner))
 	e.jobKeys.Add(pub, signing.DomainJob)

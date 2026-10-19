@@ -1,0 +1,14 @@
+{
+  "id": "software",
+  "version": "1.0.0",
+  "description": "Installs packages of the console's library (MSI, Inno Setup, NSIS, WiX bundles, other installers with silent switches) and uninstalls applications silently.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "install": { "description": "Install the package of the job", "timeout_seconds": 3600 },
+    "uninstall": { "description": "Uninstall an application (product code or exact name)", "timeout_seconds": 3600 }
+  }
+}

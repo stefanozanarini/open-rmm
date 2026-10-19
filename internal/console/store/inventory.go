@@ -52,6 +52,8 @@ type InventoryStore interface {
 	GetInventory(ctx context.Context, tenantID, agentID string) (Inventory, error)
 	// InventorySummaries returns the summaries of the tenant's agents, by agent id.
 	InventorySummaries(ctx context.Context, tenantID string) (map[string]InventorySummary, error)
+	// ListInventories returns the latest inventory of every agent of the tenant.
+	ListInventories(ctx context.Context, tenantID string) ([]Inventory, error)
 	// ListInventoryChanges returns the most recent changes first.
 	ListInventoryChanges(ctx context.Context, tenantID, agentID string, limit int) ([]InventoryChange, error)
 }
@@ -107,6 +109,18 @@ func (m *Memory) InventorySummaries(_ context.Context, tenantID string) (map[str
 	for _, cur := range m.inventories {
 		if cur.inv.TenantID == tenantID {
 			out[cur.inv.AgentID] = cur.inv.Summary
+		}
+	}
+	return out, nil
+}
+
+func (m *Memory) ListInventories(_ context.Context, tenantID string) ([]Inventory, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []Inventory
+	for _, cur := range m.inventories {
+		if cur.inv.TenantID == tenantID {
+			out = append(out, cur.inv)
 		}
 	}
 	return out, nil
@@ -211,6 +225,29 @@ func (p *Postgres) InventorySummaries(ctx context.Context, tenantID string) (map
 				return err
 			}
 			out[s.AgentID] = s
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func (p *Postgres) ListInventories(ctx context.Context, tenantID string) ([]Inventory, error) {
+	var out []Inventory
+	err := p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+summaryColumns+`, received_at, data::text FROM inventories`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			inv := Inventory{TenantID: tenantID}
+			var data string
+			s, err := scanSummary(rows, &inv.ReceivedAt, &data)
+			if err != nil {
+				return err
+			}
+			inv.AgentID, inv.Summary, inv.Data = s.AgentID, s, []byte(data)
+			out = append(out, inv)
 		}
 		return rows.Err()
 	})

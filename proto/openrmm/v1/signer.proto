@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package openrmm.v1;
 
+import "openrmm/v1/agent.proto";
+
 option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
 
 // SignerService is exposed by openrmm-signer on a local socket. The signer
@@ -42,6 +44,10 @@ message JobRequest {
   // Random value chosen by the console per request, so that two identical
   // requests still have different hashes.
   bytes request_nonce = 9;
+  repeated PackageRef packages = 10;
+  // agent_ids targets several agents with one approval (one job each);
+  // agent_id is then empty.
+  repeated string agent_ids = 11;
 }
 
 message SignJobRequest {
@@ -56,4 +62,12 @@ message SignJobResponse {
   int64 expires_unix = 3;
   // Operator identity as verified by the signer, for the audit trail.
   string operator = 4;
+  // One entry per agent; for a single-agent request it repeats the fields above.
+  repeated SignedJob jobs = 5;
+}
+
+message SignedJob {
+  string job_id = 1;
+  string agent_id = 2;
+  bytes envelope = 3;
 }

@@ -44,6 +44,15 @@ type Request struct {
 	// StateDir persists between runs of the same module (e.g. a read
 	// position); it is private to the module.
 	StateDir string `json:"state_dir,omitempty"`
+	// Packages downloaded for this run, already verified.
+	Packages []Package `json:"packages,omitempty"`
+}
+
+// Package is a verified package file in the work directory.
+type Package struct {
+	FileName string `json:"file_name"`
+	Path     string `json:"path"`
+	SHA256   string `json:"sha256"`
 }
 
 // Event is one line written by the module.

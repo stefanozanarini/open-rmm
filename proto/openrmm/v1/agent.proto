@@ -27,6 +27,10 @@ service AgentService {
   // download modules.
   rpc GetModule(GetModuleRequest) returns (stream ModuleChunk);
 
+  // GetPackage streams a software package referenced (by SHA-256) by one of
+  // the agent's unfinished jobs. The agent verifies size and hash.
+  rpc GetPackage(GetPackageRequest) returns (stream PackageChunk);
+
   // GetAgentRelease streams the executables of a signed release offered to
   // the agent (see AgentUpdateOffer).
   rpc GetAgentRelease(GetAgentReleaseRequest) returns (stream ReleaseChunk);
@@ -46,6 +50,22 @@ message ReleaseChunk {
 message GetModuleRequest {
   string module = 1;
   string version = 2;
+}
+
+message GetPackageRequest {
+  string job_id = 1;
+  bytes sha256 = 2;
+}
+
+message PackageChunk {
+  bytes data = 1;
+}
+
+// PackageRef pins a package of the console's library in a signed job.
+message PackageRef {
+  bytes sha256 = 1;
+  string file_name = 2;
+  int64 size = 3;
 }
 
 message ModuleChunk {
@@ -192,6 +212,9 @@ message Job {
   int64 not_before_unix = 9;
   int64 expires_unix = 10;
   bytes nonce = 11;
+  // Packages the agent downloads into the work directory before running
+  // the module (e.g. an MSI to install).
+  repeated PackageRef packages = 12;
 }
 
 message JobUpdate {

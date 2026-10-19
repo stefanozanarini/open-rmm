@@ -36,6 +36,7 @@ import (
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
+	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/console/web"
 )
@@ -133,6 +134,7 @@ func run(log *slog.Logger) error {
 	srv, err := web.New(web.Config{
 		Store: db, Verifier: v, Signer: openrmmv1.NewSignerServiceClient(conn), Logger: log,
 		PublicURL: publicURL, ClientSecret: strings.TrimSpace(string(secret)),
+		Packages: pkgfiles.Dir{Path: env("OPENRMM_PACKAGES_DIR", "/var/lib/openrmm/packages")},
 	})
 	if err != nil {
 		return err

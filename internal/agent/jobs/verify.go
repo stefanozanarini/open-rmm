@@ -16,6 +16,7 @@ import (
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/open-rmm/internal/pkgref"
 	"github.com/stefanozanarini/open-rmm/internal/signing"
 )
 
@@ -84,6 +85,9 @@ func (v *Verifier) Verify(env *openrmmv1.SignedEnvelope, now time.Time) (*openrm
 	}
 	if len(job.GetModuleSha256()) != 32 {
 		return nil, errors.New("job must pin the module hash")
+	}
+	if err := pkgref.Validate(job.GetPackages()); err != nil {
+		return nil, err
 	}
 	if n := len(job.GetNonce()); n < 16 || n > 64 {
 		return nil, errors.New("job nonce must be 16-64 bytes")

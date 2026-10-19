@@ -20,7 +20,9 @@ import (
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
+	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
 	"github.com/stefanozanarini/open-rmm/internal/inventory"
 )
 
@@ -40,6 +42,10 @@ type Config struct {
 	Now          func() time.Time
 	// HTTPClient is used for the token exchange (tests).
 	HTTPClient *http.Client
+	// Packages is the package file store (shared with the core).
+	Packages pkgfiles.Dir
+	// Winget reads the winget catalog; nil means the public repository.
+	Winget *wingetcat.Client
 }
 
 // Server serves the console.
@@ -54,6 +60,8 @@ type Server struct {
 	now      func() time.Time
 	client   *http.Client
 	pages    map[string]*template.Template
+	packages pkgfiles.Dir
+	winget   *wingetcat.Client
 }
 
 // New returns a Server.
@@ -66,8 +74,12 @@ func New(cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if cfg.Winget == nil {
+		cfg.Winget = wingetcat.New()
+	}
 	s := &Server{
 		store: cfg.Store, verifier: cfg.Verifier, signer: cfg.Signer, log: cfg.Logger,
+		packages: cfg.Packages, winget: cfg.Winget,
 		origin: u.Scheme + "://" + u.Host, idpHost: authURL.Scheme + "://" + authURL.Host,
 		now: cfg.Now, client: cfg.HTTPClient,
 		oauth: oauth2.Config{
@@ -202,6 +214,15 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /audit", s.auth(s.handleAudit))
 	mux.Handle("GET /alerts", s.auth(s.handleAlerts))
 	mux.Handle("GET /patches", s.auth(s.handlePatches))
+	mux.Handle("GET /packages", s.auth(s.handlePackages))
+	mux.Handle("POST "+uploadPath, s.role(authn.RoleAdmin, s.handleUpload))
+	mux.Handle("GET /packages/{sha}/deploy", s.role(authn.RoleOperator, s.handleDeployForm))
+	mux.Handle("POST /packages/{sha}/deploy", s.role(authn.RoleOperator, s.handleDeploy))
+	mux.Handle("POST /catalog", s.role(authn.RoleAdmin, s.handleAddCatalog))
+	mux.Handle("POST /catalog/refresh", s.role(authn.RoleAdmin, s.handleRefreshCatalog))
+	mux.Handle("POST /catalog/{id}/match", s.role(authn.RoleAdmin, s.handleCatalogMatch))
+	mux.Handle("POST /catalog/{id}/import", s.role(authn.RoleAdmin, s.handleImportCatalog))
+	mux.Handle("POST /agents/{id}/uninstall", s.role(authn.RoleOperator, s.handleUninstall))
 	mux.Handle("POST /alerts/{id}/ack", s.role(authn.RoleOperator, s.handleAckAlert))
 	mux.Handle("GET /settings", s.role(authn.RoleAdmin, s.handleSettings))
 	mux.Handle("POST /settings", s.role(authn.RoleAdmin, s.handleSaveSettings))
@@ -230,8 +251,13 @@ func (s *Server) secure(next http.Handler) http.Handler {
 		if strings.HasPrefix(s.origin, "https://") {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
-		// Bound request bodies: forms are small, scripts at most 1 MB.
-		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		// Bound request bodies: forms are small, scripts at most 1 MB;
+		// package uploads are bounded by their handler.
+		limit := int64(2 << 20)
+		if r.URL.Path == uploadPath {
+			limit = maxPackageSize + 1<<20
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		// A panic becomes a clean 500 instead of a dropped connection (which
 		// clients may silently retry, replaying a one-time step).
 		defer func() {

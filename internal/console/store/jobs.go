@@ -54,8 +54,9 @@ type Job struct {
 	Module        string
 	ModuleVersion string
 	Action        string
-	Params        []byte // JSON
-	Envelope      []byte // serialized SignedEnvelope
+	Params        []byte   // JSON
+	Envelope      []byte   // serialized SignedEnvelope
+	Packages      []string // SHA-256 (hex) of the packages the job may download
 	State         JobState
 	Progress      int
 	Message       string

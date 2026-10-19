@@ -128,6 +128,7 @@ func TestViaRelay(t *testing.T) {
 		"sysinfo job":              TestSysinfoModuleEndToEnd,
 		"jobs after approval":      TestPendingAgentGetsJobsOnlyAfterApproval,
 		"agent update":             TestAgentStagesTargetedRelease,
+		"package delivery":         TestPackageDeliveredToAgent,
 	} {
 		t.Run(name, fn)
 	}

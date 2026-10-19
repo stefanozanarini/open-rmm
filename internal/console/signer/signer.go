@@ -90,28 +90,36 @@ func (s *Server) SignJob(ctx context.Context, req *openrmmv1.SignJobRequest) (*o
 	}
 
 	ttl := time.Duration(r.GetTtlSeconds()) * time.Second
-	job := &openrmmv1.Job{
-		JobId: ids.NewUUID(), TenantId: r.GetTenantId(), AgentId: r.GetAgentId(),
-		Module: r.GetModule(), ModuleVersion: r.GetModuleVersion(), ModuleSha256: r.GetModuleSha256(),
-		Action: r.GetAction(), ParamsJson: r.GetParamsJson(),
-		NotBeforeUnix: now.Add(-time.Minute).Unix(), ExpiresUnix: now.Add(ttl).Unix(),
-		Nonce: ids.Random(16),
-	}
-	payload, err := proto.Marshal(job)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "encode job")
-	}
-	env, err := proto.Marshal(&openrmmv1.SignedEnvelope{KeyId: s.signer.KeyID(), Payload: payload,
-		Signature: s.signer.Sign(signing.DomainJob, payload)})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "encode envelope")
-	}
 	op := claims.Operator()
-	// The signer's own log is an audit trail independent of the console.
-	s.log.Info("job signed", "job", job.GetJobId(), "operator", op, "tenant", r.GetTenantId(), "agent", r.GetAgentId(),
-		"module", r.GetModule(), "version", r.GetModuleVersion(), "action", r.GetAction(),
-		"params_sha256", fmt.Sprintf("%x", sha256.Sum256(r.GetParamsJson())))
-	return &openrmmv1.SignJobResponse{JobId: job.GetJobId(), Envelope: env, ExpiresUnix: job.GetExpiresUnix(), Operator: op}, nil
+	resp := &openrmmv1.SignJobResponse{Operator: op}
+	for _, agent := range jobreq.Targets(r) {
+		job := &openrmmv1.Job{
+			JobId: ids.NewUUID(), TenantId: r.GetTenantId(), AgentId: agent,
+			Module: r.GetModule(), ModuleVersion: r.GetModuleVersion(), ModuleSha256: r.GetModuleSha256(),
+			Action: r.GetAction(), ParamsJson: r.GetParamsJson(), Packages: r.GetPackages(),
+			NotBeforeUnix: now.Add(-time.Minute).Unix(), ExpiresUnix: now.Add(ttl).Unix(),
+			Nonce: ids.Random(16),
+		}
+		payload, err := proto.Marshal(job)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "encode job")
+		}
+		env, err := proto.Marshal(&openrmmv1.SignedEnvelope{KeyId: s.signer.KeyID(), Payload: payload,
+			Signature: s.signer.Sign(signing.DomainJob, payload)})
+		if err != nil {
+			return nil, status.Error(codes.Internal, "encode envelope")
+		}
+		resp.Jobs = append(resp.Jobs, &openrmmv1.SignedJob{JobId: job.GetJobId(), AgentId: agent, Envelope: env})
+		resp.ExpiresUnix = job.GetExpiresUnix()
+		// The signer's own log is an audit trail independent of the console.
+		s.log.Info("job signed", "job", job.GetJobId(), "operator", op, "tenant", r.GetTenantId(), "agent", agent,
+			"module", r.GetModule(), "version", r.GetModuleVersion(), "action", r.GetAction(),
+			"params_sha256", fmt.Sprintf("%x", sha256.Sum256(r.GetParamsJson())), "packages", len(r.GetPackages()))
+	}
+	if len(resp.Jobs) == 1 {
+		resp.JobId, resp.Envelope = resp.Jobs[0].GetJobId(), resp.Jobs[0].GetEnvelope()
+	}
+	return resp, nil
 }
 
 // usedTokens remembers consumed step-up nonces until their tokens expire.

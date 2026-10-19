@@ -30,6 +30,8 @@ type Memory struct {
 	inventories map[string]*memInventory
 	security    *memSecurity
 	updates     map[string]UpdateStatus
+	packages    map[string]Package
+	catalog     map[string]CatalogApp
 }
 
 func NewMemory() *Memory {

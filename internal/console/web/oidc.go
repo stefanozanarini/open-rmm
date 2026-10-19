@@ -2,8 +2,10 @@ package web
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -193,21 +195,36 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 		s.flashTo(w, r, sess, "Il servizio di firma ha rifiutato il comando: "+err.Error(), p.Return)
 		return
 	}
-	j := store.Job{
-		TenantID: req.GetTenantId(), ID: resp.GetJobId(), AgentID: req.GetAgentId(),
-		Module: req.GetModule(), ModuleVersion: req.GetModuleVersion(), Action: req.GetAction(),
-		Params: req.GetParamsJson(), Envelope: resp.GetEnvelope(), CreatedBy: "operator:" + op.Username,
-		ExpiresAt: time.Unix(resp.GetExpiresUnix(), 0),
+	var pkgs []string
+	for _, p := range req.GetPackages() {
+		pkgs = append(pkgs, hex.EncodeToString(p.GetSha256()))
 	}
-	if err := s.store.CreateJob(r.Context(), j); err != nil {
-		s.fail(w, err)
-		return
+	var created []string
+	for _, sj := range resp.GetJobs() {
+		j := store.Job{
+			TenantID: req.GetTenantId(), ID: sj.GetJobId(), AgentID: sj.GetAgentId(),
+			Module: req.GetModule(), ModuleVersion: req.GetModuleVersion(), Action: req.GetAction(),
+			Params: req.GetParamsJson(), Envelope: sj.GetEnvelope(), CreatedBy: "operator:" + op.Username,
+			ExpiresAt: time.Unix(resp.GetExpiresUnix(), 0), Packages: pkgs,
+		}
+		if err := s.store.CreateJob(r.Context(), j); err != nil {
+			s.fail(w, err)
+			return
+		}
+		s.audit(r.Context(), req.GetTenantId(), op, "job.created", j.ID, map[string]any{
+			"agent": j.AgentID, "module": j.Module, "version": j.ModuleVersion, "action": j.Action,
+			"params": json.RawMessage(j.Params), "packages": pkgs, "approved_by": resp.GetOperator(),
+		})
+		created = append(created, j.ID)
 	}
-	s.audit(r.Context(), req.GetTenantId(), op, "job.created", j.ID, map[string]any{
-		"agent": j.AgentID, "module": j.Module, "version": j.ModuleVersion, "action": j.Action,
-		"params": json.RawMessage(j.Params), "approved_by": resp.GetOperator(),
-	})
-	http.Redirect(w, r, "/jobs/"+j.ID, http.StatusSeeOther)
+	switch len(created) {
+	case 0:
+		s.fail(w, errors.New("signer returned no jobs"))
+	case 1:
+		http.Redirect(w, r, "/jobs/"+created[0], http.StatusSeeOther)
+	default:
+		s.flashTo(w, r, sess, fmt.Sprintf("%d comandi approvati e in coda.", len(created)), "/jobs")
+	}
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

@@ -258,6 +258,8 @@ Details: [UPDATES.md](UPDATES.md).
 
 The signer signs a job only if the request carries an id_token issued by Entra ID **for that exact request** (the OIDC `nonce` is the canonical hash of agent, module, manifest hash, action, parameters and validity), recent, with MFA, by an operator with the Operator or Admin role for that tenant, and never used before. The signer verifies all of this itself, with Microsoft's public keys; it does not trust the console.
 
+One approval may target **several agents** (up to 500, e.g. distributing a package): the agent list is part of the approved hash, and the signer issues one signed job per agent. Jobs may pin **packages** of the library by SHA-256, file name and size; the agent downloads them only for that job and checks size and hash before running the module.
+
 ### 6.4 Local policies on the endpoint ✅
 
 Set by MSI or GPO, never by the console: `AllowAdHocScripts` (default on), `MaxConcurrentJobs`, trusted keys. An endpoint with `AllowAdHocScripts=0` refuses ad-hoc scripts whatever the console asks.
@@ -374,14 +376,15 @@ The installation type is also sent by the core on connect (one field), so the co
 - The module runs the App Installer `winget.exe` directly (it is not on the system account's PATH). `scan` lists the applications with an available upgrade; `upgrade` upgrades given ids, or all except `exclude`. Package ids are validated before being passed to winget.
 - winget has no machine-readable output for upgrades: this first version parses its table by the column positions of the header (independent of the display language); rows with truncated ids are skipped and logged. 📋 Move to `Microsoft.WinGet.Client` / the COM API, which need extra components on the endpoint.
 - Check `winget/thirdparty`: warning when upgrades are available.
-- 📋 **Console-side catalog:** import the winget community index and match it against each endpoint's software inventory, so outdated software is detected also where winget is not available (Windows Server 2019, LTSC). 📋 Per-user apps through the user helper; `bootstrap` installing App Installer where missing; private REST source.
+- ✅ **Console-side catalog** (instead of winget or Chocolatey on servers): the operator adds winget package ids to the tenant's catalog; the console reads their manifests from the winget community repository and matches each application against every endpoint's software inventory (by MSI product code, then by display-name prefix, editable), so outdated software is detected also where winget is not available (Windows Server 2019, LTSC) and for software installed by hand. The installer is downloaded **by the console**, over HTTPS only, and accepted only if its SHA-256 matches the manifest; it then goes into the package library and is distributed like any package (§8.7). "Check new versions" refreshes the catalog on request. 📋 Scheduled refresh, per-user apps through the user helper, private REST source.
 
-### 8.7 Software distribution and removal (`msi-install`, `software-uninstall`) 📋
+### 8.7 Software distribution and removal (`software`) ✅
 
-- Operators upload an MSI to the console's **package library**: the console stores it (file system / object storage, not the database), computes its SHA-256, reads ProductName/Version/ProductCode and checks its Authenticode signature (warning if unsigned).
-- Deployment to PCs or groups is a normal job, approved with per-command MFA; the signed job pins the package hash.
-- The generic `msi-install` module downloads the package over the agent connection, verifies the hash and runs `msiexec /i … /qn /norestart /l*v`; reboots go through the reboot policy. The same flow covers winget packages.
-- **Uninstall from the console:** from an endpoint's software inventory (or for a whole group, e.g. "remove 7-Zip 9.20 everywhere"), the operator picks an application and approves with per-command MFA. The `software-uninstall` module removes it the right way for its type: `msiexec /x {ProductCode} /qn /norestart` for MSI products, `winget uninstall --id` when winget manages it, or the registered `QuietUninstallString` (never the interactive `UninstallString` without a silent switch). The result is verified against the inventory afterwards; reboots go through the reboot policy. Uninstalling the open-rmm agent itself is refused.
+- **Package library** (page *Software*): Admins upload an installer (MSI, Inno Setup, NSIS, WiX bundle, or any exe with its silent switches) or import one from the winget catalog. Files are stored outside the database by SHA-256 in a volume written by the web console and read by the core; the metadata (name, version, kind, switches, product code, origin, uploader) is per tenant and audited.
+- **Distribution:** an Operator picks a package and the endpoints (those with an older version are preselected) and approves **once with MFA** for all of them (§6.3). Each job pins the package hash; the agent downloads it through the gateway (also through the DMZ relay), only while that job is pending, and verifies size and hash.
+- The `software` module verifies the **Authenticode signature** (refused unless the package was explicitly marked "unsigned allowed"), installs silently (`msiexec /i … /qn /norestart /l*v`, or the installer's silent switches), translates the common Windows Installer exit codes and never reboots: a 3010/1641 result records a reboot need that the `reboot` module honours until the next boot.
+- **Uninstall from the console:** from the software list of an endpoint, approved with per-command MFA. The module removes the application the right way for its type: `msiexec /x {ProductCode} /qn /norestart` for MSI products (also when only the `UninstallString` points to msiexec), the registered `QuietUninstallString`, or the `UninstallString` plus switches the operator gives explicitly; it never runs an interactive uninstaller, refuses per-user installations and the open-rmm agent, and checks afterwards that the application is gone.
+- 📋 Later: uninstall for a group ("remove 7-Zip 9.20 everywhere"), reading MSI properties at upload, Authenticode check on the console, removal of unused files.
 
 ### 8.8 Firmware 📋
 
@@ -502,8 +505,9 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | 3 | `inventory` (incl. Supremo/AnyDesk/TeamViewer ids), OS installation type, Clients/Servers sections | ✅ |
 | 4 | Security plugins: `trendmicro`, `protection-status`, `accesslog` with unusual-logon detection, checks and alerts, Vision One connector | ✅ (to be validated on real endpoints) |
 | 5 | `winupdate`, `winget`, update dashboard, `reboot`, maintenance windows | ✅ (console-side catalog and user helper 📋) |
-| 6 | Package library, `msi-install`, `software-uninstall`; console layout (tree, tabs, bottom panel); setup wizard with code signing and optional AD | 📋 |
-| 7 | Federation with full central operations | 📋 |
+| 6 | Package library, winget catalog on the console, `software` (install/uninstall), multi-agent approval | ✅ |
+| 7 | Console layout (tree, tabs, bottom panel); setup wizard with code signing and optional AD | 📋 |
+| 8 | Federation with full central operations | 📋 |
 | Later | Firmware, further plugins (§8.10), Linux agent packages, interactive shell | 📋 |
 
 ---
@@ -548,3 +552,4 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | 2026-10-19 | **Setup wizard**: code signing via enterprise CA, dedicated CA or public certificate; **optional** Active Directory integration |
 | 2026-10-19 | DMZ split implemented: gateway relays opaque frames for an allow-list of methods; the core opens one mTLS tunnel and re-verifies forwarded identities |
 | 2026-10-19 | Console layout inspired by Tactical RMM (tenant/site tree, Servers/Workstations/Mixed tabs, per-agent bottom panel); **software uninstall from the console** |
+| 2026-10-19 | Third-party software on servers without winget: **no Chocolatey** for now (community scripts run as SYSTEM; it does not see software installed by hand); the console uses the **winget manifests** to detect outdated software from the inventory and distributes the installers itself, hash-checked, with manual approval |

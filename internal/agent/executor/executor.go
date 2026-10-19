@@ -8,6 +8,7 @@ package executor
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,9 @@ import (
 type Session interface {
 	Send(*openrmmv1.AgentMessage)
 	modcache.Fetcher
+	// FetchPackage downloads a package of job jobID to dest, verifying its
+	// size and SHA-256.
+	FetchPackage(ctx context.Context, jobID string, ref *openrmmv1.PackageRef, dest string) error
 }
 
 // PolicyRun identifies a scheduled run of a policy rule.
@@ -102,6 +106,34 @@ func New(ctx context.Context, cfg *config.Config, tenantID, agentID string, log 
 		}
 	}
 	return e, nil
+}
+
+// fetchPackages downloads the job's packages into <work>/packages.
+func (e *Executor) fetchPackages(job *openrmmv1.Job, workDir string, send func(*openrmmv1.JobUpdate)) ([]runner.Package, error) {
+	refs := job.GetPackages()
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	dir := filepath.Join(workDir, "packages")
+	if err := secfile.EnsureDir(dir); err != nil {
+		return nil, fmt.Errorf("package directory: %w", err)
+	}
+	e.mu.Lock()
+	sess := e.session
+	e.mu.Unlock()
+	if sess == nil {
+		return nil, errors.New("not connected to the console: cannot download packages")
+	}
+	var out []runner.Package
+	for _, ref := range refs {
+		send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING, Message: "download " + ref.GetFileName()})
+		dest := filepath.Join(dir, ref.GetFileName())
+		if err := sess.FetchPackage(e.ctx, job.GetJobId(), ref, dest); err != nil {
+			return nil, fmt.Errorf("package %s: %w", ref.GetFileName(), err)
+		}
+		out = append(out, runner.Package{FileName: ref.GetFileName(), Path: dest, SHA256: hex.EncodeToString(ref.GetSha256())})
+	}
+	return out, nil
 }
 
 func (e *Executor) moduleLock(id string) *sync.Mutex {
@@ -312,6 +344,10 @@ func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
 	modLock := e.moduleLock(m.ID)
 	modLock.Lock()
 	defer modLock.Unlock()
+	pkgs, err := e.fetchPackages(job, workDir, send)
+	if err != nil {
+		return fail(job, "%v", err)
+	}
 	// Re-hash right before running: the cache could have changed since Get.
 	if err := modules.VerifyFiles(m, inst.FilesDir); err != nil {
 		return reject(job, "module integrity check failed: %v", err)
@@ -332,6 +368,7 @@ func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
 		Request: runner.Request{
 			ProtocolVersion: modules.ProtocolVersion, JobID: job.GetJobId(), Action: job.GetAction(),
 			Params: params, TenantID: e.tenantID, AgentID: e.agentID, WorkDir: workDir, StateDir: stateDir,
+			Packages: pkgs,
 		},
 		StateDir: stateDir,
 		OnEvent: func(ev runner.Event) {

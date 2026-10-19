@@ -61,10 +61,10 @@ func (p *Postgres) CreateJob(ctx context.Context, j Job) error {
 	}
 	err := p.inTenant(ctx, j.TenantID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `INSERT INTO jobs
-			(tenant_id, id, agent_id, module, module_version, action, params, envelope, state, created_by, expires_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'queued',$9,$10)`,
+			(tenant_id, id, agent_id, module, module_version, action, params, envelope, state, created_by, expires_at, packages)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'queued',$9,$10,$11)`,
 			j.TenantID, j.ID, j.AgentID, j.Module, j.ModuleVersion, j.Action, string(params), j.Envelope,
-			j.CreatedBy, j.ExpiresAt); err != nil {
+			j.CreatedBy, j.ExpiresAt, nonNil(j.Packages)); err != nil {
 			return err
 		}
 		// Delivered on commit.
@@ -80,7 +80,7 @@ func (p *Postgres) CreateJob(ctx context.Context, j Job) error {
 
 const jobColumns = `tenant_id::text, id::text, agent_id::text, module, module_version, action, params::text,
 	envelope, state, progress, message, coalesce(result::text, ''), error, created_by, created_at, expires_at,
-	sent_at, finished_at`
+	sent_at, finished_at, packages`
 
 func scanJob(row pgx.Row) (Job, error) {
 	var j Job
@@ -88,7 +88,7 @@ func scanJob(row pgx.Row) (Job, error) {
 	var progress int16
 	err := row.Scan(&j.TenantID, &j.ID, &j.AgentID, &j.Module, &j.ModuleVersion, &j.Action, &params,
 		&j.Envelope, &state, &progress, &j.Message, &result, &j.Error, &j.CreatedBy, &j.CreatedAt,
-		&j.ExpiresAt, &j.SentAt, &j.FinishedAt)
+		&j.ExpiresAt, &j.SentAt, &j.FinishedAt, &j.Packages)
 	j.State, j.Progress, j.Params = JobState(state), int(progress), []byte(params)
 	if result != "" {
 		j.Result = []byte(result)
@@ -206,4 +206,11 @@ func (p *Postgres) ListenJobs(ctx context.Context, fn func(string)) error {
 		}
 		fn(n.Payload)
 	}
+}
+
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

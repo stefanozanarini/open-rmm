@@ -13,6 +13,7 @@ import (
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/inventory"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
@@ -144,6 +145,9 @@ type agentData struct {
 	Alerts   []alertView
 	Logons   []store.LogonEvent
 	Updates  agentUpdates
+	// Outdated maps installed application names to the newer version in
+	// the winget catalog.
+	Outdated map[string]string
 }
 
 func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
@@ -200,6 +204,19 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 	if d.Updates, err = s.agentUpdates(r, t, id); err != nil {
 		s.fail(w, err)
 		return
+	}
+	d.Outdated = map[string]string{}
+	if d.Inv != nil {
+		if apps, err := s.store.ListCatalogApps(r.Context(), t); err == nil {
+			for _, app := range apps {
+				for _, sw := range d.Inv.Software {
+					if v := wingetcat.Installed([]inventory.Software{sw}, app.MatchName, app.ProductCodes); len(v) > 0 &&
+						wingetcat.CompareVersions(v[0], app.DisplayVersion) < 0 {
+						d.Outdated[sw.Name] = app.Version
+					}
+				}
+			}
+		}
 	}
 	d.Results, err = s.policyResults(r, t, id)
 	if err != nil {

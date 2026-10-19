@@ -81,6 +81,8 @@ services:
     volumes:
       - ./pki/core:/run/openrmm/pki:ro
       - ./secrets/core:/run/openrmm/secrets:ro
+      # Package library, written by the web console, served to agents.
+      - packages:/var/lib/openrmm/packages:ro
     # The tunnel network also gives the outbound HTTPS the Vision One
     # connector needs.
     networks: [internal, tunnel]
@@ -91,7 +93,8 @@ services:
     mem_limit: 512m
 
   # Operator web console. Published on the LAN only (OPENRMM_CONSOLE_BIND),
-  # never on the internet. Needs outbound HTTPS to Microsoft for sign-in.
+  # never on the internet. Needs outbound HTTPS to Microsoft for sign-in, and
+  # to GitHub and the software vendors for the winget catalog.
   server:
     image: ${OPENRMM_IMAGE:-open-rmm:dev}
     restart: unless-stopped
@@ -122,6 +125,7 @@ services:
       - ./secrets/server:/run/openrmm/secrets:ro
       - ./console-tls:/run/openrmm/tls:ro
       - signer-socket:/run/openrmm-signer
+      - packages:/var/lib/openrmm/packages
     ports:
       - "${OPENRMM_CONSOLE_BIND:-127.0.0.1:8080}:8080"
     networks: [internal, public]
@@ -193,5 +197,6 @@ networks:
 
 volumes:
   db-data: {}
+  packages: {}
   signer-socket: {}
   signer-state: {}

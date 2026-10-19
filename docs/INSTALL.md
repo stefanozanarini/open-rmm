@@ -103,7 +103,11 @@ docker compose run --rm admin audit verify   -tenant <TENANT>
 
 `reject` and `revoke` are equivalent: the agent is disconnected and can no longer connect.
 
-## 7. Security monitoring (optional)
+## 7. Software library
+
+Publish the `software` module. On the **Software** page administrators upload installers or add applications to the winget catalog (e.g. `7zip.7zip`, `Mozilla.Firefox`, `Notepad++.Notepad++`) and download their latest installer; operators distribute packages and uninstall applications from an endpoint's software list. Files are kept in the `packages` volume, shared by `server` (which writes them) and `core` (which serves them to agents). The `server` container needs outbound HTTPS to `api.github.com`, `raw.githubusercontent.com` and the vendors' download sites.
+
+## 8. Security monitoring (optional)
 
 **RDP subnets.** In the web console, **Impostazioni** (administrators), list the networks remote desktop is expected from, one per line (e.g. `192.168.10.0/24`). An RDP logon from any other address raises a critical alert. Without a list the private ranges are allowed.
 

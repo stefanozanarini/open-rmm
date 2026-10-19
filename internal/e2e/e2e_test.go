@@ -28,6 +28,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/agent/identity"
 	"github.com/stefanozanarini/open-rmm/internal/console/audit"
 	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
+	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
 	"github.com/stefanozanarini/open-rmm/internal/console/relay"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
@@ -52,6 +53,7 @@ type env struct {
 	gw            *gateway.Server
 	addr          string
 	tenant        string
+	packages      pkgfiles.Dir
 }
 
 func quietLog() *slog.Logger {
@@ -78,9 +80,10 @@ func start(t *testing.T) *env {
 	if err := st.CreateTenant(context.Background(), store.Tenant{ID: tenant, Name: "test"}); err != nil {
 		t.Fatal(err)
 	}
-	e := &env{}
+	e := &env{packages: pkgfiles.Dir{Path: t.TempDir()}}
 	gw, err := gateway.New(gateway.Config{Store: st, AgentsCA: ca, Logger: quietLog(), HeartbeatInterval: 10 * time.Second,
-		Now: func() time.Time { return time.Now().Add(time.Duration(e.offset.Load())) }})
+		Packages: e.packages,
+		Now:      func() time.Time { return time.Now().Add(time.Duration(e.offset.Load())) }})
 	if err != nil {
 		t.Fatal(err)
 	}

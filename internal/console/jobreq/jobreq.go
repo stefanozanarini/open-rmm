@@ -18,9 +18,12 @@ import (
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
+	"github.com/stefanozanarini/open-rmm/internal/pkgref"
 )
 
 const (
+	// MaxAgents bounds the agents one approval may target.
+	MaxAgents    = 500
 	MaxTTL       = 24 * time.Hour
 	MaxParams    = 1 << 20
 	nonceRandLen = 16
@@ -28,8 +31,14 @@ const (
 
 // Validate checks a request before hashing or signing it.
 func Validate(r *openrmmv1.JobRequest) error {
-	if !ids.IsUUID(r.GetTenantId()) || !ids.IsUUID(r.GetAgentId()) {
-		return errors.New("tenant and agent must be UUIDs")
+	if !ids.IsUUID(r.GetTenantId()) {
+		return errors.New("tenant must be a UUID")
+	}
+	if err := validateTargets(r); err != nil {
+		return err
+	}
+	if err := pkgref.Validate(r.GetPackages()); err != nil {
+		return err
 	}
 	if !modules.ValidID(r.GetModule()) || !modules.ValidVersion(r.GetModuleVersion()) {
 		return errors.New("invalid module reference")
@@ -56,11 +65,40 @@ func Validate(r *openrmmv1.JobRequest) error {
 	return nil
 }
 
+// validateTargets requires exactly one of agent_id and agent_ids.
+func validateTargets(r *openrmmv1.JobRequest) error {
+	if r.GetAgentId() != "" {
+		if len(r.GetAgentIds()) > 0 || !ids.IsUUID(r.GetAgentId()) {
+			return errors.New("agent must be a UUID, given either as agent_id or agent_ids")
+		}
+		return nil
+	}
+	if n := len(r.GetAgentIds()); n == 0 || n > MaxAgents {
+		return fmt.Errorf("between 1 and %d agents", MaxAgents)
+	}
+	seen := map[string]bool{}
+	for _, a := range r.GetAgentIds() {
+		if !ids.IsUUID(a) || seen[a] {
+			return errors.New("agents must be distinct UUIDs")
+		}
+		seen[a] = true
+	}
+	return nil
+}
+
+// Targets returns the agents a valid request targets.
+func Targets(r *openrmmv1.JobRequest) []string {
+	if r.GetAgentId() != "" {
+		return []string{r.GetAgentId()}
+	}
+	return r.GetAgentIds()
+}
+
 // Hash returns the canonical SHA-256 of a request: every field length-prefixed
 // in a fixed order, so no two requests share an encoding.
 func Hash(r *openrmmv1.JobRequest) []byte {
 	var b bytes.Buffer
-	b.WriteString("openrmm/job-request/v1\x00")
+	b.WriteString("openrmm/job-request/v2\x00")
 	field := func(p []byte) {
 		var l [8]byte
 		binary.BigEndian.PutUint64(l[:], uint64(len(p)))
@@ -78,6 +116,23 @@ func Hash(r *openrmmv1.JobRequest) []byte {
 	binary.BigEndian.PutUint64(ttl[:], uint64(r.GetTtlSeconds())) // #nosec G115 -- validated positive
 	field(ttl[:])
 	field(r.GetRequestNonce())
+	count := func(n int) {
+		var c [8]byte
+		binary.BigEndian.PutUint64(c[:], uint64(n)) // #nosec G115 -- small, validated
+		field(c[:])
+	}
+	count(len(r.GetPackages()))
+	for _, p := range r.GetPackages() {
+		var size [8]byte
+		binary.BigEndian.PutUint64(size[:], uint64(p.GetSize())) // #nosec G115 -- validated positive
+		field(p.GetSha256())
+		field([]byte(p.GetFileName()))
+		field(size[:])
+	}
+	count(len(r.GetAgentIds()))
+	for _, a := range r.GetAgentIds() {
+		field([]byte(a))
+	}
 	sum := sha256.Sum256(b.Bytes())
 	return sum[:]
 }

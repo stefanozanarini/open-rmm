@@ -21,6 +21,7 @@ import (
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/console/audit"
+	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
 	"github.com/stefanozanarini/open-rmm/internal/console/relay"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
@@ -47,6 +48,9 @@ type Config struct {
 	EnrollPerMinute float64 // default 10
 	EnrollBurst     int     // default 5
 
+	// Packages is the package file store; empty Path: packages unavailable.
+	Packages pkgfiles.Dir
+
 	Now func() time.Time // for tests
 }
 
@@ -66,6 +70,7 @@ type Server struct {
 
 	mu       sync.Mutex
 	sessions map[string]*session // by tenant/agent
+	packages pkgfiles.Dir
 }
 
 type session struct {
@@ -85,6 +90,7 @@ func New(cfg Config) (*Server, error) {
 		heartbeat: cfg.HeartbeatInterval,
 		now:       cfg.Now,
 		sessions:  map[string]*session{},
+		packages:  cfg.Packages,
 	}
 	if s.log == nil {
 		s.log = slog.Default()

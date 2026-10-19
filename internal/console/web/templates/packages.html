@@ -1,0 +1,75 @@
+{{define "content"}}
+{{with .Data}}
+<h2>Catalogo winget</h2>
+<p class="muted">Le applicazioni seguite vengono confrontate con l'inventario di tutti gli endpoint, anche senza winget (ad esempio Windows Server 2019). L'installer viene scaricato dalla console solo via HTTPS e accettato solo se lo SHA-256 corrisponde a quello del manifest winget.</p>
+{{if .Catalog}}
+<table>
+<thead><tr><th>Applicazione</th><th>Ultima versione</th><th>Installata su</th><th>Da aggiornare</th><th>Pacchetto</th>{{if $.IsAdmin}}<th>Riconoscimento</th>{{end}}</tr></thead>
+<tbody>
+{{range .Catalog}}<tr>
+  <td>{{.Name}}<br><code class="muted">{{.WingetID}}</code></td>
+  <td>{{.Version}}{{if ne .DisplayVersion .Version}} <span class="muted">({{.DisplayVersion}})</span>{{end}}<br><span class="muted">{{.Release.Kind}} · verificato {{fmtTime .CheckedAt}}</span></td>
+  <td>{{.Installed}}</td>
+  <td>{{if .Outdated}}<details><summary><span class="badge chk-warning">{{len .Outdated}}</span></summary>{{range .Outdated}}<a href="/agents/{{.AgentID}}">{{.Hostname}}</a> <span class="muted">{{.Installed}}</span><br>{{end}}</details>{{else}}0{{end}}</td>
+  <td>{{with .Package}}{{if $.CanRun}}<a class="button" href="/packages/{{.SHA256}}/deploy">Distribuisci</a>{{else}}nella libreria{{end}}
+      {{else}}{{if $.IsAdmin}}<form method="post" action="/catalog/{{.WingetID}}/import" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button>Scarica {{.Version}}</button></form>{{else}}-{{end}}{{end}}</td>
+  {{if $.IsAdmin}}<td><form method="post" action="/catalog/{{.WingetID}}/match" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}">
+    <input name="match_name" value="{{.MatchName}}" size="16" title="Inizio del nome in Programmi e funzionalità">
+    <button>Salva</button> <button name="delete" value="1" class="link">rimuovi</button></form></td>{{end}}
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}<p class="muted">Nessuna applicazione nel catalogo.</p>{{end}}
+{{if $.IsAdmin}}
+<div class="actions">
+<form method="post" action="/catalog" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <input name="winget_id" placeholder="Id winget, es. 7zip.7zip" size="28" required>
+  <button class="primary">Aggiungi al catalogo</button>
+</form>
+{{if .Catalog}}<form method="post" action="/catalog/refresh" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button>Controlla nuove versioni</button></form>{{end}}
+</div>
+{{end}}
+
+<h2>Libreria pacchetti</h2>
+{{if .Packages}}
+<table>
+<thead><tr><th>Software</th><th>File</th><th>Tipo</th><th>Origine</th><th>Aggiunto</th><th></th></tr></thead>
+<tbody>
+{{range .Packages}}<tr>
+  <td>{{.Name}} {{.Version}}{{with .Publisher}}<br><span class="muted">{{.}}</span>{{end}}</td>
+  <td>{{.FileName}}<br><code class="muted" title="SHA-256">{{short .SHA256}}…</code> <span class="muted">{{bytes .Size}}</span></td>
+  <td>{{.Kind}}{{with .SilentArgs}}<br><code class="muted">{{.}}</code>{{end}}{{if .AllowUnsigned}}<br><span class="badge chk-warning">non firmato ammesso</span>{{end}}</td>
+  <td>{{if eq .Source "winget"}}winget <code class="muted">{{.WingetID}}</code>{{else}}caricato{{end}}</td>
+  <td>{{fmtTime .CreatedAt}}<br><span class="muted">{{.CreatedBy}}</span></td>
+  <td>{{if $.CanRun}}<a class="button" href="/packages/{{.SHA256}}/deploy">Distribuisci</a>{{end}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}<p class="muted">La libreria è vuota.</p>{{end}}
+
+{{if $.IsAdmin}}
+<h3>Carica un installer</h3>
+<form method="post" action="/packages/upload" enctype="multipart/form-data" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label>Nome <input name="name" required maxlength="64"></label>
+  <label>Versione <input name="version" required maxlength="64"></label>
+  <label>Editore <input name="publisher" maxlength="64"></label>
+  <label>Tipo
+    <select name="kind">
+      <option value="msi">MSI</option><option value="inno">Inno Setup</option><option value="nullsoft">NSIS (Nullsoft)</option>
+      <option value="burn">WiX bundle (burn)</option><option value="exe">Altro exe (servono le opzioni silenziose)</option>
+    </select>
+  </label>
+  <label>Opzioni (exe: opzioni silenziose, es. <code>/quiet /norestart</code>; MSI: proprietà, es. <code>ALLUSERS=1</code>)
+    <input name="silent_args" maxlength="1000" spellcheck="false">
+  </label>
+  <label>Codice prodotto MSI (facoltativo) <input name="product_code" placeholder="{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}" spellcheck="false"></label>
+  <label class="check"><input type="checkbox" name="allow_unsigned"> Ammetti l'installazione anche se il file non ha una firma Authenticode valida</label>
+  <label>File <input type="file" name="file" required></label>
+  <button class="primary">Carica</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

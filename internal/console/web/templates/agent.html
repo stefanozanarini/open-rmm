@@ -140,8 +140,11 @@
 <details>
 <summary>mostra l'elenco</summary>
 <table>
-<thead><tr><th>Nome</th><th>Versione</th><th>Editore</th><th>Installato</th><th>Ambito</th></tr></thead>
-<tbody>{{range $.Data.Software}}<tr><td>{{.Name}}</td><td>{{.Version}}</td><td>{{.Publisher}}</td><td>{{.InstallDate}}</td><td>{{label .Scope}}{{with .Arch}} {{.}}{{end}}</td></tr>{{end}}</tbody>
+<thead><tr><th>Nome</th><th>Versione</th><th>Editore</th><th>Installato</th><th>Ambito</th>{{if $.CanRun}}<th></th>{{end}}</tr></thead>
+<tbody>{{range $.Data.Software}}<tr><td>{{.Name}}</td><td>{{.Version}}{{with index $.Data.Outdated .Name}} <span class="badge chk-warning" title="ultima versione nel catalogo">→ {{.}}</span>{{end}}</td><td>{{.Publisher}}</td><td>{{.InstallDate}}</td><td>{{label .Scope}}{{with .Arch}} {{.}}{{end}}</td>
+{{if $.CanRun}}<td>{{if eq .Scope "machine"}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/uninstall" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="name" value="{{.Name}}"><input type="hidden" name="version" value="{{.Version}}">
+  <button class="link">disinstalla</button></form>{{end}}</td>{{end}}</tr>{{end}}</tbody>
 </table>
 </details>
 {{else}}

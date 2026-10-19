@@ -149,7 +149,11 @@ type JobRequest struct {
 	TtlSeconds    int64                  `protobuf:"varint,8,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
 	// Random value chosen by the console per request, so that two identical
 	// requests still have different hashes.
-	RequestNonce  []byte `protobuf:"bytes,9,opt,name=request_nonce,json=requestNonce,proto3" json:"request_nonce,omitempty"`
+	RequestNonce []byte        `protobuf:"bytes,9,opt,name=request_nonce,json=requestNonce,proto3" json:"request_nonce,omitempty"`
+	Packages     []*PackageRef `protobuf:"bytes,10,rep,name=packages,proto3" json:"packages,omitempty"`
+	// agent_ids targets several agents with one approval (one job each);
+	// agent_id is then empty.
+	AgentIds      []string `protobuf:"bytes,11,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -247,6 +251,20 @@ func (x *JobRequest) GetRequestNonce() []byte {
 	return nil
 }
 
+func (x *JobRequest) GetPackages() []*PackageRef {
+	if x != nil {
+		return x.Packages
+	}
+	return nil
+}
+
+func (x *JobRequest) GetAgentIds() []string {
+	if x != nil {
+		return x.AgentIds
+	}
+	return nil
+}
+
 type SignJobRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Request       *JobRequest            `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
@@ -306,7 +324,9 @@ type SignJobResponse struct {
 	Envelope    []byte `protobuf:"bytes,2,opt,name=envelope,proto3" json:"envelope,omitempty"`
 	ExpiresUnix int64  `protobuf:"varint,3,opt,name=expires_unix,json=expiresUnix,proto3" json:"expires_unix,omitempty"`
 	// Operator identity as verified by the signer, for the audit trail.
-	Operator      string `protobuf:"bytes,4,opt,name=operator,proto3" json:"operator,omitempty"`
+	Operator string `protobuf:"bytes,4,opt,name=operator,proto3" json:"operator,omitempty"`
+	// One entry per agent; for a single-agent request it repeats the fields above.
+	Jobs          []*SignedJob `protobuf:"bytes,5,rep,name=jobs,proto3" json:"jobs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -369,12 +389,79 @@ func (x *SignJobResponse) GetOperator() string {
 	return ""
 }
 
+func (x *SignJobResponse) GetJobs() []*SignedJob {
+	if x != nil {
+		return x.Jobs
+	}
+	return nil
+}
+
+type SignedJob struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	AgentId       string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	Envelope      []byte                 `protobuf:"bytes,3,opt,name=envelope,proto3" json:"envelope,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignedJob) Reset() {
+	*x = SignedJob{}
+	mi := &file_openrmm_v1_signer_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignedJob) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignedJob) ProtoMessage() {}
+
+func (x *SignedJob) ProtoReflect() protoreflect.Message {
+	mi := &file_openrmm_v1_signer_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignedJob.ProtoReflect.Descriptor instead.
+func (*SignedJob) Descriptor() ([]byte, []int) {
+	return file_openrmm_v1_signer_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SignedJob) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+func (x *SignedJob) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+func (x *SignedJob) GetEnvelope() []byte {
+	if x != nil {
+		return x.Envelope
+	}
+	return nil
+}
+
 var File_openrmm_v1_signer_proto protoreflect.FileDescriptor
 
 const file_openrmm_v1_signer_proto_rawDesc = "" +
 	"\n" +
 	"\x17openrmm/v1/signer.proto\x12\n" +
-	"openrmm.v1\"l\n" +
+	"openrmm.v1\x1a\x16openrmm/v1/agent.proto\"l\n" +
 	"\x11SignPolicyRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1f\n" +
 	"\vpolicy_json\x18\x02 \x01(\fR\n" +
@@ -382,7 +469,7 @@ const file_openrmm_v1_signer_proto_rawDesc = "" +
 	"\bid_token\x18\x03 \x01(\tR\aidToken\"L\n" +
 	"\x12SignPolicyResponse\x12\x1a\n" +
 	"\benvelope\x18\x01 \x01(\fR\benvelope\x12\x1a\n" +
-	"\boperator\x18\x02 \x01(\tR\boperator\"\xa7\x02\n" +
+	"\boperator\x18\x02 \x01(\tR\boperator\"\xf8\x02\n" +
 	"\n" +
 	"JobRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x19\n" +
@@ -395,15 +482,23 @@ const file_openrmm_v1_signer_proto_rawDesc = "" +
 	"paramsJson\x12\x1f\n" +
 	"\vttl_seconds\x18\b \x01(\x03R\n" +
 	"ttlSeconds\x12#\n" +
-	"\rrequest_nonce\x18\t \x01(\fR\frequestNonce\"]\n" +
+	"\rrequest_nonce\x18\t \x01(\fR\frequestNonce\x122\n" +
+	"\bpackages\x18\n" +
+	" \x03(\v2\x16.openrmm.v1.PackageRefR\bpackages\x12\x1b\n" +
+	"\tagent_ids\x18\v \x03(\tR\bagentIds\"]\n" +
 	"\x0eSignJobRequest\x120\n" +
 	"\arequest\x18\x01 \x01(\v2\x16.openrmm.v1.JobRequestR\arequest\x12\x19\n" +
-	"\bid_token\x18\x02 \x01(\tR\aidToken\"\x83\x01\n" +
+	"\bid_token\x18\x02 \x01(\tR\aidToken\"\xae\x01\n" +
 	"\x0fSignJobResponse\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x1a\n" +
 	"\benvelope\x18\x02 \x01(\fR\benvelope\x12!\n" +
 	"\fexpires_unix\x18\x03 \x01(\x03R\vexpiresUnix\x12\x1a\n" +
-	"\boperator\x18\x04 \x01(\tR\boperator2\xa0\x01\n" +
+	"\boperator\x18\x04 \x01(\tR\boperator\x12)\n" +
+	"\x04jobs\x18\x05 \x03(\v2\x15.openrmm.v1.SignedJobR\x04jobs\"Y\n" +
+	"\tSignedJob\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x19\n" +
+	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x1a\n" +
+	"\benvelope\x18\x03 \x01(\fR\benvelope2\xa0\x01\n" +
 	"\rSignerService\x12B\n" +
 	"\aSignJob\x12\x1a.openrmm.v1.SignJobRequest\x1a\x1b.openrmm.v1.SignJobResponse\x12K\n" +
 	"\n" +
@@ -421,25 +516,29 @@ func file_openrmm_v1_signer_proto_rawDescGZIP() []byte {
 	return file_openrmm_v1_signer_proto_rawDescData
 }
 
-var file_openrmm_v1_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_openrmm_v1_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_openrmm_v1_signer_proto_goTypes = []any{
 	(*SignPolicyRequest)(nil),  // 0: openrmm.v1.SignPolicyRequest
 	(*SignPolicyResponse)(nil), // 1: openrmm.v1.SignPolicyResponse
 	(*JobRequest)(nil),         // 2: openrmm.v1.JobRequest
 	(*SignJobRequest)(nil),     // 3: openrmm.v1.SignJobRequest
 	(*SignJobResponse)(nil),    // 4: openrmm.v1.SignJobResponse
+	(*SignedJob)(nil),          // 5: openrmm.v1.SignedJob
+	(*PackageRef)(nil),         // 6: openrmm.v1.PackageRef
 }
 var file_openrmm_v1_signer_proto_depIdxs = []int32{
-	2, // 0: openrmm.v1.SignJobRequest.request:type_name -> openrmm.v1.JobRequest
-	3, // 1: openrmm.v1.SignerService.SignJob:input_type -> openrmm.v1.SignJobRequest
-	0, // 2: openrmm.v1.SignerService.SignPolicy:input_type -> openrmm.v1.SignPolicyRequest
-	4, // 3: openrmm.v1.SignerService.SignJob:output_type -> openrmm.v1.SignJobResponse
-	1, // 4: openrmm.v1.SignerService.SignPolicy:output_type -> openrmm.v1.SignPolicyResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	6, // 0: openrmm.v1.JobRequest.packages:type_name -> openrmm.v1.PackageRef
+	2, // 1: openrmm.v1.SignJobRequest.request:type_name -> openrmm.v1.JobRequest
+	5, // 2: openrmm.v1.SignJobResponse.jobs:type_name -> openrmm.v1.SignedJob
+	3, // 3: openrmm.v1.SignerService.SignJob:input_type -> openrmm.v1.SignJobRequest
+	0, // 4: openrmm.v1.SignerService.SignPolicy:input_type -> openrmm.v1.SignPolicyRequest
+	4, // 5: openrmm.v1.SignerService.SignJob:output_type -> openrmm.v1.SignJobResponse
+	1, // 6: openrmm.v1.SignerService.SignPolicy:output_type -> openrmm.v1.SignPolicyResponse
+	5, // [5:7] is the sub-list for method output_type
+	3, // [3:5] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_openrmm_v1_signer_proto_init() }
@@ -447,13 +546,14 @@ func file_openrmm_v1_signer_proto_init() {
 	if File_openrmm_v1_signer_proto != nil {
 		return
 	}
+	file_openrmm_v1_agent_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_openrmm_v1_signer_proto_rawDesc), len(file_openrmm_v1_signer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

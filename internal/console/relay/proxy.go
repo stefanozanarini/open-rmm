@@ -57,6 +57,7 @@ var allowed = map[string]bool{
 	openrmmv1.AgentService_Connect_FullMethodName:          true,
 	openrmmv1.AgentService_RenewCertificate_FullMethodName: true,
 	openrmmv1.AgentService_GetModule_FullMethodName:        true,
+	openrmmv1.AgentService_GetPackage_FullMethodName:       true,
 	openrmmv1.AgentService_GetAgentRelease_FullMethodName:  true,
 }
 

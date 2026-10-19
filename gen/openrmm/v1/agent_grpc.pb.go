@@ -132,6 +132,7 @@ const (
 	AgentService_Connect_FullMethodName          = "/openrmm.v1.AgentService/Connect"
 	AgentService_RenewCertificate_FullMethodName = "/openrmm.v1.AgentService/RenewCertificate"
 	AgentService_GetModule_FullMethodName        = "/openrmm.v1.AgentService/GetModule"
+	AgentService_GetPackage_FullMethodName       = "/openrmm.v1.AgentService/GetPackage"
 	AgentService_GetAgentRelease_FullMethodName  = "/openrmm.v1.AgentService/GetAgentRelease"
 )
 
@@ -152,6 +153,9 @@ type AgentServiceClient interface {
 	// manifest, the following ones the archive bytes. Only approved agents may
 	// download modules.
 	GetModule(ctx context.Context, in *GetModuleRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ModuleChunk], error)
+	// GetPackage streams a software package referenced (by SHA-256) by one of
+	// the agent's unfinished jobs. The agent verifies size and hash.
+	GetPackage(ctx context.Context, in *GetPackageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PackageChunk], error)
 	// GetAgentRelease streams the executables of a signed release offered to
 	// the agent (see AgentUpdateOffer).
 	GetAgentRelease(ctx context.Context, in *GetAgentReleaseRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReleaseChunk], error)
@@ -207,9 +211,28 @@ func (c *agentServiceClient) GetModule(ctx context.Context, in *GetModuleRequest
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_GetModuleClient = grpc.ServerStreamingClient[ModuleChunk]
 
+func (c *agentServiceClient) GetPackage(ctx context.Context, in *GetPackageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PackageChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_GetPackage_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GetPackageRequest, PackageChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_GetPackageClient = grpc.ServerStreamingClient[PackageChunk]
+
 func (c *agentServiceClient) GetAgentRelease(ctx context.Context, in *GetAgentReleaseRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReleaseChunk], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_GetAgentRelease_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[3], AgentService_GetAgentRelease_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -243,6 +266,9 @@ type AgentServiceServer interface {
 	// manifest, the following ones the archive bytes. Only approved agents may
 	// download modules.
 	GetModule(*GetModuleRequest, grpc.ServerStreamingServer[ModuleChunk]) error
+	// GetPackage streams a software package referenced (by SHA-256) by one of
+	// the agent's unfinished jobs. The agent verifies size and hash.
+	GetPackage(*GetPackageRequest, grpc.ServerStreamingServer[PackageChunk]) error
 	// GetAgentRelease streams the executables of a signed release offered to
 	// the agent (see AgentUpdateOffer).
 	GetAgentRelease(*GetAgentReleaseRequest, grpc.ServerStreamingServer[ReleaseChunk]) error
@@ -264,6 +290,9 @@ func (UnimplementedAgentServiceServer) RenewCertificate(context.Context, *RenewC
 }
 func (UnimplementedAgentServiceServer) GetModule(*GetModuleRequest, grpc.ServerStreamingServer[ModuleChunk]) error {
 	return status.Error(codes.Unimplemented, "method GetModule not implemented")
+}
+func (UnimplementedAgentServiceServer) GetPackage(*GetPackageRequest, grpc.ServerStreamingServer[PackageChunk]) error {
+	return status.Error(codes.Unimplemented, "method GetPackage not implemented")
 }
 func (UnimplementedAgentServiceServer) GetAgentRelease(*GetAgentReleaseRequest, grpc.ServerStreamingServer[ReleaseChunk]) error {
 	return status.Error(codes.Unimplemented, "method GetAgentRelease not implemented")
@@ -325,6 +354,17 @@ func _AgentService_GetModule_Handler(srv interface{}, stream grpc.ServerStream) 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_GetModuleServer = grpc.ServerStreamingServer[ModuleChunk]
 
+func _AgentService_GetPackage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetPackageRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).GetPackage(m, &grpc.GenericServerStream[GetPackageRequest, PackageChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_GetPackageServer = grpc.ServerStreamingServer[PackageChunk]
+
 func _AgentService_GetAgentRelease_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(GetAgentReleaseRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -358,6 +398,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "GetModule",
 			Handler:       _AgentService_GetModule_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetPackage",
+			Handler:       _AgentService_GetPackage_Handler,
 			ServerStreams: true,
 		},
 		{

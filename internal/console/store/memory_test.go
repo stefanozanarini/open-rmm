@@ -514,3 +514,65 @@ func testUpdateStatus(t *testing.T, s Store) {
 		t.Fatal("visible from another tenant")
 	}
 }
+
+func TestPackagesAndCatalog(t *testing.T) { testPackagesAndCatalog(t, NewMemory()) }
+
+func testPackagesAndCatalog(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	sha := strings.Repeat("ab", 32)
+	p := Package{TenantID: tenant.ID, SHA256: sha, Name: "7-Zip", Version: "24.08", FileName: "7z.msi", Size: 10,
+		Kind: KindMSI, Source: "winget", WingetID: "7zip.7zip", CreatedBy: "t"}
+	if err := s.PutPackage(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutPackage(ctx, p); err != ErrPackageExists {
+		t.Fatalf("duplicate: %v", err)
+	}
+	if got, err := s.GetPackage(ctx, tenant.ID, sha); err != nil || got.WingetID != "7zip.7zip" {
+		t.Fatalf("get = %+v %v", got, err)
+	}
+	if _, err := s.GetPackage(ctx, ids.NewUUID(), sha); err != ErrNotFound {
+		t.Fatalf("other tenant: %v", err)
+	}
+	if list, _ := s.ListPackages(ctx, tenant.ID); len(list) != 1 {
+		t.Fatal("list")
+	}
+	a := CatalogApp{TenantID: tenant.ID, WingetID: "7zip.7zip", Name: "7-Zip", Version: "24.08", DisplayVersion: "24.08",
+		MatchName: "7-Zip", ProductCodes: []string{"{X}"}, Release: []byte(`{"url":"https://x"}`), CheckedAt: time.Now().UTC().Truncate(time.Second), AddedBy: "t"}
+	if err := s.PutCatalogApp(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	a.Version = "24.09"
+	s.PutCatalogApp(ctx, a)
+	got, err := s.GetCatalogApp(ctx, tenant.ID, "7zip.7zip")
+	if err != nil || got.Version != "24.09" || len(got.ProductCodes) != 1 || !strings.Contains(string(got.Release), "https://x") {
+		t.Fatalf("catalog = %+v %v", got, err)
+	}
+	if err := s.DeleteCatalogApp(ctx, tenant.ID, "7zip.7zip"); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := s.ListCatalogApps(ctx, tenant.ID); len(list) != 0 {
+		t.Fatal("not deleted")
+	}
+
+	// Jobs remember their packages.
+	agent := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, CertFingerprint: "fp2", CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, agent)
+	s.PutModule(ctx, Module{ID: "software", Version: "1.0.0", KeyID: "k", Manifest: []byte("{}"), Signature: []byte("s"),
+		ManifestSHA256: make([]byte, 32), Archive: []byte("a")})
+	j := Job{TenantID: tenant.ID, ID: ids.NewUUID(), AgentID: agent.ID, Module: "software", ModuleVersion: "1.0.0",
+		Action: "install", Params: []byte("{}"), Envelope: []byte("e"), CreatedBy: "t", ExpiresAt: time.Now().Add(time.Hour), Packages: []string{sha}}
+	if err := s.CreateJob(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetJob(ctx, tenant.ID, j.ID); len(got.Packages) != 1 || got.Packages[0] != sha {
+		t.Fatalf("job packages = %v", got.Packages)
+	}
+	inv := Inventory{TenantID: tenant.ID, AgentID: agent.ID, Data: []byte(`{"x":1}`), Summary: InventorySummary{CollectedAt: time.Now()}}
+	s.PutInventory(ctx, inv, nil)
+	if all, _ := s.ListInventories(ctx, tenant.ID); len(all) != 1 || all[0].AgentID != agent.ID || !strings.Contains(string(all[0].Data), `"x"`) {
+		t.Fatalf("inventories = %+v", all)
+	}
+}

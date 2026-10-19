@@ -60,6 +60,15 @@ function Get-PendingReboot([string]$StateDir) {
     if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') { $reasons += 'windows_update' }
     if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') { $reasons += 'component_servicing' }
     try { if ((New-Object -ComObject Microsoft.Update.SystemInfo).RebootRequired -and $reasons -notcontains 'windows_update') { $reasons += 'windows_update' } } catch { }
+    # Marker of the software module, valid until the next boot.
+    $marker = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\open-rmm-modules' -Name RebootRequiredAt -ErrorAction SilentlyContinue).RebootRequiredAt
+    if ($marker) {
+        try {
+            $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime()
+            if ([datetime]::Parse($marker).ToUniversalTime() -gt $boot) { $reasons += 'software' }
+        }
+        catch { }
+    }
     $rename = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations
     if ($rename) { $reasons += 'file_rename' }
     # File renames alone are frequent and harmless: they do not make a reboot required.
