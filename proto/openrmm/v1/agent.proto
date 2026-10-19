@@ -70,6 +70,7 @@ message HostInfo {
   string arch = 4;        // runtime.GOARCH
   string agent_version = 5;
   string machine_id = 6;  // stable OS machine identifier, used to spot re-enrollments
+  string os_family = 7;   // "client", "server" or "unknown"
 }
 
 message EnrollRequest {
@@ -92,7 +93,22 @@ message AgentMessage {
     Heartbeat heartbeat = 2;
     JobUpdate job_update = 3;
     UpdateStatus update_status = 4;
+    PolicyResult policy_result = 5;
   }
+}
+
+// PolicyResult is the outcome of one scheduled run of a policy rule. It is
+// acknowledged with a JobUpdateAck carrying run_id.
+message PolicyResult {
+  string run_id = 1;
+  string policy_id = 2;
+  int64 policy_version = 3;
+  string rule_id = 4;
+  JobUpdate.State state = 5;
+  bytes result_json = 6;
+  string error = 7;
+  int64 started_unix_ms = 8;
+  int64 finished_unix_ms = 9;
 }
 
 // UpdateStatus reports the progress of an agent update.
@@ -116,7 +132,15 @@ message ConsoleMessage {
     SignedEnvelope job = 2;
     JobUpdateAck job_update_ack = 3;
     AgentUpdateOffer agent_update = 4;
+    PolicySet policy_set = 5;
   }
+}
+
+// PolicySet is the complete set of policies the agent should apply. Sent on
+// connect and whenever it changes; policies missing from it are removed.
+// Each policy is signed (domain openrmm/policy/v1).
+message PolicySet {
+  repeated SignedEnvelope policies = 1;
 }
 
 // AgentUpdateOffer proposes a release. The agent installs it only if the

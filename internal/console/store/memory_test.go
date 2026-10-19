@@ -266,3 +266,62 @@ func testReleases(t *testing.T, s Store) {
 		t.Fatalf("agent = %+v", a)
 	}
 }
+
+func TestPolicyVersions(t *testing.T) { testPolicyVersions(t, NewMemory()) }
+
+func testPolicyVersions(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	agent := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "pc"},
+		CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, agent)
+	id := ids.NewUUID()
+	add := func(v int64, deleted bool) error {
+		pv := PolicyVersion{TenantID: tenant.ID, ID: id, Version: v, Name: "p", AppliesTo: "all", Deleted: deleted, CreatedBy: "t"}
+		if !deleted {
+			pv.Document, pv.Envelope = []byte(fmt.Sprintf(`{"v":%d}`, v)), []byte("env")
+		}
+		return s.AddPolicyVersion(ctx, pv)
+	}
+	if err := add(1, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := add(1, false); err != ErrPolicyVersion {
+		t.Fatalf("duplicate version: %v", err)
+	}
+	if err := add(3, false); err != ErrPolicyVersion {
+		t.Fatalf("skipped version: %v", err)
+	}
+	if err := add(2, false); err != nil {
+		t.Fatal(err)
+	}
+	cur, _ := s.CurrentPolicies(ctx, tenant.ID)
+	if len(cur) != 1 || cur[0].Version != 2 || string(cur[0].Document) != `{"v":2}` {
+		t.Fatalf("current = %+v", cur)
+	}
+	if other, _ := s.CurrentPolicies(ctx, ids.NewUUID()); len(other) != 0 {
+		t.Fatal("policy visible from another tenant")
+	}
+	now := time.Now()
+	r := PolicyResult{TenantID: tenant.ID, AgentID: agent.ID, PolicyID: id, RuleID: "r", PolicyVersion: 2,
+		RunID: ids.NewUUID(), State: JobSucceeded, Result: []byte(`{"ok":true}`), StartedAt: now, FinishedAt: now}
+	if err := s.PutPolicyResult(ctx, r); err != nil {
+		t.Fatal(err)
+	}
+	r2 := r
+	r2.RunID, r2.State, r2.Result, r2.Error, r2.FinishedAt = ids.NewUUID(), JobFailed, nil, "boom", now.Add(time.Minute)
+	if err := s.PutPolicyResult(ctx, r2); err != nil {
+		t.Fatal(err)
+	}
+	rs, _ := s.ListPolicyResults(ctx, tenant.ID, agent.ID)
+	if len(rs) != 1 || rs[0].State != JobFailed || rs[0].Error != "boom" {
+		t.Fatalf("results = %+v", rs)
+	}
+	if err := add(3, true); err != nil {
+		t.Fatal(err)
+	}
+	if cur, _ := s.CurrentPolicies(ctx, tenant.ID); len(cur) != 0 {
+		t.Fatal("deleted policy still current")
+	}
+}

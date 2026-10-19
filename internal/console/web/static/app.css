@@ -42,3 +42,7 @@ button.primary { background:var(--accent); border-color:var(--accent); color:#ff
 button.danger { color:var(--danger); border-color:#f2b8b5; }
 button.link { border:none; background:none; color:var(--accent); padding:0; }
 .actions { display:flex; gap:8px; margin:16px 0; }
+form.stack.wide { max-width:1000px; }
+a.button { display:inline-block; padding:6px 14px; border-radius:4px; background:var(--accent); color:#fff; text-decoration:none; }
+details summary { cursor:pointer; color:var(--accent); }
+details pre { margin-top:8px; }

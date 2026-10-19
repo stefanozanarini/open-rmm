@@ -135,6 +135,8 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		s.completeLogin(w, r, sess, claims)
 	case "job":
 		s.completeJob(w, r, sess, p, claims, raw)
+	case "policy":
+		s.completePolicy(w, r, sess, p, claims, raw)
 	default:
 		http.Error(w, "accesso non valido", http.StatusBadRequest)
 	}
@@ -188,7 +190,7 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 		s.log.Warn("signer refused job", "err", err, "operator", op.Username)
 		s.audit(r.Context(), req.GetTenantId(), op, "job.refused", req.GetAgentId(), map[string]any{
 			"module": req.GetModule(), "action": req.GetAction(), "reason": err.Error()})
-		s.flash(w, r, "Il servizio di firma ha rifiutato il comando: "+err.Error(), p.Return)
+		s.flashTo(w, r, sess, "Il servizio di firma ha rifiutato il comando: "+err.Error(), p.Return)
 		return
 	}
 	j := store.Job{

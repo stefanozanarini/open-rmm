@@ -143,4 +143,8 @@ Details in [ENTRA.md](ENTRA.md). The full text of scripts goes to the audit log.
 | `sysinfo` 1.0.0 | Windows, Linux | `info`: hostname, operating system, uptime |
 | `script` 1.0.0 | Windows | `run`: runs `params.script` (PowerShell) and returns output, errors and duration. Capability `adhoc_script` |
 
+## Policies
+
+To run a module action periodically, or only on endpoints where a condition holds, create a **policy** in the web console (**Policy**, Admin role). Each rule names a module version, an action, parameters, an interval and an optional condition. Saving asks for a new MFA sign-in; the signer signs that exact version and the agents receive it at once. Results of the latest run of each rule appear on the agent page. Modules with the `adhoc_script` capability cannot be used in policies.
+
 Planned plugins and how they are activated automatically by policies: [ARCHITECTURE.md](ARCHITECTURE.md) §3.7 and §8.

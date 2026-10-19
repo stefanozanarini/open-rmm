@@ -1,6 +1,7 @@
-// Package executor runs verified jobs through modules.
+// Package executor runs verified jobs, and scheduled policy rules, through
+// modules.
 //
-// Final job updates (rejected, succeeded, failed) are written to an on-disk
+// Final updates (job updates and policy results) are written to an on-disk
 // outbox before being sent and are deleted only when the console
 // acknowledges them, so a result survives disconnections and restarts.
 package executor
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -31,8 +33,19 @@ import (
 
 // Session is the live connection to the console, if any.
 type Session interface {
-	Send(*openrmmv1.JobUpdate)
+	Send(*openrmmv1.AgentMessage)
 	modcache.Fetcher
+}
+
+// PolicyRun identifies a scheduled run of a policy rule.
+type PolicyRun struct {
+	PolicyID      string
+	PolicyVersion int64
+	RuleID        string
+}
+
+func jobMsg(u *openrmmv1.JobUpdate) *openrmmv1.AgentMessage {
+	return &openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_JobUpdate{JobUpdate: u}}
 }
 
 // Executor runs jobs, at most cfg.MaxConcurrentJobs at a time.
@@ -90,8 +103,8 @@ func (e *Executor) Attach(s Session) {
 	e.mu.Lock()
 	e.session = s
 	e.mu.Unlock()
-	for _, u := range e.pending() {
-		s.Send(u)
+	for _, m := range e.pending() {
+		s.Send(m)
 	}
 }
 
@@ -107,12 +120,14 @@ func (e *Executor) Detach(s Session) {
 // Wait blocks until all running jobs have finished.
 func (e *Executor) Wait() { e.wg.Wait() }
 
-func (e *Executor) send(u *openrmmv1.JobUpdate) {
+func (e *Executor) send(u *openrmmv1.JobUpdate) { e.sendMsg(jobMsg(u)) }
+
+func (e *Executor) sendMsg(m *openrmmv1.AgentMessage) {
 	e.mu.Lock()
 	s := e.session
 	e.mu.Unlock()
 	if s != nil {
-		s.Send(u)
+		s.Send(m)
 	}
 }
 
@@ -125,10 +140,21 @@ func (e *Executor) fetcher() (modcache.Fetcher, error) {
 	return e.session, nil
 }
 
-// Acked removes a final update from the outbox.
-func (e *Executor) Acked(jobID string) {
-	if ids.IsUUID(jobID) {
-		_ = os.Remove(filepath.Join(e.outbox, jobID+".pb"))
+// lazyFetcher resolves the session only when a download is needed.
+type lazyFetcher struct{ e *Executor }
+
+func (l lazyFetcher) FetchModule(ctx context.Context, id, version string) (*modcache.Fetched, error) {
+	f, err := l.e.fetcher()
+	if err != nil {
+		return nil, err
+	}
+	return f.FetchModule(ctx, id, version)
+}
+
+// Acked removes a final update (job id or policy run id) from the outbox.
+func (e *Executor) Acked(id string) {
+	if ids.IsUUID(id) {
+		_ = os.Remove(filepath.Join(e.outbox, id+".msg"))
 	}
 }
 
@@ -145,8 +171,8 @@ func (e *Executor) Replayed(jobID string) {
 		e.send(&openrmmv1.JobUpdate{JobId: jobID, State: openrmmv1.JobUpdate_STATE_RUNNING})
 		return
 	}
-	if u, err := e.readOutbox(jobID); err == nil {
-		e.send(u)
+	if m, err := e.readOutbox(jobID); err == nil {
+		e.sendMsg(m)
 		return
 	}
 	// Seen but neither running nor finished: the agent stopped mid-job.
@@ -175,7 +201,31 @@ func (e *Executor) Start(job *openrmmv1.Job) {
 			delete(e.running, job.GetJobId())
 			e.mu.Unlock()
 		}()
-		e.finish(e.run(job))
+		e.finish(e.run(job, false))
+	}()
+}
+
+// StartPolicy runs one scheduled policy rule asynchronously. Policy runs are
+// quiet (only the final result is reported) and may never use modules that
+// run ad-hoc code. done is called with the final result.
+func (e *Executor) StartPolicy(job *openrmmv1.Job, pr PolicyRun, done func(*openrmmv1.PolicyResult)) {
+	if !ids.IsUUID(job.GetJobId()) {
+		return
+	}
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		started := time.Now()
+		u := e.run(job, true)
+		res := &openrmmv1.PolicyResult{
+			RunId: job.GetJobId(), PolicyId: pr.PolicyID, PolicyVersion: pr.PolicyVersion, RuleId: pr.RuleID,
+			State: u.GetState(), ResultJson: u.GetResultJson(), Error: u.GetError(),
+			StartedUnixMs: started.UnixMilli(), FinishedUnixMs: time.Now().UnixMilli(),
+		}
+		e.finishMsg(res.GetRunId(), &openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_PolicyResult{PolicyResult: res}})
+		if done != nil {
+			done(res)
+		}
 	}()
 }
 
@@ -187,16 +237,20 @@ func fail(job *openrmmv1.Job, format string, args ...any) *openrmmv1.JobUpdate {
 	return &openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_FAILED, Error: fmt.Sprintf(format, args...)}
 }
 
-func (e *Executor) run(job *openrmmv1.Job) *openrmmv1.JobUpdate {
+// run executes job. quiet suppresses intermediate updates and marks a
+// policy run, for which ad-hoc script modules are refused.
+func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
+	send := e.send
+	if quiet {
+		send = func(*openrmmv1.JobUpdate) {}
+	}
 	log := e.log.With("job", job.GetJobId(), "module", job.GetModule(), "action", job.GetAction())
 	if len(job.GetParamsJson()) > 0 && !json.Valid(job.GetParamsJson()) {
 		return reject(job, "job parameters are not valid JSON")
 	}
-	f, err := e.fetcher()
-	if err != nil {
-		return fail(job, "%v", err)
-	}
-	inst, err := e.cache.Get(e.ctx, f, job.GetModule(), job.GetModuleVersion(), job.GetModuleSha256())
+	// The console is needed only to download a module that is not cached:
+	// cached modules also run offline (policies).
+	inst, err := e.cache.Get(e.ctx, lazyFetcher{e}, job.GetModule(), job.GetModuleVersion(), job.GetModuleSha256())
 	if err != nil {
 		log.Warn("module unavailable", "err", err)
 		return reject(job, "module unavailable: %v", err)
@@ -213,12 +267,15 @@ func (e *Executor) run(job *openrmmv1.Job) *openrmmv1.JobUpdate {
 	if action.Context == modules.ContextUser {
 		return reject(job, "user-context execution is not available yet")
 	}
+	if quiet && m.HasCapability(modules.CapAdHocScript) {
+		return reject(job, "modules that run ad-hoc code cannot be scheduled by policies")
+	}
 	// Local policy: decided on the endpoint (MSI/GPO), never by the console.
 	if m.HasCapability(modules.CapAdHocScript) && !e.cfg.AdHocScriptsAllowed() {
 		log.Warn("ad-hoc script refused by local policy")
 		return reject(job, "ad-hoc scripts are disabled by local policy on this endpoint")
 	}
-	e.send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_ACCEPTED})
+	send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_ACCEPTED})
 
 	select {
 	case e.sem <- struct{}{}:
@@ -235,7 +292,7 @@ func (e *Executor) run(job *openrmmv1.Job) *openrmmv1.JobUpdate {
 	if err := modules.VerifyFiles(m, inst.FilesDir); err != nil {
 		return reject(job, "module integrity check failed: %v", err)
 	}
-	e.send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING})
+	send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING})
 	log.Info("running module")
 
 	params := json.RawMessage(job.GetParamsJson())
@@ -255,7 +312,7 @@ func (e *Executor) run(job *openrmmv1.Job) *openrmmv1.JobUpdate {
 		OnEvent: func(ev runner.Event) {
 			switch ev.Type {
 			case "progress":
-				e.send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING,
+				send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING,
 					ProgressPercent: int32(ev.Percent), Message: ev.Message}) // #nosec G115 -- clamped to 0-100
 			case "log":
 				log.Info("module log", "level", ev.Level, "message", ev.Message)
@@ -284,41 +341,43 @@ func truncate(s string, n int) string {
 	return s[:n] + "…"
 }
 
-// finish stores a final update in the outbox and sends it.
-func (e *Executor) finish(u *openrmmv1.JobUpdate) {
-	raw, err := proto.Marshal(u)
+// finish stores a final job update in the outbox and sends it.
+func (e *Executor) finish(u *openrmmv1.JobUpdate) { e.finishMsg(u.GetJobId(), jobMsg(u)) }
+
+func (e *Executor) finishMsg(id string, m *openrmmv1.AgentMessage) {
+	raw, err := proto.Marshal(m)
 	if err == nil {
-		err = secfile.WriteFile(filepath.Join(e.outbox, u.GetJobId()+".pb"), raw)
+		err = secfile.WriteFile(filepath.Join(e.outbox, id+".msg"), raw)
 	}
 	if err != nil {
-		e.log.Error("outbox write failed", "job", u.GetJobId(), "err", err)
+		e.log.Error("outbox write failed", "id", id, "err", err)
 	}
-	e.send(u)
+	e.sendMsg(m)
 }
 
-func (e *Executor) readOutbox(jobID string) (*openrmmv1.JobUpdate, error) {
-	raw, err := os.ReadFile(filepath.Join(e.outbox, jobID+".pb")) // #nosec G304 -- job id validated as UUID
+func (e *Executor) readOutbox(id string) (*openrmmv1.AgentMessage, error) {
+	raw, err := os.ReadFile(filepath.Join(e.outbox, id+".msg")) // #nosec G304 -- id validated as UUID
 	if err != nil {
 		return nil, err
 	}
-	u := &openrmmv1.JobUpdate{}
-	return u, proto.Unmarshal(raw, u)
+	m := &openrmmv1.AgentMessage{}
+	return m, proto.Unmarshal(raw, m)
 }
 
-func (e *Executor) pending() []*openrmmv1.JobUpdate {
+func (e *Executor) pending() []*openrmmv1.AgentMessage {
 	entries, err := os.ReadDir(e.outbox)
 	if err != nil {
 		return nil
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	var out []*openrmmv1.JobUpdate
+	var out []*openrmmv1.AgentMessage
 	for _, en := range entries {
-		id, ok := strings.CutSuffix(en.Name(), ".pb")
+		id, ok := strings.CutSuffix(en.Name(), ".msg")
 		if !ok || !ids.IsUUID(id) {
 			continue
 		}
-		if u, err := e.readOutbox(id); err == nil {
-			out = append(out, u)
+		if m, err := e.readOutbox(id); err == nil {
+			out = append(out, m)
 		}
 	}
 	return out

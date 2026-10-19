@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SignerService_SignJob_FullMethodName = "/openrmm.v1.SignerService/SignJob"
+	SignerService_SignJob_FullMethodName    = "/openrmm.v1.SignerService/SignJob"
+	SignerService_SignPolicy_FullMethodName = "/openrmm.v1.SignerService/SignPolicy"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -32,6 +33,9 @@ const (
 // signer verifies it on its own before signing.
 type SignerServiceClient interface {
 	SignJob(ctx context.Context, in *SignJobRequest, opts ...grpc.CallOption) (*SignJobResponse, error)
+	// SignPolicy signs a policy document approved by an operator with a fresh
+	// MFA sign-in whose nonce is the document's fingerprint.
+	SignPolicy(ctx context.Context, in *SignPolicyRequest, opts ...grpc.CallOption) (*SignPolicyResponse, error)
 }
 
 type signerServiceClient struct {
@@ -52,6 +56,16 @@ func (c *signerServiceClient) SignJob(ctx context.Context, in *SignJobRequest, o
 	return out, nil
 }
 
+func (c *signerServiceClient) SignPolicy(ctx context.Context, in *SignPolicyRequest, opts ...grpc.CallOption) (*SignPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignPolicyResponse)
+	err := c.cc.Invoke(ctx, SignerService_SignPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SignerServiceServer is the server API for SignerService service.
 // All implementations must embed UnimplementedSignerServiceServer
 // for forward compatibility.
@@ -62,6 +76,9 @@ func (c *signerServiceClient) SignJob(ctx context.Context, in *SignJobRequest, o
 // signer verifies it on its own before signing.
 type SignerServiceServer interface {
 	SignJob(context.Context, *SignJobRequest) (*SignJobResponse, error)
+	// SignPolicy signs a policy document approved by an operator with a fresh
+	// MFA sign-in whose nonce is the document's fingerprint.
+	SignPolicy(context.Context, *SignPolicyRequest) (*SignPolicyResponse, error)
 	mustEmbedUnimplementedSignerServiceServer()
 }
 
@@ -74,6 +91,9 @@ type UnimplementedSignerServiceServer struct{}
 
 func (UnimplementedSignerServiceServer) SignJob(context.Context, *SignJobRequest) (*SignJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SignJob not implemented")
+}
+func (UnimplementedSignerServiceServer) SignPolicy(context.Context, *SignPolicyRequest) (*SignPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignPolicy not implemented")
 }
 func (UnimplementedSignerServiceServer) mustEmbedUnimplementedSignerServiceServer() {}
 func (UnimplementedSignerServiceServer) testEmbeddedByValue()                       {}
@@ -114,6 +134,24 @@ func _SignerService_SignJob_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_SignPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).SignPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_SignPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).SignPolicy(ctx, req.(*SignPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SignerService_ServiceDesc is the grpc.ServiceDesc for SignerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -124,6 +162,10 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SignJob",
 			Handler:    _SignerService_SignJob_Handler,
+		},
+		{
+			MethodName: "SignPolicy",
+			Handler:    _SignerService_SignPolicy_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

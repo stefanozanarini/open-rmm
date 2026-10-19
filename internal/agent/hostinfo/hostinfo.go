@@ -19,5 +19,6 @@ func Collect(agentVersion string) *openrmmv1.HostInfo {
 		Arch:         runtime.GOARCH,
 		AgentVersion: agentVersion,
 		MachineId:    machineID(),
+		OsFamily:     OSFamily(),
 	}
 }

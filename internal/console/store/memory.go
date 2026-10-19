@@ -25,6 +25,8 @@ type Memory struct {
 	sessions  map[string]WebSession // by session hash
 	releases  map[string]Release    // by version@platform
 	targets   map[string]ReleaseTarget
+	policies  []PolicyVersion
+	results   map[string]PolicyResult
 }
 
 func NewMemory() *Memory {
@@ -39,6 +41,7 @@ func NewMemory() *Memory {
 		sessions: map[string]WebSession{},
 		releases: map[string]Release{},
 		targets:  map[string]ReleaseTarget{},
+		results:  map[string]PolicyResult{},
 	}
 }
 

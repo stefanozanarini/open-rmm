@@ -33,7 +33,7 @@ type Operator struct {
 
 // Pending is an authentication round trip in progress.
 type Pending struct {
-	Purpose      string    `json:"purpose"` // "login" or "job"
+	Purpose      string    `json:"purpose"` // "login", "job" or "policy"
 	State        string    `json:"state"`
 	Nonce        string    `json:"nonce"`
 	CodeVerifier string    `json:"code_verifier"`
@@ -41,6 +41,8 @@ type Pending struct {
 	// For "job": the serialized JobRequest being approved and where to go.
 	JobRequest []byte `json:"job_request,omitempty"`
 	Return     string `json:"return,omitempty"`
+	// For "policy": the canonical policy document being approved.
+	PolicyDoc []byte `json:"policy_doc,omitempty"`
 }
 
 // SessionData is stored server-side; the browser only holds a random id.

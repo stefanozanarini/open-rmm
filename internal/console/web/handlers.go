@@ -77,6 +77,7 @@ type runnable struct {
 
 type agentData struct {
 	Agent    store.Agent
+	Results  []resultView
 	Jobs     []store.Job
 	Actions  []runnable
 	Commands []runnable // regular module actions
@@ -106,6 +107,11 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := agentData{Agent: a, Jobs: jobs, Online: a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) < 10*time.Minute}
+	d.Results, err = s.policyResults(r, t, id)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
 	if a.Status == store.AgentActive {
 		d.Actions, err = s.runnableOn(r, a)
 		if err != nil {
@@ -514,4 +520,35 @@ func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, r, "updates", "Aggiornamenti dell'agente", d)
+}
+
+type resultView struct {
+	store.PolicyResult
+	Policy string
+	Pretty string
+}
+
+func (s *Server) policyResults(r *http.Request, tenant, agent string) ([]resultView, error) {
+	rs, err := s.store.ListPolicyResults(r.Context(), tenant, agent)
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]string{}
+	if cur, err := s.store.CurrentPolicies(r.Context(), tenant); err == nil {
+		for _, p := range cur {
+			names[p.ID] = p.Name
+		}
+	}
+	out := make([]resultView, 0, len(rs))
+	for _, x := range rs {
+		v := resultView{PolicyResult: x, Policy: names[x.PolicyID]}
+		if v.Policy == "" {
+			v.Policy = "(eliminata)"
+		}
+		if len(x.Result) > 0 {
+			v.Pretty = pretty(x.Result)
+		}
+		out = append(out, v)
+	}
+	return out, nil
 }

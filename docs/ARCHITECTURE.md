@@ -71,7 +71,7 @@ The DMZ / internal split is implemented ✅ (§6.7): `openrmm-gateway` is a rela
 
 | Component | Role | Expected update frequency |
 |---|---|---|
-| `openrmm-agent` ✅ | Core: transport, identity, signature checks, module cache and runner, job outbox, policy scheduler (🔜), health file | Rare (protocol or security fixes) |
+| `openrmm-agent` ✅ | Core: transport, identity, signature checks, module cache and runner, job outbox, policy scheduler, health file | Rare (protocol or security fixes) |
 | `openrmm-watchdog` ✅ | Restarts the agent when stopped or hung, applies staged updates with rollback | Very rare |
 | `openrmm-userhelper` 📋 | Process in the user session: notifications, reboot prompts, modules in user context (per-user apps, per-user winget) | Rare |
 | Modules ✅ | Every feature | Often, **without touching the agent** |
@@ -122,7 +122,7 @@ Code, identifiers, comments, documentation and commit messages are in English. T
 - module download, cache and per-run integrity check;
 - running modules as child processes with timeouts, output limits and process-tree kill;
 - final results outbox;
-- 🔜 **policy scheduler with declarative conditions** (§3.7);
+- ✅ **policy scheduler with declarative conditions** (§3.7);
 - health file for the watchdog.
 
 Everything else is a module, including PowerShell execution.
@@ -161,32 +161,26 @@ A job is `{job_id, tenant_id, agent_id, module, version, module_sha256, action, 
 - Final updates go through an on-disk outbox and are re-sent until the console acknowledges them.
 - A job delivered again after a reconnection is never re-run: the agent reports the state it knows.
 
-### 3.7 Policies and conditional plugins 🔜
+### 3.7 Policies and conditional plugins ✅
 
-Recurring work (inventory every 24 h, Trend Micro status every 15 min, logon events every 5 min) and automatic plugin activation are expressed as **policies**:
+Recurring work (inventory every 24 h, Trend Micro status every 15 min, logon events every 5 min) and automatic plugin activation are expressed as **policies**. A policy is a canonical JSON document:
 
-```yaml
-policy: security-baseline          # assigned to a group (clients, servers, a site, an OU)
-version: 7
-rules:
-  - module: trendmicro-endpoint@1.0.0   # pinned by manifest hash
-    action: status
-    every: 15m
-    when: { service_exists: "ds_agent" }   # Server & Workload Protection
-  - module: trendmicro-endpoint@1.0.0
-    action: status
-    every: 15m
-    when: { service_exists: "TMBMServer" } # Standard Endpoint Protection (exact names to verify)
-  - module: accesslog@1.0.0
-    action: collect
-    every: 5m
+```json
+{"id":"…","tenant_id":"…","name":"security-baseline","version":7,"applies_to":"all",
+ "rules":[
+  {"id":"trend-swp","module":"trendmicro-endpoint","module_version":"1.0.0","module_sha256":"…",
+   "action":"status","every_seconds":900,"when":{"service_exists":"ds_agent"}},
+  {"id":"logons","module":"accesslog","module_version":"1.0.0","module_sha256":"…",
+   "action":"collect","every_seconds":300}]}
 ```
 
-- A policy is **signed by the signer** after an operator approves it with MFA — once per policy version, not at every run.
-- The core evaluates only **declarative conditions**: service exists, file exists, registry key or value exists, OS family (client/server). No product-specific logic enters the core.
-- The module is downloaded only when a rule applies: endpoints without Trend Micro never receive the Trend module. This is how "agent detects Trend Micro → downloads and enables the plugin" works without enlarging the core.
-- Policies are stored locally and keep running offline; results are queued.
-- Modules with the `adhoc_script` capability are not allowed in policies.
+- `applies_to` is `all`, `clients` or `servers` (OS installation type reported by the agent). Groups by site or OU will come with the console layout (§11).
+- A policy is **signed by the signer** (domain `openrmm/policy/v1`) after an operator with the **Admin** role approves it with a fresh MFA sign-in whose nonce is the document's fingerprint — once per policy version, not at every run. Each change or deletion creates a new version; versions are immutable in the database and audited.
+- The core evaluates only **declarative conditions**: `service_exists`, `file_exists`, `registry_key_exists` (HKLM), `os_family`, combined with `all`, `any`, `not` (depth ≤ 4). No product-specific logic enters the core. Results are cached for 5 minutes.
+- The module is fetched only when a rule is due and its condition holds: endpoints without Trend Micro never download the Trend module. This is how "agent detects Trend Micro → downloads and enables the plugin" works without enlarging the core. Modules are pinned by manifest hash.
+- The agent refuses policies for another tenant, with an invalid signature, or older than a version it has already seen (no rollback by a compromised console). Policies are stored in `policies.json` and keep running offline; results go through the outbox and are shown on the agent page.
+- Intervals are between 1 minute and 7 days; the first run of a new rule is delayed by a random amount (up to 2 minutes) so a fleet does not run it all at once.
+- Modules with the `adhoc_script` capability are refused in policies, both by the console and by the agent.
 
 ---
 
@@ -316,7 +310,7 @@ internet ──► [DMZ] openrmm-gateway  ◄──── mTLS, opened from the 
 
 All modules are signed plugins outside the agent core, assigned by jobs or policies (§3.7).
 
-### 8.1 `inventory` 📋 (next after policies)
+### 8.1 `inventory` 📋 (next)
 
 | Area | Data | Windows source |
 |---|---|---|
@@ -472,7 +466,7 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 |---|---|---|
 | Phase 0 — foundations | PKI and enrollment, mTLS gateway, agent core, modules and SDKs, job queue, signer with per-command MFA, web console with Entra ID, watchdog and A/B updates, MSI and ADMX | ✅ (to be validated on real Windows) |
 | 1 | DMZ / internal split (gateway as relay, `openrmm-core`) | ✅ |
-| 2 | Policies with scheduling and conditional plugins | 🔜 |
+| 2 | Policies with scheduling and conditional plugins | ✅ |
 | 3 | `inventory` (incl. Supremo/AnyDesk/TeamViewer ids), OS installation type, Clients/Servers sections | 📋 |
 | 4 | Security plugins: `trendmicro-endpoint`, `trendmicro-ztia`, Vision One connector, `accesslog` with unusual-logon detection, `protection-status` | 📋 |
 | 5 | `winupdate`, `winget`, console-side catalog, update dashboards, `reboot`, user helper | 📋 |

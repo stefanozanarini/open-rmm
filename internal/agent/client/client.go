@@ -31,6 +31,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/agent/identity"
 	"github.com/stefanozanarini/open-rmm/internal/agent/jobs"
 	"github.com/stefanozanarini/open-rmm/internal/agent/modcache"
+	"github.com/stefanozanarini/open-rmm/internal/agent/policies"
 	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
 	"github.com/stefanozanarini/open-rmm/internal/agent/svcctl"
 	"github.com/stefanozanarini/open-rmm/internal/agent/updater"
@@ -73,6 +74,7 @@ type Client struct {
 	runCtx    context.Context
 	mu        sync.Mutex
 	exec      *executor.Executor
+	policies  *policies.Manager
 	execAgent string
 }
 
@@ -233,7 +235,7 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 	if err != nil {
 		return false, err
 	}
-	exec, err := c.executorFor(id)
+	exec, pols, err := c.executorFor(id)
 	if err != nil {
 		return false, err
 	}
@@ -309,6 +311,8 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 				exec.Acked(m.JobUpdateAck.GetJobId())
 			case *openrmmv1.ConsoleMessage_AgentUpdate:
 				c.updater.Offer(sctx, sess, m.AgentUpdate.GetManifest())
+			case *openrmmv1.ConsoleMessage_PolicySet:
+				pols.Apply(m.PolicySet)
 			}
 		}
 	}()
@@ -350,21 +354,26 @@ func (c *Client) connect(ctx context.Context, id *identity.Identity) (bool, erro
 	}
 }
 
-// executorFor returns the executor of the current identity. Jobs keep
-// running across reconnections; a new identity (re-enrollment) gets a new
-// executor.
-func (c *Client) executorFor(id *identity.Identity) (*executor.Executor, error) {
+// executorFor returns the executor and policy manager of the current
+// identity. Jobs and policies keep running across reconnections (policies
+// also offline); a new identity (re-enrollment) gets new ones.
+func (c *Client) executorFor(id *identity.Identity) (*executor.Executor, *policies.Manager, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.exec != nil && c.execAgent == id.AgentID {
-		return c.exec, nil
+		return c.exec, c.policies, nil
 	}
 	e, err := executor.New(c.runCtx, c.cfg, id.TenantID, id.AgentID, c.log)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	c.exec, c.execAgent = e, id.AgentID
-	return e, nil
+	pm, err := policies.New(c.cfg.JobKeyring(), id.TenantID, c.cfg.DataDir, policies.SystemProbe{}, e, c.log)
+	if err != nil {
+		return nil, nil, err
+	}
+	go pm.Run(c.runCtx)
+	c.exec, c.policies, c.execAgent = e, pm, id.AgentID
+	return e, pm, nil
 }
 
 // renew obtains a certificate for a fresh key pair and stores it. The old
@@ -418,9 +427,9 @@ type session struct {
 	conn *grpc.ClientConn
 }
 
-func (s *session) Send(u *openrmmv1.JobUpdate) {
+func (s *session) Send(m *openrmmv1.AgentMessage) {
 	select {
-	case s.out <- &openrmmv1.AgentMessage{Msg: &openrmmv1.AgentMessage_JobUpdate{JobUpdate: u}}:
+	case s.out <- m:
 	case <-s.ctx.Done():
 	}
 }

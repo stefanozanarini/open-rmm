@@ -53,6 +53,7 @@ type HostInfo struct {
 	Arch         string
 	AgentVersion string
 	MachineID    string
+	OSFamily     string // client | server | unknown
 }
 
 type Agent struct {
@@ -107,6 +108,7 @@ type Store interface {
 	JobStore
 	SessionStore
 	ReleaseStore
+	PolicyStore
 }
 
 // HashToken returns the value stored in place of an enrollment token.

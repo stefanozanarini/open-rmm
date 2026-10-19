@@ -2,7 +2,7 @@
 {{with .Data}}
 <dl class="facts">
   <dt>Stato</dt><dd><span class="badge {{.Agent.Status}}">{{label .Agent.Status}}</span> {{if .Online}}<span class="badge online">online</span>{{end}}</dd>
-  <dt>Sistema</dt><dd>{{.Agent.Host.OSVersion}} ({{.Agent.Host.OS}}/{{.Agent.Host.Arch}})</dd>
+  <dt>Sistema</dt><dd>{{.Agent.Host.OSVersion}} ({{.Agent.Host.OS}}/{{.Agent.Host.Arch}}, {{label .Agent.Host.OSFamily}})</dd>
   <dt>Versione agente</dt><dd>{{.Agent.Host.AgentVersion}}</dd>
   <dt>Ultimo contatto</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} da {{.}}{{end}}</dd>
   <dt>Registrato</dt><dd>{{fmtTime .Agent.EnrolledAt}}</dd>
@@ -65,6 +65,22 @@
 </form>
 {{end}}
 {{end}}
+
+<h2>Policy</h2>
+{{if .Data.Results}}
+<table>
+<thead><tr><th>Policy</th><th>Regola</th><th>Stato</th><th>Ultima esecuzione</th><th>Dettagli</th></tr></thead>
+<tbody>
+{{range .Data.Results}}<tr>
+  <td>{{.Policy}} <span class="muted">v{{.PolicyVersion}}</span></td>
+  <td>{{.RuleID}}</td>
+  <td><span class="badge {{.State}}">{{label .State}}</span></td>
+  <td>{{fmtTime .FinishedAt}}</td>
+  <td>{{if .Error}}<span class="muted">{{.Error}}</span>{{end}}{{if .Pretty}}<details><summary>risultato</summary><pre>{{.Pretty}}</pre></details>{{end}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}<p class="muted">Nessun risultato di policy.</p>{{end}}
 
 <h2>Ultimi job</h2>
 {{template "jobrows" .Data.Jobs}}

@@ -283,7 +283,11 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 	// unanswered ones are re-sent once per session (the agent deduplicates).
 	sent := map[string]bool{}
 	offered := map[string]bool{}
+	var policyHash []byte
 	if a.Status == store.AgentActive {
+		if err := s.sendPolicies(ctx, stream, a, &policyHash); err != nil {
+			return err
+		}
 		if err := s.dispatch(ctx, stream, a, sent); err != nil {
 			return err
 		}
@@ -316,6 +320,9 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 			cur.Host = a.Host
 			a = cur
 			if a.Status == store.AgentActive {
+				if err := s.sendPolicies(ctx, stream, a, &policyHash); err != nil {
+					return err
+				}
 				if err := s.dispatch(ctx, stream, a, sent); err != nil {
 					return err
 				}
@@ -342,6 +349,14 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 				// Fallback in case a notification was missed.
 				if a.Status == store.AgentActive {
 					if err := s.dispatch(ctx, stream, a, sent); err != nil {
+						return err
+					}
+				}
+			case *openrmmv1.AgentMessage_PolicyResult:
+				if s.recordPolicyResult(ctx, a, m.PolicyResult) {
+					if err := stream.Send(&openrmmv1.ConsoleMessage{Msg: &openrmmv1.ConsoleMessage_JobUpdateAck{
+						JobUpdateAck: &openrmmv1.JobUpdateAck{JobId: m.PolicyResult.GetRunId()},
+					}}); err != nil {
 						return err
 					}
 				}
@@ -490,6 +505,7 @@ func hostFromProto(h *openrmmv1.HostInfo) store.HostInfo {
 		Arch:         h.GetArch(),
 		AgentVersion: h.GetAgentVersion(),
 		MachineID:    h.GetMachineId(),
+		OSFamily:     normalizeFamily(h.GetOsFamily()),
 	}
 }
 
@@ -503,4 +519,12 @@ func validateHost(h store.HostInfo) error {
 		return errors.New("hostname is required")
 	}
 	return nil
+}
+
+func normalizeFamily(f string) string {
+	switch f {
+	case "client", "server":
+		return f
+	}
+	return "unknown"
 }

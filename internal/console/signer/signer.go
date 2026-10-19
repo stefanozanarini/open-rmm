@@ -12,8 +12,10 @@
 package signer
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +32,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
 	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/open-rmm/internal/policy"
 	"github.com/stefanozanarini/open-rmm/internal/signing"
 )
 
@@ -160,4 +163,58 @@ func (u *usedTokens) add(nonce string, until, now time.Time) error {
 		return err
 	}
 	return nil
+}
+
+// SignPolicy verifies the operator's approval of a policy document and signs
+// it. Policies act on many endpoints for a long time, so they need the Admin
+// role; the approval is bound to the exact document bytes.
+func (s *Server) SignPolicy(ctx context.Context, req *openrmmv1.SignPolicyRequest) (*openrmmv1.SignPolicyResponse, error) {
+	deny := func(reason string, err error) (*openrmmv1.SignPolicyResponse, error) {
+		s.log.Warn("policy signature refused", "reason", reason, "err", err, "tenant", req.GetTenantId())
+		return nil, status.Error(codes.PermissionDenied, reason)
+	}
+	raw := req.GetPolicyJson()
+	if len(raw) > 1<<20 {
+		return nil, status.Error(codes.InvalidArgument, "policy too large")
+	}
+	p, err := policy.Parse(raw)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	canon, err := p.Canonical()
+	if err != nil || !bytes.Equal(canon, raw) {
+		return nil, status.Error(codes.InvalidArgument, "policy document is not canonical")
+	}
+	if p.TenantID != req.GetTenantId() {
+		return nil, status.Error(codes.InvalidArgument, "tenant mismatch")
+	}
+	claims, err := s.verifier.Verify(ctx, req.GetIdToken())
+	if err != nil {
+		return deny("operator authentication rejected", err)
+	}
+	now := s.now()
+	if err := s.verifier.CheckFresh(claims, now); err != nil {
+		return deny("authentication too old", err)
+	}
+	if subtle.ConstantTimeCompare([]byte(claims.Nonce), []byte(policy.AuthNonce(raw))) != 1 {
+		return deny("authentication was not issued for this policy", authn.ErrNonce)
+	}
+	if !claims.HasRole(authn.RoleAdmin) {
+		return deny("only administrators may approve policies", authn.ErrNoRole)
+	}
+	if !s.verifier.MayManage(claims, p.TenantID) {
+		return deny("operator may not manage this tenant", authn.ErrNoTenant)
+	}
+	if err := s.used.add(claims.Nonce, now.Add(2*time.Hour), now); err != nil {
+		return deny("authentication already used", err)
+	}
+	env, err := proto.Marshal(&openrmmv1.SignedEnvelope{KeyId: s.signer.KeyID(), Payload: raw,
+		Signature: s.signer.Sign(signing.DomainPolicy, raw)})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "encode envelope")
+	}
+	op := claims.Operator()
+	s.log.Info("policy signed", "policy", p.ID, "version", p.Version, "name", p.Name, "tenant", p.TenantID,
+		"rules", len(p.Rules), "operator", op, "sha256", fmt.Sprintf("%x", sha256.Sum256(raw)))
+	return &openrmmv1.SignPolicyResponse{Envelope: env, Operator: op}, nil
 }

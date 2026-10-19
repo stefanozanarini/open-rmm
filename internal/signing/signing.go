@@ -22,6 +22,7 @@ const (
 	DomainJob            Domain = "openrmm/job/v1"
 	DomainModuleManifest Domain = "openrmm/module-manifest/v1"
 	DomainAgentRelease   Domain = "openrmm/agent-release/v1"
+	DomainPolicy         Domain = "openrmm/policy/v1"
 )
 
 // MaxPayload bounds the payload size accepted for verification.

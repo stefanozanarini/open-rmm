@@ -162,6 +162,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /tokens", s.role(authn.RoleAdmin, s.handleTokens))
 	mux.Handle("POST /tokens", s.role(authn.RoleAdmin, s.handleCreateToken))
 	mux.Handle("GET /audit", s.auth(s.handleAudit))
+	mux.Handle("GET /policies", s.auth(s.handlePolicies))
+	mux.Handle("GET /policies/new", s.role(authn.RoleAdmin, s.handlePolicyForm))
+	mux.Handle("GET /policies/{id}", s.role(authn.RoleAdmin, s.handlePolicyForm))
+	mux.Handle("POST /policies", s.role(authn.RoleAdmin, s.handleSavePolicy))
+	mux.Handle("POST /policies/{id}/delete", s.role(authn.RoleAdmin, s.handleDeletePolicy))
 	return s.secure(mux)
 }
 
@@ -184,6 +189,14 @@ func (s *Server) secure(next http.Handler) http.Handler {
 		}
 		// Bound request bodies: forms are small, scripts at most 1 MB.
 		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		// A panic becomes a clean 500 instead of a dropped connection (which
+		// clients may silently retry, replaying a one-time step).
+		defer func() {
+			if v := recover(); v != nil {
+				s.log.Error("panic serving request", "path", r.URL.Path, "panic", v)
+				http.Error(w, "errore interno", http.StatusInternalServerError)
+			}
+		}()
 		next.ServeHTTP(w, r)
 	})
 }
@@ -292,9 +305,18 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title stri
 	}
 }
 
-// flash stores a one-time message and redirects.
+// flash stores a one-time message in the request's session and redirects.
 func (s *Server) flash(w http.ResponseWriter, r *http.Request, msg, to string) {
-	sess := sessionFrom(r.Context())
+	s.flashTo(w, r, sessionFrom(r.Context()), msg, to)
+}
+
+// flashTo is flash with an explicit session, for handlers outside the auth
+// middleware (the identity provider callback).
+func (s *Server) flashTo(w http.ResponseWriter, r *http.Request, sess *session, msg, to string) {
+	if sess == nil {
+		http.Redirect(w, r, to, http.StatusSeeOther)
+		return
+	}
 	sess.data.Flash = msg
 	if err := s.save(r.Context(), w, sess); err != nil {
 		s.fail(w, err)
@@ -309,4 +331,5 @@ var labels = map[string]string{
 	"queued": "in coda", "sent": "inviato", "accepted": "accettato", "running": "in esecuzione",
 	"succeeded": "completato", "failed": "fallito", "rejected": "rifiutato", "expired": "scaduto",
 	"downloading": "download", "staged": "pronto", "applied": "installato", "rolled_back": "ripristinato",
+	"all": "tutti", "clients": "solo client", "servers": "solo server", "client": "client", "server": "server", "unknown": "non noto",
 }

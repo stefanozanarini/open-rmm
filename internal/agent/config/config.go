@@ -131,7 +131,8 @@ func (c *Config) validate() error {
 		if err != nil {
 			return fmt.Errorf("job signing key: %w", err)
 		}
-		if _, err := c.keys.Add(ed25519.PublicKey(pub), signing.DomainJob); err != nil {
+		// The signer signs both jobs and policies with the same key.
+		if _, err := c.keys.Add(ed25519.PublicKey(pub), signing.DomainJob, signing.DomainPolicy); err != nil {
 			return err
 		}
 	}

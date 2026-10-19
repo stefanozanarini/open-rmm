@@ -23,6 +23,9 @@ func osVersion() string {
 	return ""
 }
 
+// OSFamily is "unknown" on Linux: there is no reliable client/server marker.
+func OSFamily() string { return "unknown" }
+
 func machineID() string {
 	b, err := os.ReadFile("/etc/machine-id")
 	if err != nil {

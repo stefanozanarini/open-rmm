@@ -10,6 +10,22 @@ option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv
 // signer verifies it on its own before signing.
 service SignerService {
   rpc SignJob(SignJobRequest) returns (SignJobResponse);
+  // SignPolicy signs a policy document approved by an operator with a fresh
+  // MFA sign-in whose nonce is the document's fingerprint.
+  rpc SignPolicy(SignPolicyRequest) returns (SignPolicyResponse);
+}
+
+message SignPolicyRequest {
+  string tenant_id = 1;
+  // Canonical policy document (JSON) exactly as approved.
+  bytes policy_json = 2;
+  string id_token = 3;
+}
+
+message SignPolicyResponse {
+  // Serialized SignedEnvelope carrying policy_json.
+  bytes envelope = 1;
+  string operator = 2;
 }
 
 // JobRequest is what the operator approves. Its canonical hash is embedded in

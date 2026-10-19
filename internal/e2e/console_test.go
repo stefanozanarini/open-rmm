@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"html"
 	"io"
@@ -39,6 +40,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/web"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
+	"github.com/stefanozanarini/open-rmm/internal/policy"
 	"github.com/stefanozanarini/open-rmm/internal/signing"
 )
 
@@ -134,14 +136,15 @@ func (p *fakeIdP) signIn(u opIdentity) {
 }
 
 type consoleEnv struct {
-	store   *store.Memory
-	idp     *fakeIdP
-	console *httptest.Server
-	signer  openrmmv1.SignerServiceClient
-	jobKeys *signing.Keyring
-	tenant  string
-	agentID string
-	module  *modules.Verified
+	jobSigner *signing.Signer
+	store     *store.Memory
+	idp       *fakeIdP
+	console   *httptest.Server
+	signer    openrmmv1.SignerServiceClient
+	jobKeys   *signing.Keyring
+	tenant    string
+	agentID   string
+	module    *modules.Verified
 }
 
 var admin = opIdentity{OID: ids.NewUUID(), Name: "Mario Rossi", Username: "mario@cliente.it",
@@ -202,7 +205,7 @@ func startConsole(t *testing.T) *consoleEnv {
 	st.CreateAgent(ctx, store.Agent{TenantID: tenant, ID: agentID, Status: store.AgentPending,
 		Host:            store.HostInfo{Hostname: "pc01", OS: "linux", Arch: "amd64", OSVersion: "Ubuntu"},
 		CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)})
-	e := &consoleEnv{store: st, idp: idp, console: console, signer: sc, tenant: tenant, agentID: agentID}
+	e := &consoleEnv{store: st, idp: idp, console: console, signer: sc, tenant: tenant, agentID: agentID, jobSigner: jobSigner}
 	e.jobKeys = signing.NewKeyring()
 	pub, _ := signing.ParsePublicKey(pubKey(jobSigner))
 	e.jobKeys.Add(pub, signing.DomainJob)
@@ -515,5 +518,89 @@ func TestOriginHeaderChecked(t *testing.T) {
 	// What a browser sends with Referrer-Policy: same-origin.
 	if code := do(e.console.URL); code != http.StatusOK {
 		t.Fatalf("own origin: %d", code)
+	}
+}
+
+func (e *consoleEnv) jobSignerOf(*testing.T) *signing.Signer { return e.jobSigner }
+
+func TestConsoleCreatesPolicyWithStepUp(t *testing.T) {
+	e := startConsole(t)
+	c, csrf := e.login(t, admin)
+	rules := `[{"id":"info","module":"sysinfo","version":"1.0.0","action":"info","every":"6h",
+	  "when":{"any":[{"service_exists":"ds_agent"},{"os_family":"server"}]}}]`
+	code, body, final := post(t, c, e.console.URL+"/policies", url.Values{"csrf": {csrf}, "name": {"Baseline"},
+		"applies_to": {"servers"}, "rules": {rules}})
+	if code != 200 || final.Path != "/policies" || !strings.Contains(body, "Baseline") {
+		t.Fatalf("save policy: %d at %s: %s", code, final, body)
+	}
+	e.idp.mu.Lock()
+	nonce := e.idp.lastAuth.Get("nonce")
+	e.idp.mu.Unlock()
+	if !strings.HasPrefix(nonce, "policy.") {
+		t.Fatalf("policy approval nonce = %q", nonce)
+	}
+	cur, _ := e.store.CurrentPolicies(context.Background(), e.tenant)
+	if len(cur) != 1 || cur[0].Version != 1 || cur[0].AppliesTo != "servers" {
+		t.Fatalf("stored policies = %+v", cur)
+	}
+	p, err := policy.Parse(cur[0].Document)
+	if err != nil || p.Rules[0].ModuleSHA256 != hex.EncodeToString(e.module.ManifestHash) || p.Rules[0].EverySeconds != 6*3600 {
+		t.Fatalf("policy document %+v: %v", p, err)
+	}
+	// Editing creates version 2 of the same policy.
+	code, _, _ = post(t, c, e.console.URL+"/policies", url.Values{"csrf": {csrf}, "id": {p.ID}, "name": {"Baseline"},
+		"applies_to": {"all"}, "rules": {rules}})
+	if cur, _ = e.store.CurrentPolicies(context.Background(), e.tenant); code != 200 || cur[0].Version != 2 {
+		t.Fatalf("edit: %d, %+v", code, cur)
+	}
+	// Deleting hides it.
+	post(t, c, e.console.URL+"/policies/"+p.ID+"/delete", url.Values{"csrf": {csrf}})
+	if cur, _ = e.store.CurrentPolicies(context.Background(), e.tenant); len(cur) != 0 {
+		t.Fatal("policy not deleted")
+	}
+}
+
+func TestConsoleRefusesAdHocModulesInPolicies(t *testing.T) {
+	e := startConsole(t)
+	publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "script"))
+	c, csrf := e.login(t, admin)
+	code, body, _ := post(t, c, e.console.URL+"/policies", url.Values{"csrf": {csrf}, "name": {"Bad"}, "applies_to": {"all"},
+		"rules": {`[{"id":"s","module":"script","version":"1.0.0","action":"run","every":"1h"}]`}})
+	if code != 200 || !strings.Contains(html.UnescapeString(body), "non possono stare in una policy") {
+		t.Fatalf("ad-hoc module accepted in a policy form: %d", code)
+	}
+	if cur, _ := e.store.CurrentPolicies(context.Background(), e.tenant); len(cur) != 0 {
+		t.Fatal("policy stored")
+	}
+}
+
+func TestOperatorCannotEditPolicies(t *testing.T) {
+	e := startConsole(t)
+	op := admin
+	op.OID, op.Roles = ids.NewUUID(), []string{authn.RoleOperator}
+	c, csrf := e.login(t, op)
+	if code, _ := get(t, c, e.console.URL+"/policies/new"); code != http.StatusForbidden {
+		t.Fatalf("operator opened the policy editor: %d", code)
+	}
+	if code, _, _ := post(t, c, e.console.URL+"/policies", url.Values{"csrf": {csrf}, "name": {"x"}, "applies_to": {"all"}, "rules": {"[]"}}); code != http.StatusForbidden {
+		t.Fatalf("operator saved a policy: %d", code)
+	}
+}
+
+// The callback must report a signer refusal without crashing (it runs
+// outside the authenticated middleware).
+func TestRefusedStepUpShowsMessage(t *testing.T) {
+	e := startConsole(t)
+	e.store.ApproveAgent(context.Background(), e.tenant, e.agentID, "t", time.Now())
+	noMFA := admin
+	c, csrf := e.login(t, admin)
+	noMFA.AMR = []string{"pwd", "mfa"}
+	// The step-up is done by an operator whose role was removed meanwhile.
+	noMFA.Roles = []string{authn.RoleReader}
+	e.idp.signIn(noMFA)
+	code, body, final := post(t, c, e.console.URL+"/agents/"+e.agentID+"/jobs",
+		url.Values{"csrf": {csrf}, "target": {"sysinfo|1.0.0|info"}, "ttl_minutes": {"60"}})
+	if code != 200 || final.Path != "/agents/"+e.agentID || !strings.Contains(html.UnescapeString(body), "rifiutato") {
+		t.Fatalf("refused step-up: %d at %s", code, final)
 	}
 }
