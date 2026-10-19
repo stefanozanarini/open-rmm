@@ -1,7 +1,7 @@
 {
   "id": "firmware",
-  "version": "1.0.0",
-  "description": "BIOS, firmware and driver updates with the vendor tools: Dell Command Update and Lenovo System Update. Other vendors are reported as not supported.",
+  "version": "1.1.0",
+  "description": "BIOS, firmware and driver updates with the vendor tools: Dell Command Update, Lenovo System Update and HP Image Assistant. Other vendors are reported as not supported.",
   "protocol_version": 1,
   "entrypoints": {
     "windows/amd64": { "type": "powershell", "path": "Main.ps1" }

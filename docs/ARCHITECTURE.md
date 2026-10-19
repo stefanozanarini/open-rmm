@@ -388,11 +388,11 @@ The installation type is also sent by the core on connect (one field), so the co
 
 ### 8.8 Firmware ✅
 
-`firmware` uses the vendor tools, which know the right packages for each model: **Dell Command Update** (`dcu-cli`, report XML) and **Lenovo System Update** (`tvsu /CM`, results exported to WMI). Other vendors (Acer) are reported as not supported; Windows Update drivers remain with `winupdate`. The tools are distributed from the package library.
+`firmware` uses the vendor tools, which know the right packages for each model: **Dell Command Update** (`dcu-cli`, report XML), **Lenovo System Update** (`tvsu /CM`, results exported to WMI) and **HP Image Assistant** (`/Operation:Analyze`, JSON report; business models, consumer models reported as not supported). Other vendors (Acer) are reported as not supported; Windows Update drivers remain with `winupdate`. The tools are distributed from the package library.
 
 - `scan` runs from the baseline policy; reports go to the Patch dashboard (counts, BIOS pending) and to the agent's Patch tab, with checks.
 - `install` needs an operator's MFA approval (or a signed policy rule), by type (firmware, driver, vendor applications); **BIOS only when explicitly included**, and only on mains power with at least 50% battery; BitLocker is suspended for one reboot before a BIOS update. Never reboots: the reboot is recorded for `reboot` (maintenance windows).
-- 📋 To validate on real Dell and Lenovo endpoints (DCU exit codes and report format, System Update WMI class). Later: BIOS password support, check that the BitLocker recovery key is escrowed before a BIOS update.
+- 📋 To validate on real Dell, Lenovo and HP endpoints (DCU exit codes and report format, System Update WMI class, HPIA report fields and exit codes). Later: BIOS password support, check that the BitLocker recovery key is escrowed before a BIOS update.
 
 ### 8.9 `reboot` ✅
 
@@ -551,7 +551,7 @@ The console matches computers and agents by host name and shows:
 | 6 | Package library, winget catalog on the console, `software` (install/uninstall), multi-agent approval | ✅ |
 | 7 | Console layout (site and OU tree, tabs, bottom panel, bulk actions, notes, themes); setup checklist, Authenticode signing, optional Active Directory | ✅ |
 | 8 | Federation with full central operations | ✅ |
-| 9 | `firmware`: BIOS, firmware and drivers through Dell Command Update and Lenovo System Update, in the Patch dashboard | ✅ (to be validated on real endpoints) |
+| 9 | `firmware`: BIOS, firmware and drivers through Dell Command Update, Lenovo System Update and HP Image Assistant, in the Patch dashboard | ✅ (to be validated on real endpoints) |
 | 10 | Interactive shell: MFA per session, opt-in local policy, ConPTY, xterm.js, every line audited | ✅ (to be validated on real Windows) |
 | Later | Further plugins (§8.10), Linux agent packages | 📋 |
 

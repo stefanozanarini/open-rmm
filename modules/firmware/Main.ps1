@@ -3,6 +3,7 @@
 #
 #   Dell    Dell Command Update (dcu-cli.exe), winget id Dell.CommandUpdate
 #   Lenovo  Lenovo System Update (tvsu.exe), winget id Lenovo.SystemUpdate
+#   HP      HP Image Assistant (HPImageAssistant.exe), business models only
 #
 # The tools are not installed by this module: distribute them from the
 # Software page. Nothing here reboots: a needed reboot is recorded for the
@@ -14,7 +15,8 @@
 #            "severity": "all" | "recommended" | "critical" }
 #
 # Tool paths and arguments can be overridden for validation on real
-# endpoints: { "dcu_path": "...", "tvsu_path": "...", "lenovo_wmi_class": "..." }
+# endpoints: { "dcu_path": "...", "tvsu_path": "...", "lenovo_wmi_class": "...",
+#              "hpia_path": "..." }
 Import-Module (Join-Path $PSScriptRoot '_sdk/OpenRmm.psm1')
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +40,7 @@ function Get-Vendor {
     switch -Regex ($m) {
         '^\s*Dell' { return 'dell' }
         '^\s*LENOVO' { return 'lenovo' }
+        '^\s*(HP|Hewlett)' { return 'hp' }
         default { return $m.Trim() }
     }
 }
@@ -171,6 +174,75 @@ function Install-Lenovo([string]$Tvsu, [string[]]$Types, [string]$Severity) {
     @{ exit_code = $code; reboot = ($Types -contains 'bios') -or ($Types -contains 'firmware') }
 }
 
+# ---- HP ----
+
+function Get-HpiaPath($Params) {
+    Find-Tool @((Get-Prop $Params 'hpia_path'),
+        (Join-Path $env:ProgramFiles 'HP\HPIA\HPImageAssistant.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'HP\HPIA\HPImageAssistant.exe'),
+        (Join-Path $env:ProgramFiles 'HPImageAssistant\HPImageAssistant.exe'),
+        (Join-Path $env:SystemDrive 'HPIA\HPImageAssistant.exe'))
+}
+
+# HP Image Assistant categories and selections.
+$HpCategories = @{ bios = 'BIOS'; driver = 'Drivers'; firmware = 'Firmware'; application = 'Software' }
+
+# Exit codes: 0 done, 256/257 nothing to do, 3010 reboot needed, 3020 some
+# packages failed, 4096 platform not supported.
+function Invoke-Hpia([string]$Hpia, [string[]]$Arguments) {
+    $p = Start-Process -FilePath $Hpia -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
+    $p.ExitCode
+}
+
+function Read-HpiaReport([string]$Dir) {
+    $file = Get-ChildItem -Path $Dir -Filter '*.json' -Recurse -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $file) { return @() }
+    $json = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+    $recs = @(Get-Prop (Get-Prop $json 'HPIA') 'Recommendations' @())
+    $list = @()
+    foreach ($r in $recs) {
+        $sp = Get-Prop $r 'SoftPaq'
+        $component = "$(Get-Prop $r 'Category' '') $(Get-Prop $r 'TargetComponent' '')"
+        $category = switch -Regex ($component) {
+            'bios' { 'bios' }
+            'firmware' { 'firmware' }
+            'software|application|accessor' { 'application' }
+            default { 'driver' }
+        }
+        $list += @{
+            id       = [string](Get-Prop $sp 'Id' '')
+            title    = [string](Get-Prop $sp 'Name' (Get-Prop $r 'TargetComponent' ''))
+            version  = [string](Get-Prop $sp 'Version' (Get-Prop $r 'ReferenceVersion' ''))
+            category = $category
+            severity = ConvertTo-Severity ([string](Get-Prop $r 'RecommendationValue' ''))
+            released = ConvertTo-IsoDate ([string](Get-Prop $sp 'ReleaseDate' ''))
+        }
+    }
+    $list
+}
+
+function Get-HpUpdates([string]$Hpia) {
+    $dir = Join-Path $env:OPENRMM_WORK_DIR 'hpia-report'
+    [void](New-Item -ItemType Directory -Path $dir -Force)
+    $code = Invoke-Hpia $Hpia @('/Operation:Analyze', '/Action:List', '/Category:All', '/Selection:All', '/Silent', "/ReportFolder:$dir")
+    if ($code -eq 4096) { return $null }
+    if ($code -notin 0, 256, 257, 3010) { throw "HP Image Assistant analysis failed with exit code $code" }
+    @(Read-HpiaReport $dir)
+}
+
+function Install-Hp([string]$Hpia, [string[]]$Types, [string]$Severity) {
+    $dir = Join-Path $env:OPENRMM_WORK_DIR 'hpia-report'
+    $dl = Join-Path $env:OPENRMM_WORK_DIR 'hpia-softpaqs'
+    [void](New-Item -ItemType Directory -Path $dir, $dl -Force)
+    $cats = (@($Types | ForEach-Object { $HpCategories[$_] } | Where-Object { $_ }) -join ',')
+    $sel = switch ($Severity) { 'critical' { 'Critical' } 'recommended' { 'Recommended' } default { 'All' } }
+    $code = Invoke-Hpia $Hpia @('/Operation:Analyze', '/Action:Install', "/Category:$cats", "/Selection:$sel", '/Silent',
+        "/ReportFolder:$dir", "/SoftpaqDownloadFolder:$dl")
+    if ($code -notin 0, 256, 257, 3010, 3020) { throw "HP Image Assistant install failed with exit code $code" }
+    if ($code -eq 3020) { Send-RmmLog 'HP Image Assistant: some packages failed to install' 'warn' }
+    @{ exit_code = $code; reboot = ($code -eq 3010) -or ($Types -contains 'bios') }
+}
+
 # ---- common ----
 
 # A BIOS update on battery can leave the PC unbootable: laptops must be on
@@ -220,6 +292,21 @@ function New-Report($Params) {
             $report.supported, $report.tool = $true, 'Lenovo System Update'
             $report.updates = @(Get-LenovoUpdates $tvsu (Get-Prop $Params 'lenovo_wmi_class' 'Lenovo_Updates'))
         }
+        'hp' {
+            $hpia = Get-HpiaPath $Params
+            if (-not $hpia) {
+                $report.tool_missing = 'HP Image Assistant'
+                $report.checks = @(@{ id = 'firmware'; status = 'warning'; summary = 'HP Image Assistant non installato: distribuiscilo dalla pagina Software' })
+                return $report
+            }
+            $updates = Get-HpUpdates $hpia
+            if ($null -eq $updates) {
+                $report.checks = @(@{ id = 'firmware'; status = 'ok'; summary = 'Modello HP non supportato da HP Image Assistant' })
+                return $report
+            }
+            $report.supported, $report.tool = $true, 'HP Image Assistant'
+            $report.updates = @($updates)
+        }
         default {
             $report.checks = @(@{ id = 'firmware'; status = 'ok'; summary = "Produttore $vendor non supportato per gli aggiornamenti firmware" })
             return $report
@@ -258,7 +345,7 @@ Invoke-RmmModule @{
             if ($why) { throw "BIOS update refused: $why" }
         }
         $suspended = $false
-        if ($types -contains 'bios' -and $vendor -eq 'lenovo') { $suspended = Suspend-BitLockerOnce }
+        if ($types -contains 'bios' -and $vendor -in 'lenovo', 'hp') { $suspended = Suspend-BitLockerOnce }
         Send-RmmProgress 10 "installing $($types -join ', ')"
         $r = switch ($vendor) {
             'dell' {
@@ -270,6 +357,11 @@ Invoke-RmmModule @{
                 $tvsu = Get-TvsuPath $Params
                 if (-not $tvsu) { throw 'Lenovo System Update is not installed' }
                 Install-Lenovo $tvsu $types $severity
+            }
+            'hp' {
+                $hpia = Get-HpiaPath $Params
+                if (-not $hpia) { throw 'HP Image Assistant is not installed' }
+                Install-Hp $hpia $types $severity
             }
             default { throw "vendor $vendor is not supported" }
         }
