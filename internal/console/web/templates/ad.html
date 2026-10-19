@@ -1,41 +1,41 @@
 {{define "content"}}
 {{with .Data}}
 {{if not .Domains}}
-<p>Nessun dato da Active Directory. Per attivare il confronto:</p>
+<p>{{t "Nessun dato da Active Directory. Per attivare il confronto:"}}</p>
 <ol>
-  <li>pubblica il modulo <code>adinventory</code> (Moduli);</li>
-  <li>aggiungi a una policy una regola <code>adinventory</code> · <code>collect</code> ogni 24 ore, eseguita sui soli domain controller con la condizione <code>{"service_exists": "NTDS"}</code> (o su un altro server membro del dominio).</li>
+  <li>{{th "pubblica il modulo <code>adinventory</code> (Moduli);"}}</li>
+  <li>{{th "aggiungi a una policy una regola <code>adinventory</code> · <code>collect</code> ogni 24 ore, eseguita sui soli domain controller con la condizione <code>{\"service_exists\": \"NTDS\"}</code> (o su un altro server membro del dominio)."}}</li>
 </ol>
-<p class="muted">Il modulo legge la directory con l'account computer dell'endpoint: la console non conserva credenziali di AD.</p>
+<p class="muted">{{t "Il modulo legge la directory con l'account computer dell'endpoint: la console non conserva credenziali di AD."}}</p>
 {{end}}
 {{range .Domains}}
 <h2>{{.Domain}}</h2>
-<p class="muted">Rilevato {{fmtTime .CollectedAt}}{{with .Agent}} da {{.}}{{end}}.{{if .Truncated}} <strong>Elenco troncato</strong>: il dominio ha più computer di quanti ne legga il modulo.{{end}}</p>
+<p class="muted">{{tf "Rilevato %s" (fmtTime .CollectedAt)}}{{with .Agent}} {{tf "da %s" .}}{{end}}.{{if .Truncated}} {{th "<strong>Elenco troncato</strong>: il dominio ha più computer di quanti ne legga il modulo."}}{{end}}</p>
 <div class="cards">
-  <div class="card"><span class="num">{{.Total}}</span>oggetti computer</div>
-  <div class="card"><span class="num">{{.Enabled}}</span>abilitati</div>
-  <div class="card"><span class="num">{{.WithAgent}}</span>con agente</div>
-  <div class="card{{if .WithoutAgent}} warn{{end}}"><span class="num">{{len .WithoutAgent}}</span>attivi senza agente</div>
-  <div class="card{{if .Stale}} warn{{end}}"><span class="num">{{len .Stale}}</span>obsoleti (oltre 90 giorni)</div>
+  <div class="card"><span class="num">{{.Total}}</span>{{t "oggetti computer"}}</div>
+  <div class="card"><span class="num">{{.Enabled}}</span>{{t "abilitati"}}</div>
+  <div class="card"><span class="num">{{.WithAgent}}</span>{{t "con agente"}}</div>
+  <div class="card{{if .WithoutAgent}} warn{{end}}"><span class="num">{{len .WithoutAgent}}</span>{{t "attivi senza agente"}}</div>
+  <div class="card{{if .Stale}} warn{{end}}"><span class="num">{{len .Stale}}</span>{{t "obsoleti (oltre 90 giorni)"}}</div>
 </div>
-<h3>Computer attivi senza agente</h3>
-<p class="muted">Abilitati e con un accesso al dominio negli ultimi 30 giorni, ma senza open-rmm: verifica che ricevano la GPO di installazione.</p>
+<h3>{{t "Computer attivi senza agente"}}</h3>
+<p class="muted">{{t "Abilitati e con un accesso al dominio negli ultimi 30 giorni, ma senza open-rmm: verifica che ricevano la GPO di installazione."}}</p>
 {{if .WithoutAgent}}
-<table><thead><tr><th>Nome</th><th>OU</th><th>Sistema</th><th>Ultimo accesso</th></tr></thead><tbody>
+<table><thead><tr><th>{{t "Nome"}}</th><th>OU</th><th>{{t "Sistema"}}</th><th>{{t "Ultimo accesso"}}</th></tr></thead><tbody>
 {{range .WithoutAgent}}<tr><td>{{.Name}}</td><td>{{.OU}}</td><td>{{.OS}} {{.OSVersion}}</td><td>{{fmtTime .LastLogon}}</td></tr>{{end}}
 </tbody></table>
-{{else}}<p>Nessuno.</p>{{end}}
-<h3>Oggetti obsoleti</h3>
-<p class="muted">Abilitati ma senza accessi al dominio da oltre 90 giorni: probabilmente dismessi. Valuta di disabilitarli o rimuoverli da AD.</p>
+{{else}}<p>{{t "Nessuno."}}</p>{{end}}
+<h3>{{t "Oggetti obsoleti"}}</h3>
+<p class="muted">{{t "Abilitati ma senza accessi al dominio da oltre 90 giorni: probabilmente dismessi. Valuta di disabilitarli o rimuoverli da AD."}}</p>
 {{if .Stale}}
-<table><thead><tr><th>Nome</th><th>OU</th><th>Sistema</th><th>Inattivo da</th></tr></thead><tbody>
-{{range .Stale}}<tr><td>{{.Name}}</td><td>{{.OU}}</td><td>{{.OS}}</td><td>{{with .IdleDays $.Data.Now}}{{if ge . 0}}{{.}} giorni{{else}}mai{{end}}{{end}}</td></tr>{{end}}
+<table><thead><tr><th>{{t "Nome"}}</th><th>OU</th><th>{{t "Sistema"}}</th><th>{{t "Inattivo da"}}</th></tr></thead><tbody>
+{{range .Stale}}<tr><td>{{.Name}}</td><td>{{.OU}}</td><td>{{.OS}}</td><td>{{with .IdleDays $.Data.Now}}{{if ge . 0}}{{tf "%d giorni" .}}{{else}}{{t "mai"}}{{end}}{{end}}</td></tr>{{end}}
 </tbody></table>
-{{else}}<p>Nessuno.</p>{{end}}
+{{else}}<p>{{t "Nessuno."}}</p>{{end}}
 {{end}}
 {{if .AgentsOutside}}
-<h2>Agenti Windows non presenti in AD</h2>
-<p class="muted">PC in workgroup, di un altro dominio, o con un nome diverso da quello dell'oggetto computer.</p>
+<h2>{{t "Agenti Windows non presenti in AD"}}</h2>
+<p class="muted">{{t "PC in workgroup, di un altro dominio, o con un nome diverso da quello dell'oggetto computer."}}</p>
 <ul>{{range .AgentsOutside}}<li><a href="/agents/{{.ID}}">{{.Host.Hostname}}</a></li>{{end}}</ul>
 {{end}}
 {{end}}

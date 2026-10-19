@@ -1,18 +1,18 @@
 {{define "agent-facts"}}
 {{with .Data}}
 <dl class="facts">
-  <dt>Stato</dt><dd><span class="badge {{.Agent.Status}}">{{label .Agent.Status}}</span> {{if .Online}}<span class="badge online">online</span>{{end}}</dd>
-  <dt>Sistema</dt><dd>{{.Agent.Host.OSVersion}} ({{.Agent.Host.OS}}/{{.Agent.Host.Arch}}, {{label .Agent.Host.OSFamily}})</dd>
-  <dt>Versione agente</dt><dd>{{.Agent.Host.AgentVersion}}</dd>
-  <dt>Ultimo contatto</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} da {{.}}{{end}}</dd>
-  {{with .AD}}<dt>Active Directory</dt><dd>{{.Domain}}{{with .OU}} · <a href="/agents{{qs "ou" $.Data.AD.Key}}">{{.}}</a>{{end}}{{if not .Enabled}} <span class="badge chk-failing">account disabilitato</span>{{end}}{{with .LastLogon}} · ultimo accesso al dominio {{fmtTime .}}{{end}}</dd>{{end}}
-  <dt>Registrato</dt><dd>{{fmtTime .Agent.EnrolledAt}}</dd>
-  <dt>Approvato</dt><dd>{{fmtTime .Agent.ApprovedAt}} {{.Agent.ApprovedBy}}</dd>
-  <dt>Anello aggiornamenti</dt><dd>{{.Agent.UpdateRing}}</dd>
-  <dt>Ultimo aggiornamento</dt><dd>{{if .Agent.Update.State}}<span class="badge {{.Agent.Update.State}}">{{label .Agent.Update.State}}</span> {{.Agent.Update.Version}} · {{fmtTime .Agent.Update.At}}{{with .Agent.Update.Error}}<br><span class="muted">{{.}}</span>{{end}}{{else}}-{{end}}</dd>
-  <dt>Certificato valido fino a</dt><dd>{{fmtTime .Agent.CertNotAfter}}</dd>
-  <dt>ID agente</dt><dd><code>{{.Agent.ID}}</code></dd>
-  <dt>ID macchina</dt><dd><code>{{.Agent.Host.MachineID}}</code></dd>
+  <dt>{{t "Stato"}}</dt><dd><span class="badge {{.Agent.Status}}">{{label .Agent.Status}}</span> {{if .Online}}<span class="badge online">online</span>{{end}}</dd>
+  <dt>{{t "Sistema"}}</dt><dd>{{.Agent.Host.OSVersion}} ({{.Agent.Host.OS}}/{{.Agent.Host.Arch}}, {{label .Agent.Host.OSFamily}})</dd>
+  <dt>{{t "Versione agente"}}</dt><dd>{{.Agent.Host.AgentVersion}}</dd>
+  <dt>{{t "Ultimo contatto"}}</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} {{tf "da %v" .}}{{end}}</dd>
+  {{with .AD}}<dt>Active Directory</dt><dd>{{.Domain}}{{with .OU}} · <a href="/agents{{qs "ou" $.Data.AD.Key}}">{{.}}</a>{{end}}{{if not .Enabled}} <span class="badge chk-failing">{{t "account disabilitato"}}</span>{{end}}{{with .LastLogon}} · {{tf "ultimo accesso al dominio %s" (fmtTime .)}}{{end}}</dd>{{end}}
+  <dt>{{t "Registrato"}}</dt><dd>{{fmtTime .Agent.EnrolledAt}}</dd>
+  <dt>{{t "Approvato"}}</dt><dd>{{fmtTime .Agent.ApprovedAt}} {{.Agent.ApprovedBy}}</dd>
+  <dt>{{t "Anello aggiornamenti"}}</dt><dd>{{.Agent.UpdateRing}}</dd>
+  <dt>{{t "Ultimo aggiornamento"}}</dt><dd>{{if .Agent.Update.State}}<span class="badge {{.Agent.Update.State}}">{{label .Agent.Update.State}}</span> {{.Agent.Update.Version}} · {{fmtTime .Agent.Update.At}}{{with .Agent.Update.Error}}<br><span class="muted">{{.}}</span>{{end}}{{else}}-{{end}}</dd>
+  <dt>{{t "Certificato valido fino a"}}</dt><dd>{{fmtTime .Agent.CertNotAfter}}</dd>
+  <dt>{{t "ID agente"}}</dt><dd><code>{{.Agent.ID}}</code></dd>
+  <dt>{{t "ID macchina"}}</dt><dd><code>{{.Agent.Host.MachineID}}</code></dd>
 </dl>
 {{end}}
 
@@ -21,13 +21,13 @@
 {{if eq .Data.Agent.Status "pending"}}
 <form method="post" action="/agents/{{.Data.Agent.ID}}/approve" class="inline">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <button class="primary">Approva</button>
+  <button class="primary">{{t "Approva"}}</button>
 </form>
 {{end}}
 {{if ne .Data.Agent.Status "revoked"}}
 <form method="post" action="/agents/{{.Data.Agent.ID}}/revoke" class="inline">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <button class="danger">Revoca</button>
+  <button class="danger">{{t "Revoca"}}</button>
 </form>
 {{end}}
 </div>
@@ -36,71 +36,71 @@
 
 {{define "agent-alerts"}}
 {{if .Data.Alerts}}
-<h2>Avvisi aperti</h2>
+<h2>{{t "Avvisi aperti"}}</h2>
 {{template "agentalerts" (alertCtx . .Data.Alerts (printf "/agents/%s" .Data.Agent.ID))}}
 {{end}}
 {{end}}
 
 {{define "agent-checks"}}
-<h2>Controlli</h2>
+<h2>{{t "Controlli"}}</h2>
 {{if .Data.Checks}}
 <table>
-<thead><tr><th>Controllo</th><th>Stato</th><th>Dettaglio</th><th>Aggiornato</th></tr></thead>
+<thead><tr><th>{{t "Controllo"}}</th><th>{{t "Stato"}}</th><th>{{t "Dettaglio"}}</th><th>{{t "Aggiornato"}}</th></tr></thead>
 <tbody>{{range .Data.Checks}}<tr><td>{{.CheckID}}</td><td><span class="badge chk-{{.Status}}">{{label .Status}}</span></td><td>{{.Summary}}</td><td>{{fmtTime .UpdatedAt}}</td></tr>{{end}}</tbody>
 </table>
-{{else}}<p class="muted">Nessun controllo. I controlli arrivano dai moduli eseguiti dalle policy (ad esempio <code>trendmicro</code> e <code>protection-status</code>).</p>{{end}}
+{{else}}<p class="muted">{{th "Nessun controllo. I controlli arrivano dai moduli eseguiti dalle policy (ad esempio <code>trendmicro</code> e <code>protection-status</code>)."}}</p>{{end}}
 {{end}}
 
 {{define "agent-updates"}}
-<h2>Aggiornamenti</h2>
+<h2>{{t "Aggiornamenti"}}</h2>
 {{with .Data.Updates}}
 {{with .Windows}}
-<p class="muted">Windows Update verificato il {{fmtTime .ScannedAt}} · gestione: {{label .ManagedBy}}{{if ne .ManagedBy "none"}} (open-rmm osserva soltanto{{with .WSUSServer}}, server {{.}}{{end}}){{end}}{{with .LastSuccess}} · ultima installazione riuscita {{isoDate .}}{{end}}</p>
-{{if .PendingReboot.Required}}<p><span class="badge chk-warning">riavvio in sospeso</span>{{with .PendingReboot.Since}} dal {{isoDate .}}{{end}} <span class="muted">({{range $i, $r := .PendingReboot.Reasons}}{{if $i}}, {{end}}{{label $r}}{{end}})</span></p>{{end}}
+<p class="muted">{{tf "Windows Update verificato il %s" (fmtTime .ScannedAt)}} · {{tf "gestione: %s" (label .ManagedBy)}}{{if ne .ManagedBy "none"}} ({{t "open-rmm osserva soltanto"}}{{with .WSUSServer}}, {{tf "server %s" .}}{{end}}){{end}}{{with .LastSuccess}} · {{tf "ultima installazione riuscita %s" (isoDate .)}}{{end}}</p>
+{{if .PendingReboot.Required}}<p><span class="badge chk-warning">{{t "riavvio in sospeso"}}</span>{{with .PendingReboot.Since}} {{tf "dal %s" (isoDate .)}}{{end}} <span class="muted">({{range $i, $r := .PendingReboot.Reasons}}{{if $i}}, {{end}}{{label $r}}{{end}})</span></p>{{end}}
 {{if .Updates}}
 <table>
-<thead><tr><th>Aggiornamento</th><th>KB</th><th>Tipo</th><th>Uscito</th></tr></thead>
+<thead><tr><th>{{t "Aggiornamento"}}</th><th>KB</th><th>{{t "Tipo"}}</th><th>{{t "Uscito"}}</th></tr></thead>
 <tbody>{{range .Updates}}<tr><td>{{.Title}}</td><td>{{range .KBs}}{{.}} {{end}}</td>
-<td>{{if .Important}}<span class="badge chk-failing">{{if eq .Classification "critical"}}critico{{else}}sicurezza{{end}}</span>{{else}}{{label .Classification}}{{end}}{{with .Severity}} <span class="muted">{{.}}</span>{{end}}</td>
+<td>{{if .Important}}<span class="badge chk-failing">{{if eq .Classification "critical"}}{{t "critico"}}{{else}}{{t "sicurezza"}}{{end}}</span>{{else}}{{label .Classification}}{{end}}{{with .Severity}} <span class="muted">{{.}}</span>{{end}}</td>
 <td>{{isoDate .Released}}</td></tr>{{end}}</tbody>
 </table>
-{{else}}<p><span class="badge chk-ok">aggiornato</span> nessun aggiornamento di Windows mancante.</p>{{end}}
+{{else}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento di Windows mancante."}}</p>{{end}}
 {{end}}
 {{with .Winget}}
-<h3>Applicazioni da aggiornare (winget)</h3>
+<h3>{{t "Applicazioni da aggiornare (winget)"}}</h3>
 {{if .Upgrades}}
 <table>
-<thead><tr><th>Applicazione</th><th>Id</th><th>Installata</th><th>Disponibile</th></tr></thead>
+<thead><tr><th>{{t "Applicazione"}}</th><th>Id</th><th>{{t "Installata"}}</th><th>{{t "Disponibile"}}</th></tr></thead>
 <tbody>{{range .Upgrades}}<tr><td>{{.Name}}</td><td><code>{{.ID}}</code></td><td>{{.Version}}</td><td>{{.Available}}</td></tr>{{end}}</tbody>
 </table>
-{{else}}<p class="muted">Nessuna applicazione da aggiornare (verificato il {{fmtTime .ScannedAt}}).</p>{{end}}
+{{else}}<p class="muted">{{tf "Nessuna applicazione da aggiornare (verificato il %s)." (fmtTime .ScannedAt)}}</p>{{end}}
 {{end}}
-{{if not .HasReport}}<p class="muted">Nessuna verifica. Crea una policy con i moduli <code>winupdate</code> (azione <code>scan</code>) e <code>winget</code> (azione <code>scan</code>).</p>{{end}}
+{{if not .HasReport}}<p class="muted">{{th "Nessuna verifica. Crea una policy con i moduli <code>winupdate</code> (azione <code>scan</code>) e <code>winget</code> (azione <code>scan</code>)."}}</p>{{end}}
 {{end}}
 {{end}}
 
 {{define "agent-inventory"}}
-<h2>Inventario</h2>
+<h2>{{t "Inventario"}}</h2>
 {{with .Data.Inv}}
-<p class="muted">Raccolto il {{fmtTime .CollectedAt}} · ricevuto il {{fmtTime $.Data.InvAt}}</p>
+<p class="muted">{{tf "Raccolto il %s" (fmtTime .CollectedAt)}} · {{tf "ricevuto il %s" (fmtTime $.Data.InvAt)}}</p>
 <div class="grid2">
 <dl class="facts">
-  <dt>Produttore e modello</dt><dd>{{.System.Manufacturer}} {{.System.Model}}{{with .System.SKU}} <span class="muted">({{.}})</span>{{end}}</dd>
-  <dt>Numero di serie</dt><dd>{{with .System.Serial}}<code>{{.}}</code>{{else}}-{{end}}</dd>
-  <dt>Tipo</dt><dd>{{with .System.Chassis}}{{label .}}{{else}}-{{end}}{{if .System.Virtual}} · macchina virtuale{{end}}</dd>
-  <dt>Dominio</dt><dd>{{if .System.PartOfDomain}}{{.System.Domain}}{{else}}non in dominio{{with .System.Domain}} ({{.}}){{end}}{{end}}</dd>
-  <dt>Utente connesso</dt><dd>{{with .OS.LoggedOnUser}}{{.}}{{else}}-{{end}}</dd>
-  <dt>Sistema operativo</dt><dd>{{.OS.Name}} {{.OS.DisplayVersion}} <span class="muted">build {{.OS.Build}} · {{.OS.Architecture}}</span></dd>
-  <dt>Installato il</dt><dd>{{isoDate .OS.InstallDate}}</dd>
-  <dt>Ultimo avvio</dt><dd>{{isoDate .OS.LastBoot}}</dd>
+  <dt>{{t "Produttore e modello"}}</dt><dd>{{.System.Manufacturer}} {{.System.Model}}{{with .System.SKU}} <span class="muted">({{.}})</span>{{end}}</dd>
+  <dt>{{t "Numero di serie"}}</dt><dd>{{with .System.Serial}}<code>{{.}}</code>{{else}}-{{end}}</dd>
+  <dt>{{t "Tipo"}}</dt><dd>{{with .System.Chassis}}{{label .}}{{else}}-{{end}}{{if .System.Virtual}} · {{t "macchina virtuale"}}{{end}}</dd>
+  <dt>{{t "Dominio"}}</dt><dd>{{if .System.PartOfDomain}}{{.System.Domain}}{{else}}{{t "non in dominio"}}{{with .System.Domain}} ({{.}}){{end}}{{end}}</dd>
+  <dt>{{t "Utente connesso"}}</dt><dd>{{with .OS.LoggedOnUser}}{{.}}{{else}}-{{end}}</dd>
+  <dt>{{t "Sistema operativo"}}</dt><dd>{{.OS.Name}} {{.OS.DisplayVersion}} <span class="muted">build {{.OS.Build}} · {{.OS.Architecture}}</span></dd>
+  <dt>{{t "Installato il"}}</dt><dd>{{isoDate .OS.InstallDate}}</dd>
+  <dt>{{t "Ultimo avvio"}}</dt><dd>{{isoDate .OS.LastBoot}}</dd>
 </dl>
 <dl class="facts">
   <dt>BIOS/UEFI</dt><dd>{{.Firmware.Vendor}} {{.Firmware.Version}}{{with .Firmware.Date}} <span class="muted">({{.}})</span>{{end}}</dd>
   <dt>UEFI · Secure Boot</dt><dd>{{yesNo .Firmware.UEFI}} · {{yesNo .Firmware.SecureBoot}}</dd>
-  <dt>TPM</dt><dd>{{if .TPM.Present}}{{.TPM.Version}}{{if not .TPM.Ready}} (non pronto){{end}}{{else}}assente o non rilevato{{end}}</dd>
-  <dt>CPU</dt><dd>{{range .CPUs}}{{.Name}} <span class="muted">({{.Cores}} core, {{.Threads}} thread)</span><br>{{else}}-{{end}}</dd>
-  <dt>Memoria</dt><dd>{{bytes .Memory.TotalBytes}}{{with .Memory.Modules}} <span class="muted">· {{range $i, $m := .}}{{if $i}}, {{end}}{{bytes $m.CapacityByte}}{{with $m.SpeedMHz}} {{.}} MHz{{end}}{{end}}</span>{{end}}</dd>
-  <dt>Assistenza remota</dt><dd>
+  <dt>TPM</dt><dd>{{if .TPM.Present}}{{.TPM.Version}}{{if not .TPM.Ready}} ({{t "non pronto"}}){{end}}{{else}}{{t "assente o non rilevato"}}{{end}}</dd>
+  <dt>CPU</dt><dd>{{range .CPUs}}{{.Name}} <span class="muted">({{tf "%d core, %d thread" .Cores .Threads}})</span><br>{{else}}-{{end}}</dd>
+  <dt>{{t "Memoria"}}</dt><dd>{{bytes .Memory.TotalBytes}}{{with .Memory.Modules}} <span class="muted">· {{range $i, $m := .}}{{if $i}}, {{end}}{{bytes $m.CapacityByte}}{{with $m.SpeedMHz}} {{.}} MHz{{end}}{{end}}</span>{{end}}</dd>
+  <dt>{{t "Assistenza remota"}}</dt><dd>
     {{with .RemoteAccess.SupremoID}}Supremo <code>{{.}}</code><br>{{end}}
     {{with .RemoteAccess.AnyDeskID}}AnyDesk <code>{{.}}</code><br>{{end}}
     {{with .RemoteAccess.TeamViewerID}}TeamViewer <code>{{.}}</code>{{end}}
@@ -108,31 +108,31 @@
 </dl>
 </div>
 
-<h3>Dischi e volumi</h3>
+<h3>{{t "Dischi e volumi"}}</h3>
 <table>
-<thead><tr><th>Disco</th><th>Tipo</th><th>Dimensione</th><th>Stato</th></tr></thead>
+<thead><tr><th>{{t "Disco"}}</th><th>{{t "Tipo"}}</th><th>{{t "Dimensione"}}</th><th>{{t "Stato"}}</th></tr></thead>
 <tbody>{{range .Disks}}<tr><td>{{.Model}}{{with .Serial}} <span class="muted">{{.}}</span>{{end}}</td><td>{{.MediaType}} {{.Bus}}</td><td>{{bytes .SizeBytes}}</td>
 <td>{{if eq .Health "Healthy"}}<span class="badge succeeded">ok</span>{{else if .Health}}<span class="badge failed">{{.Health}}</span>{{else}}-{{end}}</td></tr>{{end}}</tbody>
 </table>
 <table>
-<thead><tr><th>Volume</th><th>File system</th><th>Dimensione</th><th>Libero</th><th>BitLocker</th></tr></thead>
+<thead><tr><th>Volume</th><th>File system</th><th>{{t "Dimensione"}}</th><th>{{t "Libero"}}</th><th>BitLocker</th></tr></thead>
 <tbody>{{range .Volumes}}<tr><td>{{.Mount}} {{.Label}}</td><td>{{.FS}}</td><td>{{bytes .SizeBytes}}</td>
 <td>{{bytes .FreeBytes}} <span class="muted">({{pctFree .FreeBytes .SizeBytes}}%)</span></td>
 <td>{{with .BitLocker}}<span class="badge bl-{{.}}">{{label .}}</span>{{else}}-{{end}}{{with .Encryption}} <span class="muted">{{.}}</span>{{end}}</td></tr>{{end}}</tbody>
 </table>
 
 {{if .Batteries}}
-<h3>Batteria</h3>
+<h3>{{t "Batteria"}}</h3>
 <table>
-<thead><tr><th>Batteria</th><th>Salute</th><th>Capacità (attuale / progetto)</th><th>Cicli</th><th>Carica</th></tr></thead>
+<thead><tr><th>{{t "Batteria"}}</th><th>{{t "Salute"}}</th><th>{{t "Capacità (attuale / progetto)"}}</th><th>{{t "Cicli"}}</th><th>{{t "Carica"}}</th></tr></thead>
 <tbody>{{range .Batteries}}<tr><td>{{.Name}}</td><td>{{if .HealthPercent}}{{if lt .HealthPercent 60}}<span class="badge failed">{{.HealthPercent}}%</span>{{else}}{{.HealthPercent}}%{{end}}{{else}}-{{end}}</td>
 <td>{{.FullChargeCapacity}} / {{.DesignCapacity}} mWh</td><td>{{with .CycleCount}}{{.}}{{else}}-{{end}}</td><td>{{.ChargePercent}}%</td></tr>{{end}}</tbody>
 </table>
 {{end}}
 
-<h3>Rete</h3>
+<h3>{{t "Rete"}}</h3>
 <table>
-<thead><tr><th>Scheda</th><th>MAC</th><th>Indirizzi</th><th>Gateway</th><th>DNS</th></tr></thead>
+<thead><tr><th>{{t "Scheda"}}</th><th>MAC</th><th>{{t "Indirizzi"}}</th><th>Gateway</th><th>DNS</th></tr></thead>
 <tbody>{{range .Network}}<tr><td>{{.Name}}{{if .DHCP}} <span class="muted">DHCP</span>{{end}}</td><td><code>{{.MAC}}</code></td>
 <td>{{range .IPv4}}{{.}}<br>{{end}}{{range .IPv6}}<span class="muted">{{.}}</span><br>{{end}}</td><td>{{range .Gateway}}{{.}}<br>{{end}}</td><td>{{range .DNS}}{{.}}<br>{{end}}</td></tr>{{end}}</tbody>
 </table>
@@ -140,37 +140,37 @@
 {{if .Monitors}}
 <h3>Monitor</h3>
 <table>
-<thead><tr><th>Produttore</th><th>Modello</th><th>Numero di serie</th></tr></thead>
+<thead><tr><th>{{t "Produttore"}}</th><th>{{t "Modello"}}</th><th>{{t "Numero di serie"}}</th></tr></thead>
 <tbody>{{range .Monitors}}<tr><td>{{.Manufacturer}}</td><td>{{.Model}}</td><td>{{.Serial}}</td></tr>{{end}}</tbody>
 </table>
 {{end}}
 
 {{else}}
-<p class="muted">Nessun inventario ricevuto. Crea una policy con il modulo <code>inventory</code> (azione <code>collect</code>), oppure eseguilo come comando.</p>
+<p class="muted">{{th "Nessun inventario ricevuto. Crea una policy con il modulo <code>inventory</code> (azione <code>collect</code>), oppure eseguilo come comando."}}</p>
 {{end}}
 {{end}}
 
 {{define "agent-software"}}
 {{if .Data.Inv}}
-<h3>Software installato ({{len $.Data.Software}})</h3>
+<h3>{{tf "Software installato (%d)" (len $.Data.Software)}}</h3>
 {{if not .Data.Panel}}<details>
-<summary>mostra l'elenco</summary>
+<summary>{{t "mostra l'elenco"}}</summary>
 {{end}}<table>
-<thead><tr><th>Nome</th><th>Versione</th><th>Editore</th><th>Installato</th><th>Ambito</th>{{if $.CanRun}}<th></th>{{end}}</tr></thead>
-<tbody>{{range $.Data.Software}}<tr><td>{{.Name}}</td><td>{{.Version}}{{with index $.Data.Outdated .Name}} <span class="badge chk-warning" title="ultima versione nel catalogo">→ {{.}}</span>{{end}}</td><td>{{.Publisher}}</td><td>{{.InstallDate}}</td><td>{{label .Scope}}{{with .Arch}} {{.}}{{end}}</td>
+<thead><tr><th>{{t "Nome"}}</th><th>{{t "Versione"}}</th><th>{{t "Editore"}}</th><th>{{t "Installato"}}</th><th>{{t "Ambito"}}</th>{{if $.CanRun}}<th></th>{{end}}</tr></thead>
+<tbody>{{range $.Data.Software}}<tr><td>{{.Name}}</td><td>{{.Version}}{{with index $.Data.Outdated .Name}} <span class="badge chk-warning" title="{{t "ultima versione nel catalogo"}}">→ {{.}}</span>{{end}}</td><td>{{.Publisher}}</td><td>{{.InstallDate}}</td><td>{{label .Scope}}{{with .Arch}} {{.}}{{end}}</td>
 {{if $.CanRun}}<td>{{if eq .Scope "machine"}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/uninstall" class="inline">
   <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="name" value="{{.Name}}"><input type="hidden" name="version" value="{{.Version}}">
-  <button class="link">disinstalla</button></form>{{end}}</td>{{end}}</tr>{{end}}</tbody>
+  <button class="link">{{t "disinstalla"}}</button></form>{{end}}</td>{{end}}</tr>{{end}}</tbody>
 </table>
 {{if not .Data.Panel}}</details>{{end}}
-{{else}}<p class="muted">Nessun inventario ricevuto.</p>{{end}}
+{{else}}<p class="muted">{{t "Nessun inventario ricevuto."}}</p>{{end}}
 {{end}}
 
 {{define "agent-changes"}}
 {{if .Data.Changes}}
-<h3>Modifiche rilevate</h3>
+<h3>{{t "Modifiche rilevate"}}</h3>
 <table>
-<thead><tr><th>Quando</th><th>Tipo</th><th>Dettaglio</th></tr></thead>
+<thead><tr><th>{{t "Quando"}}</th><th>{{t "Tipo"}}</th><th>{{t "Dettaglio"}}</th></tr></thead>
 <tbody>{{range .Data.Changes}}<tr><td>{{fmtTime .At}}</td><td>{{label .Kind}}</td><td>{{.Detail}}</td></tr>{{end}}</tbody>
 </table>
 {{end}}
@@ -179,25 +179,25 @@
 {{define "agent-actions"}}
 {{if and .CanRun .Data.Actions}}
 {{$csrf := .CSRF}}{{$id := .Data.Agent.ID}}
-<h2>Esegui un comando</h2>
-<p class="muted">Prima dell'esecuzione ti verrà chiesto di autenticarti di nuovo con Microsoft: l'approvazione vale solo per quel comando.</p>
+<h2>{{t "Esegui un comando"}}</h2>
+<p class="muted">{{t "Prima dell'esecuzione ti verrà chiesto di autenticarti di nuovo con Microsoft: l'approvazione vale solo per quel comando."}}</p>
 {{if .Data.Commands}}
 <form method="post" action="/agents/{{$id}}/jobs" class="stack">
   <input type="hidden" name="csrf" value="{{$csrf}}">
-  <label>Azione
+  <label>{{t "Azione"}}
     <select name="target">
     {{range .Data.Commands}}<option value="{{.Module}}|{{.Version}}|{{.Action}}">{{.Module}} {{.Version}} · {{.Action}}{{if .Description}} — {{.Description}}{{end}}</option>{{end}}
     </select>
   </label>
-  <label>Parametri (JSON, facoltativi)
+  <label>{{t "Parametri (JSON, facoltativi)"}}
     <input name="params" value="{}" spellcheck="false">
   </label>
   {{template "ttl"}}
-  <button class="primary">Approva ed esegui</button>
+  <button class="primary">{{t "Approva ed esegui"}}</button>
 </form>
 {{end}}
 {{range .Data.Scripts}}
-<h3>Script PowerShell</h3>
+<h3>{{t "Script PowerShell"}}</h3>
 <form method="post" action="/agents/{{$id}}/jobs" class="stack">
   <input type="hidden" name="csrf" value="{{$csrf}}">
   <input type="hidden" name="target" value="{{.Module}}|{{.Version}}|{{.Action}}">
@@ -205,8 +205,8 @@
     <textarea name="script" rows="10" spellcheck="false" placeholder="Get-Service | Where-Object Status -eq 'Stopped'"></textarea>
   </label>
   {{template "ttl"}}
-  <p class="muted">Il testo completo dello script viene registrato nel registro attività.</p>
-  <button class="primary">Approva ed esegui lo script</button>
+  <p class="muted">{{t "Il testo completo dello script viene registrato nel registro attività."}}</p>
+  <button class="primary">{{t "Approva ed esegui lo script"}}</button>
 </form>
 {{end}}
 {{end}}
@@ -214,11 +214,11 @@
 
 {{define "agent-logons"}}
 {{if .Data.Logons}}
-<h2>Accessi recenti</h2>
+<h2>{{t "Accessi recenti"}}</h2>
 {{if not .Data.Panel}}<details>
-<summary>ultimi {{len .Data.Logons}} eventi</summary>
+<summary>{{tf "ultimi %d eventi" (len .Data.Logons)}}</summary>
 {{end}}<table>
-<thead><tr><th>Quando</th><th>Evento</th><th>Utente</th><th>Tipo</th><th>Da</th><th>Esito</th></tr></thead>
+<thead><tr><th>{{t "Quando"}}</th><th>{{t "Evento"}}</th><th>{{t "Utente"}}</th><th>{{t "Tipo"}}</th><th>{{t "Da"}}</th><th>{{t "Esito"}}</th></tr></thead>
 <tbody>{{range .Data.Logons}}<tr><td>{{fmtTime .At}}</td><td>{{label .Kind}} <span class="muted">{{.EventID}}</span></td>
 <td>{{if .Domain}}{{.Domain}}\{{end}}{{.User}}</td><td>{{with .LogonType}}{{logonType .}}{{end}}</td>
 <td>{{.SourceIP}}{{with .SourceHost}} <span class="muted">{{.}}</span>{{end}}</td><td>{{.Status}}</td></tr>{{end}}</tbody>
@@ -228,58 +228,58 @@
 {{end}}
 
 {{define "agent-policies"}}
-<h2>Policy</h2>
+<h2>{{t "Policy"}}</h2>
 {{if .Data.Results}}
 <table>
-<thead><tr><th>Policy</th><th>Regola</th><th>Stato</th><th>Ultima esecuzione</th><th>Dettagli</th></tr></thead>
+<thead><tr><th>Policy</th><th>{{t "Regola"}}</th><th>{{t "Stato"}}</th><th>{{t "Ultima esecuzione"}}</th><th>{{t "Dettagli"}}</th></tr></thead>
 <tbody>
 {{range .Data.Results}}<tr>
   <td>{{.Policy}} <span class="muted">v{{.PolicyVersion}}</span></td>
   <td>{{.RuleID}}</td>
   <td><span class="badge {{.State}}">{{label .State}}</span></td>
   <td>{{fmtTime .FinishedAt}}</td>
-  <td>{{if .Error}}<span class="muted">{{.Error}}</span>{{end}}{{if .Pretty}}<details><summary>risultato</summary><pre>{{.Pretty}}</pre></details>{{end}}</td>
+  <td>{{if .Error}}<span class="muted">{{.Error}}</span>{{end}}{{if .Pretty}}<details><summary>{{t "risultato"}}</summary><pre>{{.Pretty}}</pre></details>{{end}}</td>
 </tr>{{end}}
 </tbody>
 </table>
-{{else}}<p class="muted">Nessun risultato di policy.</p>{{end}}
+{{else}}<p class="muted">{{t "Nessun risultato di policy."}}</p>{{end}}
 {{end}}
 
 {{define "agent-jobs"}}
-<h2>Ultimi job</h2>
+<h2>{{t "Ultimi job"}}</h2>
 {{template "jobrows" .Data.Jobs}}
 {{end}}
 
 {{define "agent-notes"}}
-<h2>Note</h2>
+<h2>{{t "Note"}}</h2>
 {{if .CanRun}}
 <form method="post" action="/agents/{{.Data.Agent.ID}}/notes" class="stack">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <input type="hidden" name="return" value="{{.Data.Return}}">
-  <label>Nuova nota <textarea name="body" rows="3" maxlength="4000" required></textarea></label>
-  <button>Aggiungi</button>
+  <label>{{t "Nuova nota"}} <textarea name="body" rows="3" maxlength="4000" required></textarea></label>
+  <button>{{t "Aggiungi"}}</button>
 </form>
 {{end}}
 {{range .Data.Notes}}<div class="note"><p>{{.Body}}</p><p class="muted">{{.Author}} · {{fmtTime .CreatedAt}}</p></div>
-{{else}}<p class="muted">Nessuna nota.</p>{{end}}
+{{else}}<p class="muted">{{t "Nessuna nota."}}</p>{{end}}
 {{end}}
 
 {{define "ttl"}}
-<label>Validità
-  <select name="ttl_minutes"><option value="15">15 minuti</option><option value="60" selected>1 ora</option><option value="480">8 ore</option><option value="1440">24 ore</option></select>
+<label>{{t "Validità"}}
+  <select name="ttl_minutes"><option value="15">{{t "15 minuti"}}</option><option value="60" selected>{{t "1 ora"}}</option><option value="480">{{t "8 ore"}}</option><option value="1440">{{t "24 ore"}}</option></select>
 </label>
 {{end}}
 
 {{define "agentalerts"}}
 <table>
-<thead><tr><th>Gravità</th><th>Avviso</th><th>Volte</th><th>Ultima volta</th><th></th></tr></thead>
+<thead><tr><th>{{t "Gravità"}}</th><th>{{t "Avviso"}}</th><th>{{t "Volte"}}</th><th>{{t "Ultima volta"}}</th><th></th></tr></thead>
 <tbody>
 {{range .Alerts}}<tr>
   <td><span class="badge sev-{{.Severity}}">{{label .Severity}}</span></td>
   <td>{{.Summary}}</td><td>{{.Count}}</td><td>{{fmtTime .LastSeen}}</td>
   <td>{{if $.CanRun}}<form method="post" action="/alerts/{{.ID}}/ack" class="inline">
     <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Return}}">
-    <button>Prendi in carico</button></form>{{end}}</td>
+    <button>{{t "Prendi in carico"}}</button></form>{{end}}</td>
 </tr>{{end}}
 </tbody>
 </table>

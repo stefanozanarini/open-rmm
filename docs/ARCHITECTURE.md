@@ -470,6 +470,7 @@ Implemented ✅: agents (pending/active/revoked, approve, revoke), command and s
 - bottom panel for the selected agent, with tabs **Summary · Checks · Patches · Software · Inventory · Logons · Policies · History · Notes · Commands**; the full agent page stays available;
 - **notes** per agent (author and date, audited);
 - light and dark themes (automatic by default, kept in the session); still server-rendered with no JavaScript, under the same strict CSP.
+- **Italian and English** ✅: a language selector at the top right of the header; the choice is kept in the session, and until the operator chooses, the browser's `Accept-Language` decides (Italian by default, also on the sign-in error pages). Italian is the source text: an English catalog keyed by the Italian strings covers templates, flash and error messages, status labels and date formats, and a test checks that every key has an English entry with the same format verbs.
 
 Planned 📋:
 

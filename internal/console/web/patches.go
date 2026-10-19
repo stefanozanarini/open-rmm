@@ -49,17 +49,17 @@ type patchesData struct {
 func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	agents, err := s.store.ListAgents(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	statuses, err := s.store.ListUpdateStatus(r.Context(), t, "")
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	byAgent := map[string]map[string]store.UpdateStatus{}
@@ -159,7 +159,7 @@ func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 		d.Apps = d.Apps[:30]
 	}
 	title := map[string]string{"": "Patch", "client": "Patch · client", "server": "Patch · server"}[d.Family]
-	s.render(w, r, "patches", title, d)
+	s.render(w, r, "patches", s.T(r, title), d)
 }
 
 // agentUpdates is the update section of the agent page.

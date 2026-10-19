@@ -2,33 +2,33 @@
 {{with .Data}}
 {{if .New}}
 <section class="warn">
-<h2>Nuovo token</h2>
-<p>Copialo ora: <strong>non verrà più mostrato</strong>.</p>
+<h2>{{t "Nuovo token"}}</h2>
+<p>{{th "Copialo ora: <strong>non verrà più mostrato</strong>."}}</p>
 <pre class="token">{{.New}}</pre>
-<p>Utilizzi: {{.NewTok.MaxUses}} · scade il {{fmtTime .NewTok.ExpiresAt}} · approvazione {{if .NewTok.AutoApprove}}automatica{{else}}manuale{{end}}</p>
+<p>{{tf "Utilizzi: %d" .NewTok.MaxUses}} · {{tf "scade il %s" (fmtTime .NewTok.ExpiresAt)}} · {{if .NewTok.AutoApprove}}{{t "approvazione automatica"}}{{else}}{{t "approvazione manuale"}}{{end}}</p>
 </section>
 {{end}}
 {{end}}
-<h2>Crea un token</h2>
+<h2>{{t "Crea un token"}}</h2>
 <form method="post" action="/tokens" class="stack">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <label>Descrizione <input name="description" maxlength="200" placeholder="es. GPO sede principale"></label>
-  <label>Numero massimo di registrazioni <input name="max_uses" type="number" min="1" max="100000" value="1"></label>
-  <label>Validità (giorni) <input name="days" type="number" min="1" max="90" value="1"></label>
-  <label class="check"><input type="checkbox" name="auto_approve"> Approvazione automatica degli agenti registrati con questo token</label>
-  <p class="muted">Lascia l'approvazione automatica disattivata per i token distribuiti via GPO: il registro delle policy è leggibile da tutti gli utenti del dominio.</p>
-  <button class="primary">Crea token</button>
+  <label>{{t "Descrizione"}} <input name="description" maxlength="200" placeholder="{{t "es. GPO sede principale"}}"></label>
+  <label>{{t "Numero massimo di registrazioni"}} <input name="max_uses" type="number" min="1" max="100000" value="1"></label>
+  <label>{{t "Validità (giorni)"}} <input name="days" type="number" min="1" max="90" value="1"></label>
+  <label class="check"><input type="checkbox" name="auto_approve"> {{t "Approvazione automatica degli agenti registrati con questo token"}}</label>
+  <p class="muted">{{t "Lascia l'approvazione automatica disattivata per i token distribuiti via GPO: il registro delle policy è leggibile da tutti gli utenti del dominio."}}</p>
+  <button class="primary">{{t "Crea token"}}</button>
 </form>
-<h2>Token esistenti</h2>
+<h2>{{t "Token esistenti"}}</h2>
 <table>
-<thead><tr><th>Descrizione</th><th>Utilizzi</th><th>Scadenza</th><th>Approvazione</th><th>Stato</th></tr></thead>
+<thead><tr><th>{{t "Descrizione"}}</th><th>{{t "Utilizzi"}}</th><th>{{t "Scadenza"}}</th><th>{{t "Approvazione"}}</th><th>{{t "Stato"}}</th></tr></thead>
 <tbody>
 {{range .Data.Tokens}}<tr>
   <td>{{.Description}}</td>
   <td>{{.Uses}} / {{.MaxUses}}</td>
   <td>{{fmtTime .ExpiresAt}}</td>
-  <td>{{if .AutoApprove}}automatica{{else}}manuale{{end}}</td>
-  <td>{{if .RevokedAt}}revocato{{else if .ExpiresAt.Before $.Data.Now}}scaduto{{else if ge .Uses .MaxUses}}esaurito{{else}}valido{{end}}</td>
+  <td>{{if .AutoApprove}}{{t "automatica"}}{{else}}{{t "manuale"}}{{end}}</td>
+  <td>{{if .RevokedAt}}{{t "revocato"}}{{else if .ExpiresAt.Before $.Data.Now}}{{t "scaduto"}}{{else if ge .Uses .MaxUses}}{{t "esaurito"}}{{else}}{{t "valido"}}{{end}}</td>
 </tr>{{end}}
 </tbody>
 </table>

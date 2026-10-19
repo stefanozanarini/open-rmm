@@ -32,12 +32,12 @@ func (s *Server) handleSelectTenant(w http.ResponseWriter, r *http.Request) {
 	sess := sessionFrom(r.Context())
 	t := r.PostFormValue("tenant")
 	if !slices.Contains(sess.data.Operator.Tenants, t) {
-		http.Error(w, "tenant non autorizzato", http.StatusForbidden)
+		http.Error(w, s.T(r, "tenant non autorizzato"), http.StatusForbidden)
 		return
 	}
 	sess.data.Tenant = t
 	if err := s.save(r.Context(), w, sess); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	http.Redirect(w, r, "/agents", http.StatusSeeOther)
@@ -89,7 +89,7 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.render(w, r, "agent", d.Agent.Host.Hostname, d)
@@ -213,14 +213,14 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	switch err := s.store.ApproveAgent(r.Context(), t, id, "operator:"+op.Username, s.now()); {
 	case errors.Is(err, store.ErrNotPending):
-		s.flash(w, r, "L'agente non è in attesa di approvazione.", "/agents/"+id)
+		s.flash(w, r, s.T(r, "L'agente non è in attesa di approvazione."), "/agents/"+id)
 		return
 	case err != nil:
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "agent.approved", id, map[string]any{"hostname": a.Host.Hostname, "machine_id": a.Host.MachineID})
-	s.flash(w, r, "Agente "+a.Host.Hostname+" approvato.", "/agents/"+id)
+	s.flash(w, r, s.Tf(r, "Agente %s approvato.", a.Host.Hostname), "/agents/"+id)
 }
 
 func (s *Server) handleRevoke(w http.ResponseWriter, r *http.Request) {
@@ -237,11 +237,11 @@ func (s *Server) handleRevoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.SetAgentStatus(r.Context(), t, id, store.AgentRevoked); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "agent.revoked", id, map[string]any{"hostname": a.Host.Hostname})
-	s.flash(w, r, "Agente "+a.Host.Hostname+" revocato.", "/agents/"+id)
+	s.flash(w, r, s.Tf(r, "Agente %s revocato.", a.Host.Hostname), "/agents/"+id)
 }
 
 // handleRunJob validates the form and starts the step-up authentication that
@@ -256,47 +256,47 @@ func (s *Server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 	back := "/agents/" + id
 	a, err := s.store.GetAgent(r.Context(), t, id)
 	if err != nil || a.Status != store.AgentActive {
-		s.flash(w, r, "Solo gli agenti approvati possono ricevere comandi.", back)
+		s.flash(w, r, s.T(r, "Solo gli agenti approvati possono ricevere comandi."), back)
 		return
 	}
 	target := strings.Split(r.PostFormValue("target"), "|")
 	if len(target) != 3 {
-		s.flash(w, r, "Seleziona un'azione.", back)
+		s.flash(w, r, s.T(r, "Seleziona un'azione."), back)
 		return
 	}
 	module, version, action := target[0], target[1], target[2]
 	mod, err := s.store.GetModule(r.Context(), module, version)
 	if err != nil {
-		s.flash(w, r, "Modulo non trovato.", back)
+		s.flash(w, r, s.T(r, "Modulo non trovato."), back)
 		return
 	}
 	man, err := modules.ParseManifest(mod.Manifest)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if _, ok := man.Actions[action]; !ok {
-		s.flash(w, r, "Azione non disponibile.", back)
+		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}
 	params := map[string]any{}
 	if raw := strings.TrimSpace(r.PostFormValue("params")); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &params); err != nil {
-			s.flash(w, r, "I parametri devono essere un oggetto JSON.", back)
+			s.flash(w, r, s.T(r, "I parametri devono essere un oggetto JSON."), back)
 			return
 		}
 	}
 	if man.HasCapability(modules.CapAdHocScript) {
 		script := r.PostFormValue("script")
 		if strings.TrimSpace(script) == "" {
-			s.flash(w, r, "Scrivi lo script da eseguire.", back)
+			s.flash(w, r, s.T(r, "Scrivi lo script da eseguire."), back)
 			return
 		}
 		params["script"] = script
 	}
 	paramsJSON, err := json.Marshal(params)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	ttlMin, err := strconv.Atoi(r.PostFormValue("ttl_minutes"))
@@ -308,7 +308,7 @@ func (s *Server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 		Action: action, ParamsJson: paramsJSON, TtlSeconds: int64(ttlMin) * 60, RequestNonce: jobreq.NewRequestNonce(),
 	}
 	if err := jobreq.Validate(req); err != nil {
-		s.flash(w, r, "Richiesta non valida: "+err.Error(), back)
+		s.flash(w, r, s.Tf(r, "Richiesta non valida: %v", err), back)
 		return
 	}
 	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
@@ -319,15 +319,15 @@ type jobsData struct{ Jobs []store.Job }
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	jobs, err := s.store.ListJobs(r.Context(), t, "", 200)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "jobs", "Job", jobsData{Jobs: jobs})
+	s.render(w, r, "jobs", s.T(r, "Job"), jobsData{Jobs: jobs})
 }
 
 type jobData struct {
@@ -367,7 +367,7 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	a, _ := s.store.GetAgent(r.Context(), t, j.AgentID)
@@ -396,7 +396,7 @@ type moduleView struct {
 func (s *Server) handleModules(w http.ResponseWriter, r *http.Request) {
 	mods, err := s.store.ListModules(r.Context())
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	var d modulesData
@@ -415,7 +415,7 @@ func (s *Server) handleModules(w http.ResponseWriter, r *http.Request) {
 		}
 		d.Modules = append(d.Modules, v)
 	}
-	s.render(w, r, "modules", "Moduli", d)
+	s.render(w, r, "modules", s.T(r, "Moduli"), d)
 }
 
 type tokensData struct {
@@ -428,31 +428,31 @@ type tokensData struct {
 func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	toks, err := s.store.ListEnrollmentTokens(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "tokens", "Token di registrazione", tokensData{Tokens: toks, Now: s.now()})
+	s.render(w, r, "tokens", s.T(r, "Token di registrazione"), tokensData{Tokens: toks, Now: s.now()})
 }
 
 func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	maxUses, err := strconv.Atoi(r.PostFormValue("max_uses"))
 	if err != nil || maxUses < 1 || maxUses > 100000 {
-		s.flash(w, r, "Numero di utilizzi non valido (1-100000).", "/tokens")
+		s.flash(w, r, s.T(r, "Numero di utilizzi non valido (1-100000)."), "/tokens")
 		return
 	}
 	days, err := strconv.Atoi(r.PostFormValue("days"))
 	if err != nil || days < 1 || days > 90 {
-		s.flash(w, r, "Validità non valida (1-90 giorni).", "/tokens")
+		s.flash(w, r, s.T(r, "Validità non valida (1-90 giorni)."), "/tokens")
 		return
 	}
 	desc := strings.TrimSpace(r.PostFormValue("description"))
@@ -464,7 +464,7 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 	tok := store.EnrollmentToken{ID: ids.NewUUID(), TenantID: t, Description: desc, MaxUses: maxUses,
 		ExpiresAt: s.now().Add(time.Duration(days) * 24 * time.Hour), AutoApprove: r.PostFormValue("auto_approve") == "on"}
 	if err := s.store.CreateEnrollmentToken(r.Context(), tok, store.HashToken(secret)); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "enrollment_token.created", tok.ID, map[string]any{
@@ -472,11 +472,11 @@ func (s *Server) handleCreateToken(w http.ResponseWriter, r *http.Request) {
 		"description": tok.Description, "auto_approve": tok.AutoApprove})
 	toks, err := s.store.ListEnrollmentTokens(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	// The secret is rendered once, in this response only.
-	s.render(w, r, "tokens", "Token di registrazione", tokensData{Tokens: toks, New: secret, NewTok: &tok, Now: s.now()})
+	s.render(w, r, "tokens", s.T(r, "Token di registrazione"), tokensData{Tokens: toks, New: secret, NewTok: &tok, Now: s.now()})
 }
 
 type auditData struct{ Events []auditView }
@@ -493,12 +493,12 @@ type auditView struct {
 func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	events, err := s.store.ListAudit(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	var d auditData
@@ -509,7 +509,7 @@ func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {
 		d.Events = append(d.Events, auditView{Seq: e.Seq, OccurredAt: e.OccurredAt, Actor: e.Actor, Action: e.Action,
 			Target: e.Target, Details: string(det)})
 	}
-	s.render(w, r, "audit", "Registro attività", d)
+	s.render(w, r, "audit", s.T(r, "Registro attività"), d)
 }
 
 type targetView struct {
@@ -526,22 +526,22 @@ type updatesData struct {
 func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	targets, err := s.store.ListReleaseTargets(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	rels, err := s.store.ListReleases(r.Context())
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	agents, err := s.store.ListAgents(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	d := updatesData{Releases: rels}
@@ -562,7 +562,7 @@ func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
 			d.Problems = append(d.Problems, a)
 		}
 	}
-	s.render(w, r, "updates", "Versioni dell'agente", d)
+	s.render(w, r, "updates", s.T(r, "Versioni dell'agente"), d)
 }
 
 type resultView struct {
@@ -586,7 +586,7 @@ func (s *Server) policyResults(r *http.Request, tenant, agent string) ([]resultV
 	for _, x := range rs {
 		v := resultView{PolicyResult: x, Policy: names[x.PolicyID]}
 		if v.Policy == "" {
-			v.Policy = "(eliminata)"
+			v.Policy = s.T(r, "(eliminata)")
 		}
 		if len(x.Result) > 0 {
 			v.Pretty = pretty(x.Result)

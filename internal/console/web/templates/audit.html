@@ -1,7 +1,7 @@
 {{define "content"}}
-<p class="muted">Registro in sola aggiunta, con catena di hash verificabile (<code>openrmm-admin audit verify</code>). Ultimi 500 eventi.</p>
+<p class="muted">{{th "Registro in sola aggiunta, con catena di hash verificabile (<code>openrmm-admin audit verify</code>). Ultimi 500 eventi."}}</p>
 <table class="audit">
-<thead><tr><th>#</th><th>Quando</th><th>Chi</th><th>Azione</th><th>Oggetto</th><th>Dettagli</th></tr></thead>
+<thead><tr><th>#</th><th>{{t "Quando"}}</th><th>{{t "Chi"}}</th><th>{{t "Azione"}}</th><th>{{t "Oggetto"}}</th><th>{{t "Dettagli"}}</th></tr></thead>
 <tbody>
 {{range .Data.Events}}<tr>
   <td>{{.Seq}}</td><td>{{fmtTime .OccurredAt}}</td><td>{{.Actor}}</td><td>{{.Action}}</td><td><code>{{short .Target}}</code></td>

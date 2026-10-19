@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -43,12 +42,12 @@ type policiesData struct{ Policies []policyView }
 func (s *Server) handlePolicies(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	cur, err := s.store.CurrentPolicies(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	var d policiesData
@@ -59,7 +58,7 @@ func (s *Server) handlePolicies(w http.ResponseWriter, r *http.Request) {
 		}
 		d.Policies = append(d.Policies, v)
 	}
-	s.render(w, r, "policies", "Policy", d)
+	s.render(w, r, "policies", s.T(r, "Policy"), d)
 }
 
 type policyFormData struct {
@@ -95,7 +94,7 @@ func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("template") == "baseline" && r.PathValue("id") == "" {
 		rules, err := s.baselineRules(r)
 		if err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		d.Name, d.Rules = "Base", rules
@@ -108,7 +107,7 @@ func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 		}
 		p, err := policy.Parse(cur.Document)
 		if err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		rules := make([]formRule, 0, len(p.Rules))
@@ -123,7 +122,7 @@ func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 	if d.ID != "" {
 		title = "Modifica policy"
 	}
-	s.render(w, r, "policy_form", title, d)
+	s.render(w, r, "policy_form", s.T(r, title), d)
 }
 
 // buildPolicy turns the form into a validated, canonical policy document.
@@ -132,11 +131,11 @@ func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request
 	version := int64(1)
 	if id != "" {
 		if !ids.IsUUID(id) {
-			return nil, nil, errors.New("policy non valida")
+			return nil, nil, errors.New(s.T(r, "policy non valida"))
 		}
 		cur, err := s.store.GetPolicy(ctx, tenant, id)
 		if err != nil {
-			return nil, nil, errors.New("policy non trovata")
+			return nil, nil, errors.New(s.T(r, "policy non trovata"))
 		}
 		version = cur.Version + 1
 	} else {
@@ -146,28 +145,28 @@ func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request
 	dec := json.NewDecoder(strings.NewReader(r.PostFormValue("rules")))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&rules); err != nil {
-		return nil, nil, fmt.Errorf("regole: JSON non valido: %v", err)
+		return nil, nil, errors.New(s.Tf(r, "regole: JSON non valido: %v", err))
 	}
 	p := &policy.Policy{ID: id, TenantID: tenant, Name: strings.TrimSpace(r.PostFormValue("name")), Version: version,
 		AppliesTo: r.PostFormValue("applies_to")}
 	for _, fr := range rules {
 		every, err := time.ParseDuration(fr.Every)
 		if err != nil {
-			return nil, nil, fmt.Errorf("regola %q: intervallo non valido (es. 15m, 24h)", fr.ID)
+			return nil, nil, errors.New(s.Tf(r, "regola %q: intervallo non valido (es. 15m, 24h)", fr.ID))
 		}
 		mod, err := s.store.GetModule(ctx, fr.Module, fr.Version)
 		if err != nil {
-			return nil, nil, fmt.Errorf("regola %q: modulo %s %s non pubblicato", fr.ID, fr.Module, fr.Version)
+			return nil, nil, errors.New(s.Tf(r, "regola %q: modulo %s %s non pubblicato", fr.ID, fr.Module, fr.Version))
 		}
 		man, err := modules.ParseManifest(mod.Manifest)
 		if err != nil {
 			return nil, nil, err
 		}
 		if _, ok := man.Actions[fr.Action]; !ok {
-			return nil, nil, fmt.Errorf("regola %q: il modulo %s non ha l'azione %q", fr.ID, fr.Module, fr.Action)
+			return nil, nil, errors.New(s.Tf(r, "regola %q: il modulo %s non ha l'azione %q", fr.ID, fr.Module, fr.Action))
 		}
 		if man.HasCapability(modules.CapAdHocScript) {
-			return nil, nil, fmt.Errorf("regola %q: i moduli che eseguono script non possono stare in una policy", fr.ID)
+			return nil, nil, errors.New(s.Tf(r, "regola %q: i moduli che eseguono script non possono stare in una policy", fr.ID))
 		}
 		p.Rules = append(p.Rules, policy.Rule{ID: fr.ID, Module: fr.Module, ModuleVersion: fr.Version,
 			ModuleSHA256: hex.EncodeToString(mod.ManifestSHA256), Action: fr.Action, Params: fr.Params,
@@ -185,7 +184,7 @@ func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request
 func (s *Server) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	_, raw, err := s.buildPolicy(r.Context(), t, r)
@@ -193,8 +192,8 @@ func (s *Server) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 		d := policyFormData{ID: r.PostFormValue("id"), Name: r.PostFormValue("name"), AppliesTo: r.PostFormValue("applies_to"),
 			Rules: r.PostFormValue("rules"), Example: exampleRules}
 		sess := sessionFrom(r.Context())
-		sess.data.Flash = "Policy non valida: " + err.Error()
-		s.render(w, r, "policy_form", "Policy", d)
+		sess.data.Flash = s.Tf(r, "Policy non valida: %v", err)
+		s.render(w, r, "policy_form", s.T(r, "Policy"), d)
 		return
 	}
 	sess := sessionFrom(r.Context())
@@ -202,7 +201,7 @@ func (s *Server) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 		CodeVerifier: oauth2.GenerateVerifier(), StartedAt: s.now(), PolicyDoc: raw, Return: "/policies"}
 	sess.data.Pending = p
 	if err := s.save(r.Context(), w, sess); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	opts := append(s.authOptions(p, true), oauth2.SetAuthURLParam("login_hint", sess.data.Operator.Username))
@@ -210,18 +209,18 @@ func (s *Server) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) completePolicy(w http.ResponseWriter, r *http.Request, sess *session, p *Pending, c *authn.Claims, rawToken string) {
-	op := sess.data.Operator
+	op, lang := sess.data.Operator, langOf(r, sess)
 	if op == nil {
-		http.Error(w, "sessione scaduta", http.StatusUnauthorized)
+		http.Error(w, tr(lang, "sessione scaduta"), http.StatusUnauthorized)
 		return
 	}
 	if c.ObjectID != op.ObjectID || c.TenantID != op.TenantID {
-		http.Error(w, "l'approvazione deve essere fatta dallo stesso operatore", http.StatusForbidden)
+		http.Error(w, tr(lang, "l'approvazione deve essere fatta dallo stesso operatore"), http.StatusForbidden)
 		return
 	}
 	pol, err := policy.Parse(p.PolicyDoc)
 	if err != nil || c.Nonce != policy.AuthNonce(p.PolicyDoc) {
-		http.Error(w, "approvazione non valida per questa policy", http.StatusForbidden)
+		http.Error(w, tr(lang, "approvazione non valida per questa policy"), http.StatusForbidden)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -229,23 +228,23 @@ func (s *Server) completePolicy(w http.ResponseWriter, r *http.Request, sess *se
 	resp, err := s.signer.SignPolicy(ctx, &openrmmv1.SignPolicyRequest{TenantId: pol.TenantID, PolicyJson: p.PolicyDoc, IdToken: rawToken})
 	if err != nil {
 		s.audit(r.Context(), pol.TenantID, op, "policy.refused", pol.ID, map[string]any{"name": pol.Name, "reason": err.Error()})
-		s.flashTo(w, r, sess, "Il servizio di firma ha rifiutato la policy: "+err.Error(), p.Return)
+		s.flashTo(w, r, sess, trf(lang, "Il servizio di firma ha rifiutato la policy: %v", err), p.Return)
 		return
 	}
 	if err := s.store.AddPolicyVersion(r.Context(), store.PolicyVersion{TenantID: pol.TenantID, ID: pol.ID, Version: pol.Version,
 		Name: pol.Name, AppliesTo: pol.AppliesTo, Document: p.PolicyDoc, Envelope: resp.GetEnvelope(),
 		CreatedBy: "operator:" + op.Username}); err != nil {
 		if errors.Is(err, store.ErrPolicyVersion) {
-			s.flashTo(w, r, sess, "La policy è stata modificata da qualcun altro nel frattempo: riprova.", p.Return)
+			s.flashTo(w, r, sess, tr(lang, "La policy è stata modificata da qualcun altro nel frattempo: riprova."), p.Return)
 			return
 		}
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), pol.TenantID, op, "policy.saved", pol.ID, map[string]any{
 		"name": pol.Name, "version": pol.Version, "applies_to": pol.AppliesTo, "document": json.RawMessage(p.PolicyDoc),
 		"approved_by": resp.GetOperator()})
-	s.flashTo(w, r, sess, fmt.Sprintf("Policy %q (versione %d) salvata: gli agenti la ricevono subito.", pol.Name, pol.Version), p.Return)
+	s.flashTo(w, r, sess, trf(lang, "Policy %q (versione %d) salvata: gli agenti la ricevono subito.", pol.Name, pol.Version), p.Return)
 }
 
 // handleDeletePolicy removes a policy. Removing only stops monitoring, it
@@ -266,9 +265,9 @@ func (s *Server) handleDeletePolicy(w http.ResponseWriter, r *http.Request) {
 	op := sessionFrom(r.Context()).data.Operator
 	if err := s.store.AddPolicyVersion(r.Context(), store.PolicyVersion{TenantID: t, ID: id, Version: cur.Version + 1,
 		Name: cur.Name, AppliesTo: cur.AppliesTo, Deleted: true, CreatedBy: "operator:" + op.Username}); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "policy.deleted", id, map[string]any{"name": cur.Name, "version": cur.Version})
-	s.flash(w, r, fmt.Sprintf("Policy %q eliminata.", cur.Name), "/policies")
+	s.flash(w, r, s.Tf(r, "Policy %q eliminata.", cur.Name), "/policies")
 }

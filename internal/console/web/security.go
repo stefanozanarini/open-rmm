@@ -39,13 +39,13 @@ func (s *Server) alertViews(r *http.Request, tenant string, alerts []store.Alert
 func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	d := alertsData{All: r.URL.Query().Get("all") == "1"}
 	alerts, err := s.store.ListAlerts(r.Context(), t, "", !d.All, 500)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if !d.All {
@@ -54,7 +54,7 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		sort.SliceStable(alerts, func(i, j int) bool { return rank[alerts[i].Severity] < rank[alerts[j].Severity] })
 	}
 	d.Alerts = s.alertViews(r, t, alerts)
-	s.render(w, r, "alerts", "Avvisi", d)
+	s.render(w, r, "alerts", s.T(r, "Avvisi"), d)
 }
 
 func (s *Server) handleAckAlert(w http.ResponseWriter, r *http.Request) {
@@ -74,11 +74,11 @@ func (s *Server) handleAckAlert(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	case err != nil:
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "alert.acknowledged", id, nil)
-	s.flash(w, r, "Avviso preso in carico.", back)
+	s.flash(w, r, s.T(r, "Avviso preso in carico."), back)
 }
 
 type settingsData struct {
@@ -89,41 +89,41 @@ type settingsData struct {
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	cur, err := s.store.GetSettings(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	d := settingsData{Subnets: strings.Join(cur.RDPAllowedSubnets, "\n")}
 	for _, p := range accesslog.DefaultAllowed {
 		d.Defaults = append(d.Defaults, p.String())
 	}
-	s.render(w, r, "settings", "Impostazioni", d)
+	s.render(w, r, "settings", s.T(r, "Impostazioni"), d)
 }
 
 func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	op := sessionFrom(r.Context()).data.Operator
 	cur, err := s.store.GetSettings(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	lines := strings.FieldsFunc(r.PostFormValue("rdp_subnets"), func(r rune) bool { return r == '\n' || r == '\r' || r == ',' || r == ' ' })
 	prefixes, err := accesslog.ParseSubnets(lines)
 	if err != nil {
-		s.flash(w, r, "Subnet non valida: "+err.Error(), "/settings")
+		s.flash(w, r, s.Tf(r, "Subnet non valida: %v", err), "/settings")
 		return
 	}
 	if len(prefixes) > 200 {
-		s.flash(w, r, "Al massimo 200 subnet.", "/settings")
+		s.flash(w, r, s.T(r, "Al massimo 200 subnet."), "/settings")
 		return
 	}
 	next := cur
@@ -132,10 +132,10 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		next.RDPAllowedSubnets = append(next.RDPAllowedSubnets, p.String())
 	}
 	if err := s.store.PutSettings(r.Context(), t, next, "operator:"+op.Username); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "settings.updated", t, map[string]any{
 		"rdp_allowed_subnets": next.RDPAllowedSubnets, "previous": cur.RDPAllowedSubnets})
-	s.flash(w, r, "Impostazioni salvate.", "/settings")
+	s.flash(w, r, s.T(r, "Impostazioni salvate."), "/settings")
 }

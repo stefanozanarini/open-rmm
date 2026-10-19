@@ -1,54 +1,51 @@
 {{define "content"}}
 {{with .Data}}
-<p>Passi per mettere in servizio la console: <strong>{{.Done}} su {{.All}}</strong> completati.</p>
+<p>{{t "Passi per mettere in servizio la console:"}} <strong>{{tf "%d su %d" .Done .All}}</strong> {{t "completati"}}.</p>
 <table class="setup">
 <tbody>
 {{range .Items}}<tr>
-  <td>{{if eq .Status "optional"}}<span class="badge">facoltativo</span>{{else}}<span class="badge chk-{{.Status}}">{{if eq .Status "ok"}}fatto{{else if eq .Status "warning"}}da verificare{{else}}da fare{{end}}</span>{{end}}</td>
+  <td>{{if eq .Status "optional"}}<span class="badge">{{t "facoltativo"}}</span>{{else}}<span class="badge chk-{{.Status}}">{{if eq .Status "ok"}}{{t "fatto"}}{{else if eq .Status "warning"}}{{t "da verificare"}}{{else}}{{t "da fare"}}{{end}}</span>{{end}}</td>
   <td><strong>{{.Title}}</strong><br><span class="muted">{{.Detail}}</span></td>
   <td>{{if .Link}}<a href="{{.Link}}">{{.LinkLabel}}</a>{{end}}</td>
 </tr>{{end}}
 </tbody>
 </table>
 
-<h2 id="codesign">Firma del codice</h2>
-<p>Eseguibili e MSI dell'agente vanno firmati con Authenticode. Le chiavi si creano con <code>openrmm-admin</code> sulla macchina che costruisce l'MSI,
-<strong>mai sulla console</strong>: qui si registra solo il certificato pubblico, per scaricarlo e distribuirlo via GPO e per ricevere un avviso prima della scadenza.</p>
+<h2 id="codesign">{{t "Firma del codice"}}</h2>
+<p>{{th "Eseguibili e MSI dell'agente vanno firmati con Authenticode. Le chiavi si creano con <code>openrmm-admin</code> sulla macchina che costruisce l'MSI, <strong>mai sulla console</strong>: qui si registra solo il certificato pubblico, per scaricarlo e distribuirlo via GPO e per ricevere un avviso prima della scadenza."}}</p>
 <details>
-<summary>Come ottenere il certificato</summary>
+<summary>{{t "Come ottenere il certificato"}}</summary>
 <ol>
-  <li><strong>CA aziendale (AD CS)</strong>, consigliata se c'è un dominio:
+  <li>{{th "<strong>CA aziendale (AD CS)</strong>, consigliata se c'è un dominio:"}}
     <pre>openrmm-admin codesign csr -dir codesign -org "Cliente Srl"
 certreq -submit -attrib "CertificateTemplate:CodeSigning" codesign.csr codesign.cer
 certutil -encode codesign.cer codesign.crt</pre>
-    Aggiungi a <code>codesign.crt</code> i certificati della CA emittente e della radice. I PC del dominio considerano già attendibile la CA:
-    serve solo distribuire <code>codesign.cer</code> tra gli <em>Autori attendibili</em>.</li>
-  <li><strong>CA dedicata</strong>, senza AD CS:
+    {{th "Aggiungi a <code>codesign.crt</code> i certificati della CA emittente e della radice. I PC del dominio considerano già attendibile la CA: serve solo distribuire <code>codesign.cer</code> tra gli <em>Autori attendibili</em>."}}</li>
+  <li>{{th "<strong>CA dedicata</strong>, senza AD CS:"}}
     <pre>openrmm-admin codesign ca -dir codesign -org "Cliente Srl"</pre>
-    Sposta subito <code>codesign-ca.key</code> su un supporto offline: serve solo per rinnovare il certificato.</li>
-  <li><strong>Certificato pubblico</strong> (acquistato, o Microsoft Trusted Signing): genera la richiesta con <code>codesign csr</code> e invia <code>codesign.csr</code> all'autorità.</li>
+    {{th "Sposta subito <code>codesign-ca.key</code> su un supporto offline: serve solo per rinnovare il certificato."}}</li>
+  <li>{{th "<strong>Certificato pubblico</strong> (acquistato, o Microsoft Trusted Signing): genera la richiesta con <code>codesign csr</code> e invia <code>codesign.csr</code> all'autorità."}}</li>
 </ol>
-<p>Verifica e firma: <code>openrmm-admin codesign check -cert codesign/codesign.crt -key codesign/codesign.key</code>, poi
+<p>{{t "Verifica e firma:"}} <code>openrmm-admin codesign check -cert codesign/codesign.crt -key codesign/codesign.key</code>, {{t "poi"}}
 <code>make msi VERSION=x.y.z SIGN_CERT=codesign/codesign.crt SIGN_KEY=codesign/codesign.key</code>.</p>
-<p>Group Policy: <em>Configurazione computer → Criteri → Impostazioni di Windows → Impostazioni sicurezza → Criteri chiave pubblica</em>:
-<code>codesign.cer</code> in <em>Autori attendibili</em> e, per una CA dedicata, <code>codesign-ca.cer</code> in <em>Autorità di certificazione radice attendibili</em>.</p>
+<p>{{th "Group Policy: <em>Configurazione computer → Criteri → Impostazioni di Windows → Impostazioni sicurezza → Criteri chiave pubblica</em>: <code>codesign.cer</code> in <em>Autori attendibili</em> e, per una CA dedicata, <code>codesign-ca.cer</code> in <em>Autorità di certificazione radice attendibili</em>."}}</p>
 </details>
 {{with .CodeSign}}
 <dl class="facts">
-  <dt>Soggetto</dt><dd>{{$.Data.CodeInfo.Subject}}</dd>
-  <dt>Emesso da</dt><dd>{{$.Data.CodeInfo.Issuer}}</dd>
-  <dt>Validità</dt><dd>{{fmtTime $.Data.CodeInfo.NotBefore}} – {{fmtTime $.Data.CodeInfo.NotAfter}}{{if $.Data.Expiring}} <span class="badge chk-warning">in scadenza</span>{{end}}</dd>
-  <dt>Identificazione personale</dt><dd><code>{{$.Data.CodeInfo.Thumbprint}}</code></dd>
-  <dt>Per la GPO</dt><dd><a href="/setup/codesign.cer">codesign.cer</a>{{if $.Data.HasRoot}} · <a href="/setup/codesign-ca.cer">codesign-ca.cer</a>{{end}}</dd>
+  <dt>{{t "Soggetto"}}</dt><dd>{{$.Data.CodeInfo.Subject}}</dd>
+  <dt>{{t "Emesso da"}}</dt><dd>{{$.Data.CodeInfo.Issuer}}</dd>
+  <dt>{{t "Validità"}}</dt><dd>{{fmtTime $.Data.CodeInfo.NotBefore}} – {{fmtTime $.Data.CodeInfo.NotAfter}}{{if $.Data.Expiring}} <span class="badge chk-warning">{{t "in scadenza"}}</span>{{end}}</dd>
+  <dt>{{t "Identificazione personale"}}</dt><dd><code>{{$.Data.CodeInfo.Thumbprint}}</code></dd>
+  <dt>{{t "Per la GPO"}}</dt><dd><a href="/setup/codesign.cer">codesign.cer</a>{{if $.Data.HasRoot}} · <a href="/setup/codesign-ca.cer">codesign-ca.cer</a>{{end}}</dd>
 </dl>
 {{end}}
 <form method="post" action="/setup/codesign" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
-  <label>Certificato (PEM: prima il certificato di firma, poi le CA)
+  <label>{{t "Certificato (PEM: prima il certificato di firma, poi le CA)"}}
     <textarea name="certificate" rows="8" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
   </label>
-  <div class="actions"><button class="primary">Salva il certificato</button>
-  {{if .CodeSign}}<button name="remove" value="1" formnovalidate>Rimuovi</button>{{end}}</div>
+  <div class="actions"><button class="primary">{{t "Salva il certificato"}}</button>
+  {{if .CodeSign}}<button name="remove" value="1" formnovalidate>{{t "Rimuovi"}}</button>{{end}}</div>
 </form>
 {{end}}
 {{end}}

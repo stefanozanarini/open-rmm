@@ -3,24 +3,24 @@
 <form method="post" action="/policies" class="stack wide">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <input type="hidden" name="id" value="{{.ID}}">
-  <label>Nome <input name="name" value="{{.Name}}" maxlength="80" required></label>
-  <label>Si applica a
+  <label>{{t "Nome"}} <input name="name" value="{{.Name}}" maxlength="80" required></label>
+  <label>{{t "Si applica a"}}
     <select name="applies_to">
-      <option value="all" {{if eq .AppliesTo "all"}}selected{{end}}>Tutti</option>
-      <option value="clients" {{if eq .AppliesTo "clients"}}selected{{end}}>Solo client</option>
-      <option value="servers" {{if eq .AppliesTo "servers"}}selected{{end}}>Solo server</option>
+      <option value="all" {{if eq .AppliesTo "all"}}selected{{end}}>{{t "Tutti"}}</option>
+      <option value="clients" {{if eq .AppliesTo "clients"}}selected{{end}}>{{t "Solo client"}}</option>
+      <option value="servers" {{if eq .AppliesTo "servers"}}selected{{end}}>{{t "Solo server"}}</option>
     </select>
   </label>
-  <label>Regole (JSON)
+  <label>{{t "Regole (JSON)"}}
     <textarea name="rules" rows="18" spellcheck="false">{{.Rules}}</textarea>
   </label>
   <details>
-    <summary>Formato ed esempio</summary>
-    <p class="muted">Ogni regola indica il modulo (id e versione pubblicati), l'azione e l'intervallo (<code>15m</code>, <code>24h</code>; minimo 1m, massimo 7 giorni). Condizioni facoltative in <code>when</code>: <code>service_exists</code>, <code>file_exists</code>, <code>registry_key_exists</code> (<code>HKLM\…</code>), <code>os_family</code> (<code>client</code>/<code>server</code>), combinabili con <code>all</code>, <code>any</code>, <code>not</code>. Finestra facoltativa in <code>window</code>, nell'ora locale dell'endpoint: <code>{"days":["sat","sun"],"start":"22:00","end":"05:00"}</code> (giorni <code>mon</code>…<code>sun</code>, vuoto = ogni giorno; una fine prima dell'inizio attraversa la mezzanotte).</p>
+    <summary>{{t "Formato ed esempio"}}</summary>
+    <p class="muted">{{th `Ogni regola indica il modulo (id e versione pubblicati), l'azione e l'intervallo (<code>15m</code>, <code>24h</code>; minimo 1m, massimo 7 giorni). Condizioni facoltative in <code>when</code>: <code>service_exists</code>, <code>file_exists</code>, <code>registry_key_exists</code> (<code>HKLM\…</code>), <code>os_family</code> (<code>client</code>/<code>server</code>), combinabili con <code>all</code>, <code>any</code>, <code>not</code>. Finestra facoltativa in <code>window</code>, nell'ora locale dell'endpoint: <code>{"days":["sat","sun"],"start":"22:00","end":"05:00"}</code> (giorni <code>mon</code>…<code>sun</code>, vuoto = ogni giorno; una fine prima dell'inizio attraversa la mezzanotte).`}}</p>
     <pre>{{.Example}}</pre>
   </details>
-  <p class="muted">Salvando, ti verrà chiesto di autenticarti di nuovo con Microsoft per approvare esattamente questa versione.</p>
-  <button class="primary">Approva e salva{{if .Version}} (versione {{.Version}} → nuova){{end}}</button>
+  <p class="muted">{{t "Salvando, ti verrà chiesto di autenticarti di nuovo con Microsoft per approvare esattamente questa versione."}}</p>
+  <button class="primary">{{t "Approva e salva"}}{{if .Version}} {{tf "(versione %d → nuova)" .Version}}{{end}}</button>
 </form>
 {{end}}
 {{end}}

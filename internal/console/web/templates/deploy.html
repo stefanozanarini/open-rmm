@@ -1,32 +1,32 @@
 {{define "content"}}
 {{with .Data}}
 <dl class="facts">
-  <dt>Pacchetto</dt><dd>{{.Package.Name}} {{.Package.Version}} · {{.Package.FileName}} ({{bytes .Package.Size}})</dd>
+  <dt>{{t "Pacchetto"}}</dt><dd>{{.Package.Name}} {{.Package.Version}} · {{.Package.FileName}} ({{bytes .Package.Size}})</dd>
   <dt>SHA-256</dt><dd><code>{{.Package.SHA256}}</code></dd>
-  <dt>Installazione</dt><dd>{{.Package.Kind}}{{with .Package.SilentArgs}} <code>{{.}}</code>{{end}}{{if .Package.AllowUnsigned}} · <span class="badge chk-warning">anche se non firmato</span>{{end}}</dd>
-  <dt>Modulo</dt><dd>{{with .Module}}software {{.}}{{else}}<span class="badge chk-failing">modulo software non pubblicato</span>{{end}}</dd>
+  <dt>{{t "Installazione"}}</dt><dd>{{.Package.Kind}}{{with .Package.SilentArgs}} <code>{{.}}</code>{{end}}{{if .Package.AllowUnsigned}} · <span class="badge chk-warning">{{t "anche se non firmato"}}</span>{{end}}</dd>
+  <dt>{{t "Modulo"}}</dt><dd>{{with .Module}}software {{.}}{{else}}<span class="badge chk-failing">{{t "modulo software non pubblicato"}}</span>{{end}}</dd>
 </dl>
 <form method="post" action="/packages/{{.Package.SHA256}}/deploy" class="stack wide">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
-  <p class="muted">Seleziona gli endpoint. Gli endpoint scelti dall'elenco agenti, oppure quelli con una versione più vecchia, sono in cima e già selezionati. Una sola autenticazione con Microsoft approva l'installazione su tutti gli endpoint scelti; ogni endpoint riceve un proprio comando firmato.</p>
+  <p class="muted">{{t "Seleziona gli endpoint. Gli endpoint scelti dall'elenco agenti, oppure quelli con una versione più vecchia, sono in cima e già selezionati. Una sola autenticazione con Microsoft approva l'installazione su tutti gli endpoint scelti; ogni endpoint riceve un proprio comando firmato."}}</p>
   <table>
-  <thead><tr><th></th><th>Endpoint</th><th>Versione installata</th><th>Ultimo contatto</th></tr></thead>
+  <thead><tr><th></th><th>Endpoint</th><th>{{t "Versione installata"}}</th><th>{{t "Ultimo contatto"}}</th></tr></thead>
   <tbody>
   {{range .Rows}}<tr>
     <td><input type="checkbox" name="agent" value="{{.Agent.ID}}" {{if .Checked}}checked{{end}}></td>
     <td>{{.Agent.Host.Hostname}}{{if eq .Agent.Host.OSFamily "server"}} <span class="badge">server</span>{{end}}</td>
-    <td>{{if .Installed}}{{.Installed}}{{if .Outdated}} <span class="badge chk-warning">da aggiornare</span>{{end}}{{else}}<span class="muted">-</span>{{end}}</td>
+    <td>{{if .Installed}}{{.Installed}}{{if .Outdated}} <span class="badge chk-warning">{{t "da aggiornare"}}</span>{{end}}{{else}}<span class="muted">-</span>{{end}}</td>
     <td>{{fmtTime .Agent.LastSeenAt}}</td>
   </tr>{{end}}
   </tbody>
   </table>
   {{template "ttl"}}
-  <button class="primary">Approva e distribuisci</button>
+  <button class="primary">{{t "Approva e distribuisci"}}</button>
 </form>
 {{end}}
 {{end}}
 {{define "ttl"}}
-<label>Validità
-  <select name="ttl_minutes"><option value="60">1 ora</option><option value="480">8 ore</option><option value="1440" selected>24 ore</option></select>
+<label>{{t "Validità"}}
+  <select name="ttl_minutes"><option value="60">{{t "1 ora"}}</option><option value="480">{{t "8 ore"}}</option><option value="1440" selected>{{t "24 ore"}}</option></select>
 </label>
 {{end}}

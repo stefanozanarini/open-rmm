@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -127,20 +126,20 @@ func (s *Server) catalogStatus(ctx context.Context, tenant string) ([]catalogVie
 func (s *Server) handlePackages(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	d := packagesData{Kinds: []string{store.KindMSI, store.KindExe, store.KindInno, store.KindNullsoft, store.KindBurn}}
 	var err error
 	if d.Packages, err = s.store.ListPackages(r.Context(), t); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if d.Catalog, err = s.catalogStatus(r.Context(), t); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "packages", "Software", d)
+	s.render(w, r, "packages", s.T(r, "Software"), d)
 }
 
 // handleUpload stores an uploaded installer. The CSRF token must be the
@@ -148,19 +147,19 @@ func (s *Server) handlePackages(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	sess := sessionFrom(r.Context())
 	op := sess.data.Operator
 	if s.packages.Path == "" {
-		s.flash(w, r, "Archivio dei pacchetti non configurato (OPENRMM_PACKAGES_DIR).", "/packages")
+		s.flash(w, r, s.T(r, "Archivio dei pacchetti non configurato (OPENRMM_PACKAGES_DIR)."), "/packages")
 		return
 	}
 	extendDeadlines(w, time.Hour)
 	mr, err := r.MultipartReader()
 	if err != nil {
-		http.Error(w, "richiesta non valida", http.StatusBadRequest)
+		http.Error(w, s.T(r, "richiesta non valida"), http.StatusBadRequest)
 		return
 	}
 	readField := func(p *multipart.Part) string {
@@ -177,13 +176,13 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
-			http.Error(w, "richiesta non valida", http.StatusBadRequest)
+			http.Error(w, s.T(r, "richiesta non valida"), http.StatusBadRequest)
 			return
 		}
 		name := part.FormName()
 		if !csrfOK {
 			if name != "csrf" || !validCSRF(sess, readField(part)) {
-				http.Error(w, "richiesta non valida", http.StatusForbidden)
+				http.Error(w, s.T(r, "richiesta non valida"), http.StatusForbidden)
 				return
 			}
 			csrfOK = true
@@ -196,7 +195,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			}
 			if sha, size, err = s.packages.Save(part, maxPackageSize); err != nil {
 				s.log.Warn("package upload failed", "err", err)
-				s.flash(w, r, "Caricamento non riuscito: "+err.Error(), "/packages")
+				s.flash(w, r, s.Tf(r, "Caricamento non riuscito: %v", err), "/packages")
 				return
 			}
 			continue
@@ -204,11 +203,11 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		fields[name] = readField(part)
 	}
 	if !csrfOK {
-		http.Error(w, "richiesta non valida", http.StatusForbidden)
+		http.Error(w, s.T(r, "richiesta non valida"), http.StatusForbidden)
 		return
 	}
 	if sha == "" {
-		s.flash(w, r, "Seleziona il file da caricare.", "/packages")
+		s.flash(w, r, s.T(r, "Seleziona il file da caricare."), "/packages")
 		return
 	}
 	p := store.Package{TenantID: t, SHA256: sha, Name: fields["name"], Version: fields["version"], Publisher: fields["publisher"],
@@ -218,7 +217,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if p.Kind == "" && strings.HasSuffix(strings.ToLower(fileName), ".msi") {
 		p.Kind = store.KindMSI
 	}
-	if msg := validatePackage(p); msg != "" {
+	if msg := validatePackage(s.lang(r), p); msg != "" {
 		s.flash(w, r, msg, "/packages")
 		return
 	}
@@ -233,22 +232,22 @@ func extendDeadlines(w http.ResponseWriter, d time.Duration) {
 	_ = rc.SetWriteDeadline(time.Now().Add(d))
 }
 
-func validatePackage(p store.Package) string {
+func validatePackage(lang string, p store.Package) string {
 	switch {
 	case !versionTxt.MatchString(p.Name):
-		return "Indica il nome del software."
+		return tr(lang, "Indica il nome del software.")
 	case !versionTxt.MatchString(p.Version):
-		return "Indica la versione."
+		return tr(lang, "Indica la versione.")
 	case !pkgref.ValidFileName(p.FileName):
-		return "Nome del file non valido: usa lettere, cifre, spazi e . _ - ( ) +"
+		return tr(lang, "Nome del file non valido: usa lettere, cifre, spazi e . _ - ( ) +")
 	case !store.ValidKind(p.Kind):
-		return "Tipo di installer non valido."
+		return tr(lang, "Tipo di installer non valido.")
 	case p.Kind == store.KindExe && p.SilentArgs == "":
-		return "Per un installer exe generico indica le opzioni di installazione silenziosa."
+		return tr(lang, "Per un installer exe generico indica le opzioni di installazione silenziosa.")
 	case p.ProductCode != "" && !guidRe.MatchString(p.ProductCode):
-		return "Il codice prodotto deve essere un GUID tra parentesi graffe."
+		return tr(lang, "Il codice prodotto deve essere un GUID tra parentesi graffe.")
 	case len(p.SilentArgs) > 1000:
-		return "Opzioni troppo lunghe."
+		return tr(lang, "Opzioni troppo lunghe.")
 	}
 	return ""
 }
@@ -257,16 +256,16 @@ func (s *Server) addPackage(w http.ResponseWriter, r *http.Request, p store.Pack
 	op := sessionFrom(r.Context()).data.Operator
 	switch err := s.store.PutPackage(r.Context(), p); {
 	case errors.Is(err, store.ErrPackageExists):
-		s.flash(w, r, "Questo file è già nella libreria.", "/packages")
+		s.flash(w, r, s.T(r, "Questo file è già nella libreria."), "/packages")
 		return
 	case err != nil:
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), p.TenantID, op, "package.added", p.SHA256, map[string]any{"name": p.Name, "version": p.Version,
 		"file": p.FileName, "size": p.Size, "kind": p.Kind, "source": p.Source, "winget_id": p.WingetID, "url": p.SourceURL,
 		"allow_unsigned": p.AllowUnsigned})
-	s.flash(w, r, fmt.Sprintf("%s %s aggiunto alla libreria.", p.Name, p.Version), "/packages")
+	s.flash(w, r, s.Tf(r, "%s %s aggiunto alla libreria.", p.Name, p.Version), "/packages")
 }
 
 func (s *Server) catalogApp(ctx context.Context, tenant, id, by string, keepMatch string) (store.CatalogApp, error) {
@@ -287,36 +286,36 @@ func (s *Server) catalogApp(ctx context.Context, tenant, id, by string, keepMatc
 func (s *Server) handleAddCatalog(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	op := sessionFrom(r.Context()).data.Operator
 	id := strings.TrimSpace(r.PostFormValue("winget_id"))
 	if !wingetcat.IDRe.MatchString(id) {
-		s.flash(w, r, "Id winget non valido (es. 7zip.7zip, Mozilla.Firefox).", "/packages")
+		s.flash(w, r, s.T(r, "Id winget non valido (es. 7zip.7zip, Mozilla.Firefox)."), "/packages")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 	defer cancel()
 	app, err := s.catalogApp(ctx, t, id, "operator:"+op.Username, "")
 	if err != nil {
-		s.flash(w, r, "Impossibile leggere "+id+" dal catalogo winget: "+err.Error(), "/packages")
+		s.flash(w, r, s.Tf(r, "Impossibile leggere %s dal catalogo winget: %v", id, err), "/packages")
 		return
 	}
 	s.audit(r.Context(), t, op, "catalog.added", id, map[string]any{"version": app.Version, "match_name": app.MatchName})
-	s.flash(w, r, fmt.Sprintf("%s %s aggiunto al catalogo.", app.Name, app.Version), "/packages")
+	s.flash(w, r, s.Tf(r, "%s %s aggiunto al catalogo.", app.Name, app.Version), "/packages")
 }
 
 func (s *Server) handleRefreshCatalog(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	op := sessionFrom(r.Context()).data.Operator
 	apps, err := s.store.ListCatalogApps(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	extendDeadlines(w, 6*time.Minute)
@@ -336,9 +335,9 @@ func (s *Server) handleRefreshCatalog(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.audit(r.Context(), t, op, "catalog.refreshed", t, map[string]any{"apps": len(apps), "new_versions": updated, "failed": failed})
-	msg := fmt.Sprintf("Catalogo aggiornato: %d nuove versioni.", updated)
+	msg := s.Tf(r, "Catalogo aggiornato: %d nuove versioni.", updated)
 	if len(failed) > 0 {
-		msg += " Non riuscito per: " + strings.Join(failed, ", ")
+		msg += " " + s.Tf(r, "Non riuscito per: %s", strings.Join(failed, ", "))
 	}
 	s.flash(w, r, msg, "/packages")
 }
@@ -346,7 +345,7 @@ func (s *Server) handleRefreshCatalog(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCatalogMatch(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	op := sessionFrom(r.Context()).data.Operator
@@ -357,26 +356,26 @@ func (s *Server) handleCatalogMatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.PostFormValue("delete") != "" {
 		if err := s.store.DeleteCatalogApp(r.Context(), t, app.WingetID); err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		s.audit(r.Context(), t, op, "catalog.removed", app.WingetID, nil)
-		s.flash(w, r, app.Name+" rimosso dal catalogo.", "/packages")
+		s.flash(w, r, s.Tf(r, "%s rimosso dal catalogo.", app.Name), "/packages")
 		return
 	}
 	m := strings.TrimSpace(r.PostFormValue("match_name"))
 	if len(m) < 2 || len(m) > 120 {
-		s.flash(w, r, "Il nome per il riconoscimento deve avere da 2 a 120 caratteri.", "/packages")
+		s.flash(w, r, s.T(r, "Il nome per il riconoscimento deve avere da 2 a 120 caratteri."), "/packages")
 		return
 	}
 	prev := app.MatchName
 	app.MatchName = m
 	if err := s.store.PutCatalogApp(r.Context(), app); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "catalog.match_changed", app.WingetID, map[string]any{"from": prev, "to": m})
-	s.flash(w, r, "Riconoscimento di "+app.Name+" aggiornato.", "/packages")
+	s.flash(w, r, s.Tf(r, "Riconoscimento di %s aggiornato.", app.Name), "/packages")
 }
 
 // handleImportCatalog downloads the latest installer of a catalog
@@ -384,12 +383,12 @@ func (s *Server) handleCatalogMatch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleImportCatalog(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	op := sessionFrom(r.Context()).data.Operator
 	if s.packages.Path == "" {
-		s.flash(w, r, "Archivio dei pacchetti non configurato (OPENRMM_PACKAGES_DIR).", "/packages")
+		s.flash(w, r, s.T(r, "Archivio dei pacchetti non configurato (OPENRMM_PACKAGES_DIR)."), "/packages")
 		return
 	}
 	app, err := s.store.GetCatalogApp(r.Context(), t, r.PathValue("id"))
@@ -399,7 +398,7 @@ func (s *Server) handleImportCatalog(w http.ResponseWriter, r *http.Request) {
 	}
 	var rel wingetcat.Release
 	if err := json.Unmarshal(app.Release, &rel); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	extendDeadlines(w, 35*time.Minute)
@@ -408,7 +407,7 @@ func (s *Server) handleImportCatalog(w http.ResponseWriter, r *http.Request) {
 	size, err := s.winget.Download(ctx, &rel, s.packages, maxPackageSize)
 	if err != nil {
 		s.log.Warn("catalog download", "id", rel.ID, "url", rel.URL, "err", err)
-		s.flash(w, r, "Download non riuscito: "+err.Error(), "/packages")
+		s.flash(w, r, s.Tf(r, "Download non riuscito: %v", err), "/packages")
 		return
 	}
 	p := store.Package{TenantID: t, SHA256: rel.SHA256, Name: rel.Name, Version: rel.Version, Publisher: rel.Publisher,
@@ -477,7 +476,7 @@ func (s *Server) handleDeployForm(w http.ResponseWriter, r *http.Request) {
 	}
 	agents, err := s.store.ListAgents(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	installed := map[string]string{}
@@ -519,7 +518,7 @@ func (s *Server) handleDeployForm(w http.ResponseWriter, r *http.Request) {
 		}
 		return d.Rows[i].Agent.Host.Hostname < d.Rows[j].Agent.Host.Hostname
 	})
-	s.render(w, r, "deploy", "Distribuisci "+p.Name+" "+p.Version, d)
+	s.render(w, r, "deploy", s.Tf(r, "Distribuisci %s %s", p.Name, p.Version), d)
 }
 
 func ttlFrom(r *http.Request) int64 {
@@ -545,11 +544,11 @@ func (s *Server) handleDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	man, mod, err := s.softwareModule(r.Context())
 	if err != nil {
-		s.flash(w, r, "Pubblica prima il modulo software.", back)
+		s.flash(w, r, s.T(r, "Pubblica prima il modulo software."), back)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "richiesta non valida", http.StatusBadRequest)
+		http.Error(w, s.T(r, "richiesta non valida"), http.StatusBadRequest)
 		return
 	}
 	var targets []string
@@ -559,13 +558,13 @@ func (s *Server) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		}
 		a, err := s.store.GetAgent(r.Context(), t, id)
 		if err != nil || a.Status != store.AgentActive {
-			s.flash(w, r, "Solo gli agenti approvati possono ricevere comandi.", back)
+			s.flash(w, r, s.T(r, "Solo gli agenti approvati possono ricevere comandi."), back)
 			return
 		}
 		targets = append(targets, id)
 	}
 	if len(targets) == 0 || len(targets) > jobreq.MaxAgents {
-		s.flash(w, r, fmt.Sprintf("Seleziona da 1 a %d endpoint.", jobreq.MaxAgents), back)
+		s.flash(w, r, s.Tf(r, "Seleziona da 1 a %d endpoint.", jobreq.MaxAgents), back)
 		return
 	}
 	params := map[string]any{"kind": p.Kind, "allow_unsigned": p.AllowUnsigned}
@@ -585,7 +584,7 @@ func (s *Server) handleDeploy(w http.ResponseWriter, r *http.Request) {
 		req.AgentIds = targets
 	}
 	if err := jobreq.Validate(req); err != nil {
-		s.flash(w, r, "Richiesta non valida: "+err.Error(), back)
+		s.flash(w, r, s.Tf(r, "Richiesta non valida: %v", err), back)
 		return
 	}
 	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
@@ -602,12 +601,12 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 	back := "/agents/" + id
 	a, err := s.store.GetAgent(r.Context(), t, id)
 	if err != nil || a.Status != store.AgentActive {
-		s.flash(w, r, "Solo gli agenti approvati possono ricevere comandi.", back)
+		s.flash(w, r, s.T(r, "Solo gli agenti approvati possono ricevere comandi."), back)
 		return
 	}
 	man, mod, err := s.softwareModule(r.Context())
 	if err != nil {
-		s.flash(w, r, "Pubblica prima il modulo software.", back)
+		s.flash(w, r, s.T(r, "Pubblica prima il modulo software."), back)
 		return
 	}
 	name, version, code := strings.TrimSpace(r.PostFormValue("name")), strings.TrimSpace(r.PostFormValue("version")),
@@ -622,11 +621,11 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 			params["version"] = version
 		}
 	default:
-		s.flash(w, r, "Applicazione non valida.", back)
+		s.flash(w, r, s.T(r, "Applicazione non valida."), back)
 		return
 	}
 	if strings.HasPrefix(strings.ToLower(name), "open-rmm") {
-		s.flash(w, r, "L'agente open-rmm non si disinstalla dalla console.", back)
+		s.flash(w, r, s.T(r, "L'agente open-rmm non si disinstalla dalla console."), back)
 		return
 	}
 	if extra := strings.TrimSpace(r.PostFormValue("uninstall_args")); extra != "" {
@@ -637,7 +636,7 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 		ModuleSha256: mod.ManifestSHA256, Action: "uninstall", ParamsJson: raw, TtlSeconds: ttlFrom(r),
 		RequestNonce: jobreq.NewRequestNonce()}
 	if err := jobreq.Validate(req); err != nil {
-		s.flash(w, r, "Richiesta non valida: "+err.Error(), back)
+		s.flash(w, r, s.Tf(r, "Richiesta non valida: %v", err), back)
 		return
 	}
 	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)

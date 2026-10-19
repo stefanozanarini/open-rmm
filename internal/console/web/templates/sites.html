@@ -1,22 +1,22 @@
 {{define "content"}}
-<p class="muted">Gli agenti vengono assegnati alla prima sede che contiene uno degli indirizzi IPv4 delle loro schede di rete (dall'inventario) o l'indirizzo da cui si collegano. Un PC fuori sede compare in "Senza sede".</p>
+<p class="muted">{{t "Gli agenti vengono assegnati alla prima sede che contiene uno degli indirizzi IPv4 delle loro schede di rete (dall'inventario) o l'indirizzo da cui si collegano. Un PC fuori sede compare in \"Senza sede\"."}}</p>
 {{range .Data.Sites}}
 <form method="post" action="/sites" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <input type="hidden" name="id" value="{{.ID}}">
-  <label>Nome <input name="name" value="{{.Name}}" required maxlength="64" {{if not $.IsAdmin}}disabled{{end}}></label>
-  <label>Subnet (una per riga) <textarea name="subnets" rows="3" spellcheck="false" {{if not $.IsAdmin}}disabled{{end}}>{{range .Subnets}}{{.}}
+  <label>{{t "Nome"}} <input name="name" value="{{.Name}}" required maxlength="64" {{if not $.IsAdmin}}disabled{{end}}></label>
+  <label>{{t "Subnet (una per riga)"}} <textarea name="subnets" rows="3" spellcheck="false" {{if not $.IsAdmin}}disabled{{end}}>{{range .Subnets}}{{.}}
 {{end}}</textarea></label>
-  {{if $.IsAdmin}}<div class="actions"><button class="primary">Salva</button><button name="delete" value="1" class="danger">Elimina</button></div>{{end}}
+  {{if $.IsAdmin}}<div class="actions"><button class="primary">{{t "Salva"}}</button><button name="delete" value="1" class="danger">{{t "Elimina"}}</button></div>{{end}}
 </form>
-{{else}}<p class="muted">Nessuna sede.</p>{{end}}
+{{else}}<p class="muted">{{t "Nessuna sede."}}</p>{{end}}
 {{if .IsAdmin}}
-<h2>Nuova sede</h2>
+<h2>{{t "Nuova sede"}}</h2>
 <form method="post" action="/sites" class="stack">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <label>Nome <input name="name" required maxlength="64" placeholder="Sede di Bologna"></label>
-  <label>Subnet (una per riga) <textarea name="subnets" rows="3" spellcheck="false" placeholder="192.168.10.0/24"></textarea></label>
-  <button class="primary">Crea</button>
+  <label>{{t "Nome"}} <input name="name" required maxlength="64" placeholder="{{t "Sede di Bologna"}}"></label>
+  <label>{{t "Subnet (una per riga)"}} <textarea name="subnets" rows="3" spellcheck="false" placeholder="192.168.10.0/24"></textarea></label>
+  <button class="primary">{{t "Crea"}}</button>
 </form>
 {{end}}
 {{end}}

@@ -1,17 +1,17 @@
 {{define "agentrows"}}
 <table class="agents">
-<thead><tr>{{if .Select}}<th></th>{{end}}<th>Nome</th><th>Stato</th><th>Sede</th><th>Utente</th><th>Modello</th><th>Sistema</th><th>Supremo</th><th>Ultimo contatto</th></tr></thead>
+<thead><tr>{{if .Select}}<th></th>{{end}}<th>{{t "Nome"}}</th><th>{{t "Stato"}}</th><th>{{t "Sede"}}</th><th>{{t "Utente"}}</th><th>{{t "Modello"}}</th><th>{{t "Sistema"}}</th><th>Supremo</th><th>{{t "Ultimo contatto"}}</th></tr></thead>
 <tbody>
 {{range .Rows}}<tr{{if .Current}} class="current"{{end}}>
-  {{if $.Select}}<td><input type="checkbox" name="agent" value="{{.ID}}"{{if .Checked}} checked{{end}} aria-label="seleziona {{.Host.Hostname}}"></td>{{end}}
+  {{if $.Select}}<td><input type="checkbox" name="agent" value="{{.ID}}"{{if .Checked}} checked{{end}} aria-label="{{tf "seleziona %s" .Host.Hostname}}"></td>{{end}}
   <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}}
     <a href="{{rowLink $.View .ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}
-    <a class="open" href="/agents/{{.ID}}" title="apri la pagina dell'agente">↗</a></td>
-  <td class="icons">{{with .Alerts}}<span class="badge sev-critical" title="avvisi aperti">{{.}} avvisi</span>{{end}}
-    {{with .Checks}}{{if ne . "ok"}}<span class="badge chk-{{.}}" title="controlli">{{label .}}</span>{{end}}{{end}}
-    {{with .Missing}}<span class="badge chk-failing" title="aggiornamenti di sicurezza mancanti">{{.}} patch</span>{{end}}
-    {{if .Reboot}}<span class="badge chk-warning" title="riavvio in sospeso">riavvio</span>{{end}}
-    {{with .ThirdParty}}<span class="badge chk-warning" title="applicazioni da aggiornare">{{.}} app</span>{{end}}</td>
+    <a class="open" href="/agents/{{.ID}}" title="{{t "apri la pagina dell'agente"}}">↗</a></td>
+  <td class="icons">{{with .Alerts}}<span class="badge sev-critical" title="{{t "avvisi aperti"}}">{{tf "%d avvisi" .}}</span>{{end}}
+    {{with .Checks}}{{if ne . "ok"}}<span class="badge chk-{{.}}" title="{{t "controlli"}}">{{label .}}</span>{{end}}{{end}}
+    {{with .Missing}}<span class="badge chk-failing" title="{{t "aggiornamenti di sicurezza mancanti"}}">{{tf "%d patch" .}}</span>{{end}}
+    {{if .Reboot}}<span class="badge chk-warning" title="{{t "riavvio in sospeso"}}">{{t "riavvio"}}</span>{{end}}
+    {{with .ThirdParty}}<span class="badge chk-warning" title="{{t "applicazioni da aggiornare"}}">{{tf "%d app" .}}</span>{{end}}</td>
   <td>{{.Site}}</td>
   <td>{{.Inv.LoggedOnUser}}</td>
   <td>{{.Inv.Manufacturer}} {{.Inv.Model}}</td>
@@ -25,36 +25,36 @@
 {{define "content"}}
 {{with .Data}}
 <div class="workspace">
-<aside class="tree" aria-label="Sedi">
+<aside class="tree" aria-label="{{t "Sedi"}}">
   <p class="tree-title">{{$.Tenant.Name}}</p>
-  <a href="/agents{{qs "family" .Family "q" .Query "ou" .OU}}" {{if not .Site}}class="current"{{end}}>Tutte le sedi</a>
+  <a href="/agents{{qs "family" .Family "q" .Query "ou" .OU}}" {{if not .Site}}class="current"{{end}}>{{t "Tutte le sedi"}}</a>
   {{range .Sites}}<a href="/agents{{qs "site" .ID "family" $.Data.Family "q" $.Data.Query "ou" $.Data.OU}}" {{if eq $.Data.Site .ID}}class="current"{{end}}>{{.Name}} <span class="muted">{{.Count}}</span></a>{{end}}
-  <a href="/agents{{qs "site" "none" "family" .Family "q" .Query "ou" .OU}}" {{if eq .Site "none"}}class="current"{{end}}>Senza sede <span class="muted">{{.NoSite}}</span></a>
-  <a class="muted small" href="/sites">{{if $.IsAdmin}}gestisci le sedi{{else}}sedi{{end}}</a>
+  <a href="/agents{{qs "site" "none" "family" .Family "q" .Query "ou" .OU}}" {{if eq .Site "none"}}class="current"{{end}}>{{t "Senza sede"}} <span class="muted">{{.NoSite}}</span></a>
+  <a class="muted small" href="/sites">{{if $.IsAdmin}}{{t "gestisci le sedi"}}{{else}}{{t "sedi"}}{{end}}</a>
   {{if .OUs}}<p class="tree-title">Active Directory</p>
-  {{if .OU}}<a href="/agents{{qs "family" .Family "q" .Query "site" .Site}}">Tutte le OU</a>{{end}}
+  {{if .OU}}<a href="/agents{{qs "family" .Family "q" .Query "site" .Site}}">{{t "Tutte le OU"}}</a>{{end}}
   {{range .OUs}}<a href="/agents{{qs "ou" .Key "family" $.Data.Family "q" $.Data.Query "site" $.Data.Site}}" class="depth-{{.Depth}}{{if eq $.Data.OU .Key}} current{{end}}" title="{{.Key}}">{{.Label}} <span class="muted">{{.Count}}</span></a>{{end}}
-  <a class="muted small" href="/ad">confronto con AD</a>{{end}}
+  <a class="muted small" href="/ad">{{t "confronto con AD"}}</a>{{end}}
 </aside>
 <div class="main">
 <div class="toolbar">
   <nav class="tabs">
-    <a href="/agents{{qs "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family ""}}class="current"{{end}}>Tutti ({{index .Counts ""}})</a>
-    <a href="/agents{{qs "family" "client" "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family "client"}}class="current"{{end}}>Client ({{index .Counts "client"}})</a>
-    <a href="/agents{{qs "family" "server" "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family "server"}}class="current"{{end}}>Server ({{index .Counts "server"}})</a>
+    <a href="/agents{{qs "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family ""}}class="current"{{end}}>{{tf "Tutti (%d)" (index .Counts "")}}</a>
+    <a href="/agents{{qs "family" "client" "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family "client"}}class="current"{{end}}>{{tf "Client (%d)" (index .Counts "client")}}</a>
+    <a href="/agents{{qs "family" "server" "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family "server"}}class="current"{{end}}>{{tf "Server (%d)" (index .Counts "server")}}</a>
   </nav>
   <form method="get" action="/agents" class="search">
     {{if .Family}}<input type="hidden" name="family" value="{{.Family}}">{{end}}
     {{if .Site}}<input type="hidden" name="site" value="{{.Site}}">{{end}}
     {{if .OU}}<input type="hidden" name="ou" value="{{.OU}}">{{end}}
-    <input type="search" name="q" value="{{.Query}}" placeholder="Nome, utente, modello, seriale, ID Supremo, sede…">
-    <button>Cerca</button>
+    <input type="search" name="q" value="{{.Query}}" placeholder="{{t "Nome, utente, modello, seriale, ID Supremo, sede…"}}" aria-label="{{t "Cerca"}}">
+    <button>{{t "Cerca"}}</button>
   </form>
 </div>
 {{if .Pending}}
 <section class="warn">
-<h2>In attesa di approvazione ({{len .Pending}})</h2>
-<p>Questi agenti sono connessi ma non ricevono comandi finché non vengono approvati. Verifica che siano PC dell'azienda prima di approvarli.</p>
+<h2>{{tf "In attesa di approvazione (%d)" (len .Pending)}}</h2>
+<p>{{t "Questi agenti sono connessi ma non ricevono comandi finché non vengono approvati. Verifica che siano PC dell'azienda prima di approvarli."}}</p>
 {{template "agentrows" (rowsCtx . .Pending false)}}
 </section>
 {{end}}
@@ -62,22 +62,22 @@
 <form method="get" action="/agents/bulk">
 {{template "agentrows" (rowsCtx . .Active $.CanRun)}}
 {{if $.CanRun}}<div class="actions">
-  <button class="primary">Azioni sui selezionati</button>
-  <a href="{{.SelectAllURL}}">seleziona tutti</a> · <a href="{{.ClearURL}}">nessuno</a>
+  <button class="primary">{{t "Azioni sui selezionati"}}</button>
+  <a href="{{.SelectAllURL}}">{{t "seleziona tutti"}}</a> · <a href="{{.ClearURL}}">{{t "nessuno"}}</a>
 </div>{{end}}
 </form>
-{{else}}<p class="muted">Nessun agente attivo{{if .Query}} corrispondente alla ricerca{{end}}.</p>{{end}}
+{{else}}<p class="muted">{{if .Query}}{{t "Nessun agente attivo corrispondente alla ricerca."}}{{else}}{{t "Nessun agente attivo."}}{{end}}</p>{{end}}
 {{if .Revoked}}
-<h2>Revocati ({{len .Revoked}})</h2>
+<h2>{{tf "Revocati (%d)" (len .Revoked)}}</h2>
 {{template "agentrows" (rowsCtx . .Revoked false)}}
 {{end}}
 
 {{with .Selected}}
-<section class="panel" aria-label="Agente selezionato">
+<section class="panel" aria-label="{{t "Agente selezionato"}}">
   <header>
     <h2>{{.Agent.Host.Hostname}}</h2>
-    <a href="/agents/{{.Agent.ID}}">apri la pagina</a>
-    <a href="{{$.Data.ClearURL}}">chiudi</a>
+    <a href="/agents/{{.Agent.ID}}">{{t "apri la pagina"}}</a>
+    <a href="{{$.Data.ClearURL}}">{{t "chiudi"}}</a>
   </header>
   <nav class="tabs">{{range $.Data.Tabs}}<a href="{{.URL}}"{{if .Current}} class="current"{{end}}>{{.Label}}</a>{{end}}</nav>
   {{$p := panelCtx $ .}}
@@ -90,7 +90,7 @@
   {{else if eq $.Data.Tab "policies"}}{{template "agent-policies" $p}}
   {{else if eq $.Data.Tab "history"}}{{template "agent-jobs" $p}}{{template "agent-changes" $p}}
   {{else if eq $.Data.Tab "notes"}}{{template "agent-notes" $p}}
-  {{else if eq $.Data.Tab "commands"}}{{template "agent-actions" $p}}{{if not .Actions}}<p class="muted">Nessuna azione disponibile per questo agente.</p>{{end}}
+  {{else if eq $.Data.Tab "commands"}}{{template "agent-actions" $p}}{{if not .Actions}}<p class="muted">{{t "Nessuna azione disponibile per questo agente."}}</p>{{end}}
   {{end}}
 </section>
 {{end}}

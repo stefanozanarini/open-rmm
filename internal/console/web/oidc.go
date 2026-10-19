@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -46,7 +45,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		CodeVerifier: oauth2.GenerateVerifier(), StartedAt: s.now()}
 	sess.data.Pending = p
 	if err := s.save(r.Context(), w, sess); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	http.Redirect(w, r, s.oauth.AuthCodeURL(p.State, s.authOptions(p, false)...), http.StatusSeeOther)
@@ -56,14 +55,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) startStepUp(w http.ResponseWriter, r *http.Request, sess *session, req *openrmmv1.JobRequest, ret string) {
 	raw, err := proto.Marshal(req)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	p := &Pending{Purpose: "job", State: ids.NewSecret(24), Nonce: jobreq.AuthNonce(req),
 		CodeVerifier: oauth2.GenerateVerifier(), StartedAt: s.now(), JobRequest: raw, Return: ret}
 	sess.data.Pending = p
 	if err := s.save(r.Context(), w, sess); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	opts := append(s.authOptions(p, true), oauth2.SetAuthURLParam("login_hint", sess.data.Operator.Username))
@@ -87,43 +86,44 @@ func (s *Server) exchange(ctx context.Context, code, verifier string) (string, e
 
 func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	sess := s.loadSession(r)
+	lang := langOf(r, sess)
 	if sess == nil || sess.data.Pending == nil {
-		http.Error(w, "accesso non avviato o scaduto: riprova", http.StatusBadRequest)
+		http.Error(w, tr(lang, "accesso non avviato o scaduto: riprova"), http.StatusBadRequest)
 		return
 	}
 	p := sess.data.Pending
 	sess.data.Pending = nil // single use, whatever happens next
 	if err := s.save(r.Context(), w, sess); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	q := r.URL.Query()
 	if e := q.Get("error"); e != "" {
 		s.log.Warn("identity provider error", "error", e, "description", q.Get("error_description"))
-		http.Error(w, "accesso non riuscito: "+e, http.StatusUnauthorized)
+		http.Error(w, trf(lang, "accesso non riuscito: %s", e), http.StatusUnauthorized)
 		return
 	}
 	if q.Get("state") == "" || q.Get("state") != p.State || s.now().Sub(p.StartedAt) > pendingMaxAge {
-		http.Error(w, "accesso non valido o scaduto: riprova", http.StatusBadRequest)
+		http.Error(w, tr(lang, "accesso non valido o scaduto: riprova"), http.StatusBadRequest)
 		return
 	}
 	raw, err := s.exchange(r.Context(), q.Get("code"), p.CodeVerifier)
 	if err != nil {
 		s.log.Warn("token exchange failed", "err", err)
-		http.Error(w, "accesso non riuscito", http.StatusUnauthorized)
+		http.Error(w, tr(lang, "accesso non riuscito"), http.StatusUnauthorized)
 		return
 	}
 	claims, err := s.verifier.Verify(r.Context(), raw)
 	if err != nil {
 		s.log.Warn("operator token rejected", "err", err)
-		msg := "accesso negato"
+		msg := tr(lang, "accesso negato")
 		switch {
 		case errors.Is(err, authn.ErrNoMFA):
-			msg = "accesso negato: è richiesta l'autenticazione a più fattori"
+			msg = tr(lang, "accesso negato: è richiesta l'autenticazione a più fattori")
 		case errors.Is(err, authn.ErrNoRole):
-			msg = "accesso negato: nessun ruolo open-rmm assegnato"
+			msg = tr(lang, "accesso negato: nessun ruolo open-rmm assegnato")
 		case errors.Is(err, authn.ErrNoTenant):
-			msg = "accesso negato: directory non autorizzata"
+			msg = tr(lang, "accesso negato: directory non autorizzata")
 		}
 		http.Error(w, msg, http.StatusForbidden)
 		return
@@ -131,7 +131,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	switch p.Purpose {
 	case "login":
 		if claims.Nonce != p.Nonce {
-			http.Error(w, "accesso non valido", http.StatusBadRequest)
+			http.Error(w, tr(lang, "accesso non valido"), http.StatusBadRequest)
 			return
 		}
 		s.completeLogin(w, r, sess, claims)
@@ -140,7 +140,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	case "policy":
 		s.completePolicy(w, r, sess, p, claims, raw)
 	default:
-		http.Error(w, "accesso non valido", http.StatusBadRequest)
+		http.Error(w, tr(lang, "accesso non valido"), http.StatusBadRequest)
 	}
 }
 
@@ -154,7 +154,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, old *sess
 		sess.data.Tenant = tenants[0]
 	}
 	if err := s.save(r.Context(), w, sess); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	for _, t := range tenants {
@@ -165,24 +165,24 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, old *sess
 }
 
 func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *session, p *Pending, c *authn.Claims, rawToken string) {
-	op := sess.data.Operator
+	op, lang := sess.data.Operator, langOf(r, sess)
 	if op == nil {
-		http.Error(w, "sessione scaduta", http.StatusUnauthorized)
+		http.Error(w, tr(lang, "sessione scaduta"), http.StatusUnauthorized)
 		return
 	}
 	// The approval must come from the logged-in operator.
 	if c.ObjectID != op.ObjectID || c.TenantID != op.TenantID {
 		s.log.Warn("step-up by another identity", "session", op.ObjectID, "token", c.ObjectID)
-		http.Error(w, "l'approvazione deve essere fatta dallo stesso operatore", http.StatusForbidden)
+		http.Error(w, tr(lang, "l'approvazione deve essere fatta dallo stesso operatore"), http.StatusForbidden)
 		return
 	}
 	req := &openrmmv1.JobRequest{}
 	if err := proto.Unmarshal(p.JobRequest, req); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if !jobreq.CheckAuthNonce(c.Nonce, req) {
-		http.Error(w, "approvazione non valida per questa richiesta", http.StatusForbidden)
+		http.Error(w, tr(lang, "approvazione non valida per questa richiesta"), http.StatusForbidden)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -192,7 +192,7 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 		s.log.Warn("signer refused job", "err", err, "operator", op.Username)
 		s.audit(r.Context(), req.GetTenantId(), op, "job.refused", req.GetAgentId(), map[string]any{
 			"module": req.GetModule(), "action": req.GetAction(), "reason": err.Error()})
-		s.flashTo(w, r, sess, "Il servizio di firma ha rifiutato il comando: "+err.Error(), p.Return)
+		s.flashTo(w, r, sess, trf(lang, "Il servizio di firma ha rifiutato il comando: %v", err), p.Return)
 		return
 	}
 	var pkgs []string
@@ -208,7 +208,7 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 			ExpiresAt: time.Unix(resp.GetExpiresUnix(), 0), Packages: pkgs,
 		}
 		if err := s.store.CreateJob(r.Context(), j); err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		s.audit(r.Context(), req.GetTenantId(), op, "job.created", j.ID, map[string]any{
@@ -219,11 +219,11 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 	}
 	switch len(created) {
 	case 0:
-		s.fail(w, errors.New("signer returned no jobs"))
+		s.fail(w, r, errors.New("signer returned no jobs"))
 	case 1:
 		http.Redirect(w, r, "/jobs/"+created[0], http.StatusSeeOther)
 	default:
-		s.flashTo(w, r, sess, fmt.Sprintf("%d comandi approvati e in coda.", len(created)), "/jobs")
+		s.flashTo(w, r, sess, trf(lang, "%d comandi approvati e in coda.", len(created)), "/jobs")
 	}
 }
 

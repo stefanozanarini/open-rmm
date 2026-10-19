@@ -1,27 +1,27 @@
 {{define "content"}}
 {{with .Data}}
-<p class="muted">Le release dell'agente sono firmate con la chiave di rilascio offline. Pubblicazione e versioni obiettivo si gestiscono da riga di comando (<code>openrmm-admin release</code>).</p>
-<h2>Versioni obiettivo</h2>
+<p class="muted">{{th "Le release dell'agente sono firmate con la chiave di rilascio offline. Pubblicazione e versioni obiettivo si gestiscono da riga di comando (<code>openrmm-admin release</code>)."}}</p>
+<h2>{{t "Versioni obiettivo"}}</h2>
 {{if .Targets}}
 <table>
-<thead><tr><th>Anello</th><th>Piattaforma</th><th>Versione</th><th>Impostata</th><th>Agenti aggiornati</th></tr></thead>
+<thead><tr><th>{{t "Anello"}}</th><th>{{t "Piattaforma"}}</th><th>{{t "Versione"}}</th><th>{{t "Impostata"}}</th><th>{{t "Agenti aggiornati"}}</th></tr></thead>
 <tbody>
 {{range .Targets}}<tr><td>{{.Ring}}</td><td>{{.Platform}}</td><td>{{.Version}}</td><td>{{fmtTime .UpdatedAt}} {{.UpdatedBy}}</td><td>{{.Done}} / {{.Total}}</td></tr>{{end}}
 </tbody>
 </table>
-{{else}}<p class="muted">Nessuna versione obiettivo impostata: gli agenti non vengono aggiornati.</p>{{end}}
+{{else}}<p class="muted">{{t "Nessuna versione obiettivo impostata: gli agenti non vengono aggiornati."}}</p>{{end}}
 {{if .Problems}}
-<h2>Aggiornamenti non riusciti</h2>
+<h2>{{t "Aggiornamenti non riusciti"}}</h2>
 <table>
-<thead><tr><th>Agente</th><th>Versione</th><th>Stato</th><th>Quando</th><th>Errore</th></tr></thead>
+<thead><tr><th>{{t "Agente"}}</th><th>{{t "Versione"}}</th><th>{{t "Stato"}}</th><th>{{t "Quando"}}</th><th>{{t "Errore"}}</th></tr></thead>
 <tbody>
 {{range .Problems}}<tr><td><a href="/agents/{{.ID}}">{{.Host.Hostname}}</a></td><td>{{.Update.Version}}</td><td><span class="badge {{.Update.State}}">{{label .Update.State}}</span></td><td>{{fmtTime .Update.At}}</td><td>{{.Update.Error}}</td></tr>{{end}}
 </tbody>
 </table>
 {{end}}
-<h2>Release pubblicate</h2>
+<h2>{{t "Release pubblicate"}}</h2>
 <table>
-<thead><tr><th>Versione</th><th>Piattaforma</th><th>Chiave</th><th>Pubblicata</th><th>Note</th></tr></thead>
+<thead><tr><th>{{t "Versione"}}</th><th>{{t "Piattaforma"}}</th><th>{{t "Chiave"}}</th><th>{{t "Pubblicata"}}</th><th>{{t "Note"}}</th></tr></thead>
 <tbody>
 {{range .Releases}}<tr><td>{{.Version}}</td><td>{{.Platform}}</td><td><code>{{short .KeyID}}</code></td><td>{{fmtTime .PublishedAt}}</td><td>{{.Notes}}</td></tr>{{end}}
 </tbody>

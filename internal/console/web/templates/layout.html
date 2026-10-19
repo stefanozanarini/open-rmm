@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it"{{with .Theme}} data-theme="{{.}}"{{end}}>
+<html lang="{{.Lang}}"{{with .Theme}} data-theme="{{.}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,37 +12,42 @@
   <a class="brand" href="/agents">open-rmm</a>
   {{if .Operator}}
   <nav>
-    <a href="/agents?family=client">Client</a>
-    <a href="/agents?family=server">Server</a>
-    <a href="/agents">Tutti gli agenti</a>
-    <a href="/jobs">Job</a>
-    <a href="/modules">Moduli</a>
-    <a href="/policies">Policy</a>
-    <a href="/patches">Patch</a>
+    <a href="/agents?family=client">{{t "Client"}}</a>
+    <a href="/agents?family=server">{{t "Server"}}</a>
+    <a href="/agents">{{t "Tutti gli agenti"}}</a>
+    <a href="/jobs">{{t "Job"}}</a>
+    <a href="/modules">{{t "Moduli"}}</a>
+    <a href="/policies">{{t "Policy"}}</a>
+    <a href="/patches">{{t "Patch"}}</a>
     <a href="/packages">Software</a>
-    {{if .IsAdmin}}<a href="/tokens">Token</a>{{end}}
-    <a href="/alerts">Avvisi{{if .OpenAlerts}} <span class="badge sev-critical">{{.OpenAlerts}}</span>{{end}}</a>
-    <a href="/audit">Attività</a>
-    <a href="/updates">Versioni agente</a>
-    {{if .IsAdmin}}<a href="/settings">Impostazioni</a> <a href="/setup">Configurazione</a>{{end}}
+    {{if .IsAdmin}}<a href="/tokens">{{t "Token"}}</a>{{end}}
+    <a href="/alerts">{{t "Avvisi"}}{{if .OpenAlerts}} <span class="badge sev-critical">{{.OpenAlerts}}</span>{{end}}</a>
+    <a href="/audit">{{t "Attività"}}</a>
+    <a href="/updates">{{t "Versioni agente"}}</a>
+    {{if .IsAdmin}}<a href="/settings">{{t "Impostazioni"}}</a> <a href="/setup">{{t "Configurazione"}}</a>{{end}}
   </nav>
   <div class="who">
     {{if gt (len .Tenants) 1}}
     <form method="post" action="/tenant" class="inline">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
-      <select name="tenant">{{range .Tenants}}<option value="{{.ID}}" {{if eq .ID $.Tenant.ID}}selected{{end}}>{{.Name}}</option>{{end}}</select>
-      <button>Cambia</button>
+      <select name="tenant" aria-label="{{t "Tenant"}}">{{range .Tenants}}<option value="{{.ID}}" {{if eq .ID $.Tenant.ID}}selected{{end}}>{{.Name}}</option>{{end}}</select>
+      <button>{{t "Cambia"}}</button>
     </form>
     {{else}}<span class="tenant">{{.Tenant.Name}}</span>{{end}}
     <form method="post" action="/theme" class="inline theme">
       <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="return" value="{{.Path}}">
-      <select name="theme" aria-label="Tema"><option value="" {{if not .Theme}}selected{{end}}>Tema automatico</option><option value="light" {{if eq .Theme "light"}}selected{{end}}>Chiaro</option><option value="dark" {{if eq .Theme "dark"}}selected{{end}}>Scuro</option></select>
-      <button>Applica</button>
+      <select name="theme" aria-label="{{t "Tema"}}"><option value="" {{if not .Theme}}selected{{end}}>{{t "Tema automatico"}}</option><option value="light" {{if eq .Theme "light"}}selected{{end}}>{{t "Chiaro"}}</option><option value="dark" {{if eq .Theme "dark"}}selected{{end}}>{{t "Scuro"}}</option></select>
+      <button>{{t "Applica"}}</button>
     </form>
     <span>{{.Operator.Username}}</span>
     <form method="post" action="/logout" class="inline">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
-      <button class="link">Esci</button>
+      <button class="link">{{t "Esci"}}</button>
+    </form>
+    <form method="post" action="/lang" class="inline lang">
+      <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="return" value="{{.Path}}">
+      <select name="lang" aria-label="{{t "Lingua"}}" title="{{t "Lingua"}}"><option value="it" lang="it" {{if eq .Lang "it"}}selected{{end}}>Italiano</option><option value="en" lang="en" {{if eq .Lang "en"}}selected{{end}}>English</option></select>
+      <button>{{t "Applica"}}</button>
     </form>
   </div>
   {{end}}
@@ -57,7 +62,7 @@
 {{define "jobrows"}}
 {{if .}}
 <table>
-<thead><tr><th>Job</th><th>Modulo</th><th>Azione</th><th>Stato</th><th>Creato</th><th>Da</th></tr></thead>
+<thead><tr><th>Job</th><th>{{t "Modulo"}}</th><th>{{t "Azione"}}</th><th>{{t "Stato"}}</th><th>{{t "Creato"}}</th><th>{{t "Da"}}</th></tr></thead>
 <tbody>
 {{range .}}<tr>
   <td><a href="/jobs/{{.ID}}"><code>{{short .ID}}</code></a></td>
@@ -69,5 +74,5 @@
 </tr>{{end}}
 </tbody>
 </table>
-{{else}}<p class="muted">Nessun job.</p>{{end}}
+{{else}}<p class="muted">{{t "Nessun job."}}</p>{{end}}
 {{end}}

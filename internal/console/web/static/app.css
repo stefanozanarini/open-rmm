@@ -116,4 +116,4 @@ button.primary, a.button { background:var(--accent); border-color:var(--accent);
 section.warn { background:var(--warn); border-color:var(--line); }
 .card.bad { background:var(--card); }
 .card.warn { background:var(--warn); }
-header form.theme select { padding:2px 4px; font-size:13px; }
+header form.theme select, header form.lang select { padding:2px 4px; font-size:13px; }

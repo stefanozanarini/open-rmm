@@ -109,33 +109,33 @@ var tabs = []struct{ ID, Label string }{
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	q := r.URL.Query()
 	agents, err := s.store.ListAgents(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	sums, err := s.store.InventorySummaries(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	worst, err := s.store.WorstChecks(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	sites, err := s.store.ListSites(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	open, err := s.store.ListAlerts(r.Context(), t, "", true, 5000)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	alerts := map[string]int{}
@@ -144,12 +144,12 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses, err := s.store.ListUpdateStatus(r.Context(), t, "")
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	snaps, err := s.adSnapshots(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	places := adPlaces(snaps)
@@ -249,7 +249,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, store.ErrNotFound):
 		case err != nil:
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		default:
 			det.Panel = true
@@ -263,14 +263,14 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 				d.Tab = "summary"
 			}
 			for _, tb := range tabs {
-				d.Tabs = append(d.Tabs, panelTab{ID: tb.ID, Label: tb.Label, Current: tb.ID == d.Tab,
+				d.Tabs = append(d.Tabs, panelTab{ID: tb.ID, Label: s.T(r, tb.Label), Current: tb.ID == d.Tab,
 					URL: link(url.Values{"agent": {selected}, "tab": {tb.ID}})})
 			}
 			det.Return = link(url.Values{"agent": {selected}, "tab": {d.Tab}})
 		}
 	}
 	title := map[string]string{"": "Agenti", "client": "Client", "server": "Server"}[d.Family]
-	s.render(w, r, "agents", title, d)
+	s.render(w, r, "agents", s.T(r, title), d)
 }
 
 // rowLink is the URL that opens an agent in the bottom panel.
@@ -314,7 +314,7 @@ func (s *Server) handleAddNote(w http.ResponseWriter, r *http.Request) {
 	back := safeReturn(r.PostFormValue("return"), "/agents/"+id)
 	body := strings.TrimSpace(r.PostFormValue("body"))
 	if body == "" || len(body) > 4000 {
-		s.flash(w, r, "La nota deve avere da 1 a 4000 caratteri.", back)
+		s.flash(w, r, s.T(r, "La nota deve avere da 1 a 4000 caratteri."), back)
 		return
 	}
 	n := store.Note{TenantID: t, ID: ids.NewUUID(), AgentID: id, Body: body, Author: op.Name + " (" + op.Username + ")"}
@@ -322,11 +322,11 @@ func (s *Server) handleAddNote(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	} else if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "agent.note_added", id, map[string]any{"note": n.ID})
-	s.flash(w, r, "Nota aggiunta.", back)
+	s.flash(w, r, s.T(r, "Nota aggiunta."), back)
 }
 
 // ---- sites ----
@@ -338,25 +338,25 @@ type sitesData struct {
 func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	sites, err := s.store.ListSites(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	var d sitesData
 	for _, st := range sites {
 		d.Sites = append(d.Sites, siteView{Site: st})
 	}
-	s.render(w, r, "sites", "Sedi", d)
+	s.render(w, r, "sites", s.T(r, "Sedi"), d)
 }
 
 func (s *Server) handleSaveSite(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	op := sessionFrom(r.Context()).data.Operator
@@ -369,22 +369,22 @@ func (s *Server) handleSaveSite(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.PostFormValue("delete") != "" {
 		if err := s.store.DeleteSite(r.Context(), t, id); err != nil && !errors.Is(err, store.ErrNotFound) {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		s.audit(r.Context(), t, op, "site.deleted", id, nil)
-		s.flash(w, r, "Sede eliminata.", "/sites")
+		s.flash(w, r, s.T(r, "Sede eliminata."), "/sites")
 		return
 	}
 	name := strings.TrimSpace(r.PostFormValue("name"))
 	if !versionTxt.MatchString(name) {
-		s.flash(w, r, "Nome della sede non valido.", "/sites")
+		s.flash(w, r, s.T(r, "Nome della sede non valido."), "/sites")
 		return
 	}
 	fields := strings.FieldsFunc(r.PostFormValue("subnets"), func(c rune) bool { return c == '\n' || c == '\r' || c == ',' || c == ' ' })
 	prefixes, err := accesslog.ParseSubnets(fields)
 	if err != nil || len(prefixes) > 100 {
-		s.flash(w, r, "Subnet non valide (una per riga, es. 192.168.10.0/24, al massimo 100).", "/sites")
+		s.flash(w, r, s.T(r, "Subnet non valide (una per riga, es. 192.168.10.0/24, al massimo 100)."), "/sites")
 		return
 	}
 	st := store.Site{TenantID: t, ID: id, Name: name}
@@ -393,14 +393,14 @@ func (s *Server) handleSaveSite(w http.ResponseWriter, r *http.Request) {
 	}
 	switch err := s.store.PutSite(r.Context(), st); {
 	case errors.Is(err, store.ErrSiteExists):
-		s.flash(w, r, "Esiste già una sede con questo nome.", "/sites")
+		s.flash(w, r, s.T(r, "Esiste già una sede con questo nome."), "/sites")
 		return
 	case err != nil:
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "site.saved", id, map[string]any{"name": name, "subnets": st.Subnets})
-	s.flash(w, r, "Sede "+name+" salvata.", "/sites")
+	s.flash(w, r, s.Tf(r, "Sede %s salvata.", name), "/sites")
 }
 
 // ---- theme ----
@@ -412,7 +412,7 @@ func (s *Server) handleTheme(w http.ResponseWriter, r *http.Request) {
 		sess.data.Theme = th
 	}
 	if err := s.save(r.Context(), w, sess); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	http.Redirect(w, r, safeReturn(r.PostFormValue("return"), "/agents"), http.StatusSeeOther)

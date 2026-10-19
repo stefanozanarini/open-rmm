@@ -2,7 +2,6 @@ package web
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -32,12 +31,12 @@ func (s *Server) selectedAgents(r *http.Request, t string, values []string) ([]s
 		seen[id] = true
 		a, err := s.store.GetAgent(r.Context(), t, id)
 		if err != nil || a.Status != store.AgentActive {
-			return nil, "Solo gli agenti approvati possono ricevere comandi."
+			return nil, s.T(r, "Solo gli agenti approvati possono ricevere comandi.")
 		}
 		out = append(out, a)
 	}
 	if len(out) == 0 || len(out) > jobreq.MaxAgents {
-		return nil, fmt.Sprintf("Seleziona da 1 a %d agenti approvati.", jobreq.MaxAgents)
+		return nil, s.Tf(r, "Seleziona da 1 a %d agenti approvati.", jobreq.MaxAgents)
 	}
 	return out, ""
 }
@@ -45,7 +44,7 @@ func (s *Server) selectedAgents(r *http.Request, t string, values []string) ([]s
 func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	agents, msg := s.selectedAgents(r, t, r.URL.Query()["agent"])
@@ -66,7 +65,7 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 		platforms[p] = true
 		acts, err := s.runnableOn(r, a)
 		if err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		for _, x := range acts {
@@ -89,20 +88,20 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 	sortRunnables(d.Scripts)
 	var err error
 	if d.Packages, err = s.store.ListPackages(r.Context(), t); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "bulk", fmt.Sprintf("Azioni su %d agenti", len(agents)), d)
+	s.render(w, r, "bulk", s.Tf(r, "Azioni su %d agenti", len(agents)), d)
 }
 
 func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "richiesta non valida", http.StatusBadRequest)
+		http.Error(w, s.T(r, "richiesta non valida"), http.StatusBadRequest)
 		return
 	}
 	agents, msg := s.selectedAgents(r, t, r.PostForm["agent"])
@@ -126,41 +125,41 @@ func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	target := strings.Split(r.PostFormValue("target"), "|")
 	if len(target) != 3 {
-		s.flash(w, r, "Seleziona un'azione.", back)
+		s.flash(w, r, s.T(r, "Seleziona un'azione."), back)
 		return
 	}
 	mod, err := s.store.GetModule(r.Context(), target[0], target[1])
 	if err != nil {
-		s.flash(w, r, "Modulo non trovato.", back)
+		s.flash(w, r, s.T(r, "Modulo non trovato."), back)
 		return
 	}
 	man, err := modules.ParseManifest(mod.Manifest)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	if _, ok := man.Actions[target[2]]; !ok {
-		s.flash(w, r, "Azione non disponibile.", back)
+		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}
 	params := map[string]any{}
 	if raw := strings.TrimSpace(r.PostFormValue("params")); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &params); err != nil {
-			s.flash(w, r, "I parametri devono essere un oggetto JSON.", back)
+			s.flash(w, r, s.T(r, "I parametri devono essere un oggetto JSON."), back)
 			return
 		}
 	}
 	if man.HasCapability(modules.CapAdHocScript) {
 		script := r.PostFormValue("script")
 		if strings.TrimSpace(script) == "" {
-			s.flash(w, r, "Scrivi lo script da eseguire.", back)
+			s.flash(w, r, s.T(r, "Scrivi lo script da eseguire."), back)
 			return
 		}
 		params["script"] = script
 	}
 	raw, err := json.Marshal(params)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	req := &openrmmv1.JobRequest{TenantId: t, Module: man.ID, ModuleVersion: man.Version, ModuleSha256: mod.ManifestSHA256,
@@ -171,7 +170,7 @@ func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 		req.AgentIds = targets
 	}
 	if err := jobreq.Validate(req); err != nil {
-		s.flash(w, r, "Richiesta non valida: "+err.Error(), back)
+		s.flash(w, r, s.Tf(r, "Richiesta non valida: %v", err), back)
 		return
 	}
 	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)

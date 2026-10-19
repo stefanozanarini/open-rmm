@@ -1,7 +1,7 @@
 {{define "content"}}
-<p class="muted">I moduli sono firmati con la chiave di rilascio offline e vengono pubblicati da riga di comando (<code>openrmm-admin module publish</code>).</p>
+<p class="muted">{{th "I moduli sono firmati con la chiave di rilascio offline e vengono pubblicati da riga di comando (<code>openrmm-admin module publish</code>)."}}</p>
 <table>
-<thead><tr><th>Modulo</th><th>Versione</th><th>Piattaforme</th><th>Azioni</th><th>Chiave</th><th>Pubblicato</th></tr></thead>
+<thead><tr><th>{{t "Modulo"}}</th><th>{{t "Versione"}}</th><th>{{t "Piattaforme"}}</th><th>{{t "Azioni"}}</th><th>{{t "Chiave"}}</th><th>{{t "Pubblicato"}}</th></tr></thead>
 <tbody>
 {{range .Data.Modules}}<tr>
   <td>{{.ID}}{{if .AdHoc}} <span class="badge pending">script</span>{{end}}<br><span class="muted">{{.Description}}</span></td>

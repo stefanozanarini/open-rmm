@@ -122,22 +122,22 @@ type adData struct {
 func (s *Server) handleAD(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	snaps, err := s.adSnapshots(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	doms, err := s.store.ListADDomains(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	agents, err := s.store.ListAgents(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	now := s.now()
@@ -169,5 +169,5 @@ func (s *Server) handleAD(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.render(w, r, "ad", "Active Directory", d)
+	s.render(w, r, "ad", s.T(r, "Active Directory"), d)
 }

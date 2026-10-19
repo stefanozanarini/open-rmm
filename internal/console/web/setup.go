@@ -2,7 +2,6 @@ package web
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -95,7 +94,7 @@ func (s *Server) baselineRules(r *http.Request) (string, error) {
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	ctx := r.Context()
@@ -103,38 +102,38 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	var d setupData
 	add := func(it setupItem) { d.Items = append(d.Items, it) }
 
-	add(setupItem{Title: "Accesso con Entra ID e MFA", Status: setupDone,
-		Detail: "Gli operatori accedono con Entra ID; ogni comando e ogni policy richiede una nuova autenticazione MFA."})
+	add(setupItem{Title: s.T(r, "Accesso con Entra ID e MFA"), Status: setupDone,
+		Detail: s.T(r, "Gli operatori accedono con Entra ID; ogni comando e ogni policy richiede una nuova autenticazione MFA.")})
 
 	sites, err := s.store.ListSites(ctx, t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	it := setupItem{Title: "Sedi", Link: "/sites", LinkLabel: "Sedi"}
+	it := setupItem{Title: s.T(r, "Sedi"), Link: "/sites", LinkLabel: s.T(r, "Sedi")}
 	if len(sites) == 0 {
-		it.Status, it.Detail = setupTodo, "Definisci le sedi con le loro subnet: gli agenti vengono raggruppati automaticamente nell'albero."
+		it.Status, it.Detail = setupTodo, s.T(r, "Definisci le sedi con le loro subnet: gli agenti vengono raggruppati automaticamente nell'albero.")
 	} else {
-		it.Status, it.Detail = setupDone, fmt.Sprintf("%d sedi definite.", len(sites))
+		it.Status, it.Detail = setupDone, s.Tf(r, "%d sedi definite.", len(sites))
 	}
 	add(it)
 
 	set, err := s.store.GetSettings(ctx, t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	it = setupItem{Title: "Reti da cui è consentito l'RDP", Link: "/settings", LinkLabel: "Impostazioni"}
+	it = setupItem{Title: s.T(r, "Reti da cui è consentito l'RDP"), Link: "/settings", LinkLabel: s.T(r, "Impostazioni")}
 	if len(set.RDPAllowedSubnets) == 0 {
-		it.Status, it.Detail = setupWarn, "Si usano le reti private predefinite. Indica le subnet delle LAN per ricevere un avviso critico sugli RDP da altre reti (VPN comprese)."
+		it.Status, it.Detail = setupWarn, s.T(r, "Si usano le reti private predefinite. Indica le subnet delle LAN per ricevere un avviso critico sugli RDP da altre reti (VPN comprese).")
 	} else {
-		it.Status, it.Detail = setupDone, fmt.Sprintf("%d subnet: %s.", len(set.RDPAllowedSubnets), strings.Join(set.RDPAllowedSubnets, ", "))
+		it.Status, it.Detail = setupDone, s.Tf(r, "%d subnet: %s.", len(set.RDPAllowedSubnets), strings.Join(set.RDPAllowedSubnets, ", "))
 	}
 	add(it)
 
 	latest, err := s.latestModules(r)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	for _, m := range recommended {
@@ -142,17 +141,17 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 			d.Missing = append(d.Missing, m.Module)
 		}
 	}
-	it = setupItem{Title: "Moduli", Link: "/modules", LinkLabel: "Moduli"}
+	it = setupItem{Title: s.T(r, "Moduli"), Link: "/modules", LinkLabel: s.T(r, "Moduli")}
 	if len(d.Missing) == 0 {
-		it.Status, it.Detail = setupDone, fmt.Sprintf("%d moduli pubblicati.", len(latest))
+		it.Status, it.Detail = setupDone, s.Tf(r, "%d moduli pubblicati.", len(latest))
 	} else {
-		it.Status, it.Detail = setupTodo, "Da pubblicare (openrmm-admin module sign e module publish): "+strings.Join(d.Missing, ", ")+"."
+		it.Status, it.Detail = setupTodo, s.Tf(r, "Da pubblicare (openrmm-admin module sign e module publish): %s.", strings.Join(d.Missing, ", "))
 	}
 	add(it)
 
 	pols, err := s.store.CurrentPolicies(ctx, t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	periodic := 0
@@ -161,24 +160,24 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 			periodic++
 		}
 	}
-	it = setupItem{Title: "Policy di base", Link: "/policies/new?template=baseline", LinkLabel: "Crea la policy di base"}
+	it = setupItem{Title: s.T(r, "Policy di base"), Link: "/policies/new?template=baseline", LinkLabel: s.T(r, "Crea la policy di base")}
 	if len(pols) == 0 && periodic == 0 {
-		it.Status, it.Detail, it.Link, it.LinkLabel = setupTodo, "Pubblica prima i moduli: la policy di base li esegue periodicamente.", "/modules", "Moduli"
+		it.Status, it.Detail, it.Link, it.LinkLabel = setupTodo, s.T(r, "Pubblica prima i moduli: la policy di base li esegue periodicamente."), "/modules", s.T(r, "Moduli")
 	} else if len(pols) == 0 {
-		it.Status, it.Detail = setupTodo, "Inventario, aggiornamenti, stato della protezione, accessi, Trend Micro dove installato e Active Directory sui domain controller. La policy è precompilata con i moduli pubblicati e va approvata con MFA."
+		it.Status, it.Detail = setupTodo, s.T(r, "Inventario, aggiornamenti, stato della protezione, accessi, Trend Micro dove installato e Active Directory sui domain controller. La policy è precompilata con i moduli pubblicati e va approvata con MFA.")
 	} else {
-		it.Status, it.Detail, it.Link, it.LinkLabel = setupDone, fmt.Sprintf("%d policy attive.", len(pols)), "/policies", "Policy"
+		it.Status, it.Detail, it.Link, it.LinkLabel = setupDone, s.Tf(r, "%d policy attive.", len(pols)), "/policies", s.T(r, "Policy")
 	}
 	add(it)
 
 	tokens, err := s.store.ListEnrollmentTokens(ctx, t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	agents, err := s.store.ListAgents(ctx, t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	usable := 0
@@ -196,49 +195,49 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 			pending++
 		}
 	}
-	it = setupItem{Title: "Distribuzione degli agenti", Link: "/tokens", LinkLabel: "Token"}
+	it = setupItem{Title: s.T(r, "Distribuzione degli agenti"), Link: "/tokens", LinkLabel: s.T(r, "Token")}
 	switch {
 	case active > 0:
-		it.Status, it.Detail = setupDone, fmt.Sprintf("%d agenti attivi, %d in attesa di approvazione, %d token validi.", active, pending, usable)
+		it.Status, it.Detail = setupDone, s.Tf(r, "%d agenti attivi, %d in attesa di approvazione, %d token validi.", active, pending, usable)
 	case usable > 0:
-		it.Status, it.Detail = setupWarn, "Token pronto: distribuisci l'MSI con la GPO (docs/AGENT-INSTALL.md) e approva i primi agenti."
+		it.Status, it.Detail = setupWarn, s.T(r, "Token pronto: distribuisci l'MSI con la GPO (docs/AGENT-INSTALL.md) e approva i primi agenti.")
 	default:
-		it.Status, it.Detail = setupTodo, "Crea un token di registrazione da inserire nella GPO o nelle proprietà dell'MSI."
+		it.Status, it.Detail = setupTodo, s.T(r, "Crea un token di registrazione da inserire nella GPO o nelle proprietà dell'MSI.")
 	}
 	add(it)
 
-	it = setupItem{Title: "Firma del codice (Authenticode)", Link: "#codesign", LinkLabel: "Certificato"}
+	it = setupItem{Title: s.T(r, "Firma del codice (Authenticode)"), Link: "#codesign", LinkLabel: s.T(r, "Certificato")}
 	if set.CodeSigningCert != "" {
 		ch, err := codesign.ParseChain([]byte(set.CodeSigningCert), now)
 		if err != nil {
-			it.Status, it.Detail = setupTodo, "Il certificato registrato non è più valido: "+err.Error()
+			it.Status, it.Detail = setupTodo, s.Tf(r, "Il certificato registrato non è più valido: %v", err)
 		} else {
 			d.CodeSign, d.CodeInfo, d.Expiring, d.HasRoot = &ch, ch.LeafInfo(), ch.Expiring(now), ch.Root() != nil
-			it.Status, it.Detail = setupDone, "Certificato "+d.CodeInfo.Subject+" valido fino al "+d.CodeInfo.NotAfter.Format("02/01/2006")+"."
+			it.Status, it.Detail = setupDone, s.Tf(r, "Certificato %s valido fino al %s.", d.CodeInfo.Subject, d.CodeInfo.NotAfter.Format(dateFormat(s.lang(r))))
 			if d.Expiring {
-				it.Status, it.Detail = setupWarn, "Il certificato scade il "+d.CodeInfo.NotAfter.Format("02/01/2006")+": rinnovalo e ricostruisci l'MSI."
+				it.Status, it.Detail = setupWarn, s.Tf(r, "Il certificato scade il %s: rinnovalo e ricostruisci l'MSI.", d.CodeInfo.NotAfter.Format(dateFormat(s.lang(r))))
 			}
 		}
 	} else {
-		it.Status, it.Detail = setupTodo, "Firma eseguibili e MSI, altrimenti SmartScreen e gli antivirus possono bloccarli."
+		it.Status, it.Detail = setupTodo, s.T(r, "Firma eseguibili e MSI, altrimenti SmartScreen e gli antivirus possono bloccarli.")
 	}
 	add(it)
 
 	doms, err := s.store.ListADDomains(ctx, t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
-	it = setupItem{Title: "Active Directory (facoltativo)", Link: "/ad", LinkLabel: "Active Directory"}
+	it = setupItem{Title: s.T(r, "Active Directory (facoltativo)"), Link: "/ad", LinkLabel: "Active Directory"}
 	if len(doms) == 0 {
-		it.Status, it.Detail = setupOptional, "Confronta i computer del dominio con gli agenti (PC senza agente, oggetti obsoleti) e raggruppa gli agenti per OU. Nessuna credenziale di AD sulla console."
+		it.Status, it.Detail = setupOptional, s.T(r, "Confronta i computer del dominio con gli agenti (PC senza agente, oggetti obsoleti) e raggruppa gli agenti per OU. Nessuna credenziale di AD sulla console.")
 	} else {
 		var names []string
 		for _, dm := range doms {
 			names = append(names, dm.Domain)
 		}
 		sort.Strings(names)
-		it.Status, it.Detail = setupDone, "Domini: "+strings.Join(names, ", ")+"."
+		it.Status, it.Detail = setupDone, s.Tf(r, "Domini: %s.", strings.Join(names, ", "))
 	}
 	add(it)
 
@@ -251,7 +250,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 			d.Done++
 		}
 	}
-	s.render(w, r, "setup", "Configurazione", d)
+	s.render(w, r, "setup", s.T(r, "Configurazione"), d)
 }
 
 // handleSaveCodeSigning stores the public code-signing certificate (never a
@@ -259,13 +258,13 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSaveCodeSigning(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	op := sessionFrom(r.Context()).data.Operator
 	cur, err := s.store.GetSettings(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	next := cur
@@ -276,12 +275,12 @@ func (s *Server) handleSaveCodeSigning(w http.ResponseWriter, r *http.Request) {
 	} else {
 		raw := strings.TrimSpace(r.PostFormValue("certificate"))
 		if strings.Contains(raw, "PRIVATE KEY") {
-			s.flash(w, r, "Hai incollato una chiave privata: non è stata salvata. Incolla solo il certificato e conserva la chiave sulla macchina di build.", "/setup#codesign")
+			s.flash(w, r, s.T(r, "Hai incollato una chiave privata: non è stata salvata. Incolla solo il certificato e conserva la chiave sulla macchina di build."), "/setup#codesign")
 			return
 		}
 		ch, err := codesign.ParseChain([]byte(raw), s.now())
 		if err != nil {
-			s.flash(w, r, "Certificato non valido: "+err.Error(), "/setup#codesign")
+			s.flash(w, r, s.Tf(r, "Certificato non valido: %v", err), "/setup#codesign")
 			return
 		}
 		next.CodeSigningCert = raw + "\n"
@@ -289,11 +288,11 @@ func (s *Server) handleSaveCodeSigning(w http.ResponseWriter, r *http.Request) {
 		detail["subject"], detail["thumbprint"], detail["not_after"] = i.Subject, i.Thumbprint, i.NotAfter
 	}
 	if err := s.store.PutSettings(r.Context(), t, next, "operator:"+op.Username); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	s.audit(r.Context(), t, op, "settings.code_signing", t, detail)
-	s.flash(w, r, "Certificato di firma aggiornato.", "/setup#codesign")
+	s.flash(w, r, s.T(r, "Certificato di firma aggiornato."), "/setup#codesign")
 }
 
 // handleCodeSigningCert serves the public certificates for Group Policy:
@@ -301,12 +300,12 @@ func (s *Server) handleSaveCodeSigning(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCodeSigningCert(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
 	set, err := s.store.GetSettings(r.Context(), t)
 	if err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	ch, err := codesign.ParseChain([]byte(set.CodeSigningCert), s.now())

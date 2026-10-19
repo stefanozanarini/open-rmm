@@ -254,9 +254,10 @@ func publishTo(t *testing.T, st store.Store, dir string) *modules.Verified {
 // browser is an HTTP client with cookies that follows redirects.
 func (e *consoleEnv) browser(t *testing.T) *http.Client {
 	jar, _ := cookiejar.New(nil)
-	c := e.console.Client()
+	// A copy: the test server returns the same client every time.
+	c := *e.console.Client()
 	c.Jar = jar
-	return c
+	return &c
 }
 
 func get(t *testing.T, c *http.Client, u string) (int, string) {

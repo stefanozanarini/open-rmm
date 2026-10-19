@@ -36,7 +36,7 @@ Phase 0 (foundations):
 - [x] Security plugins: `trendmicro`, `protection-status`, `accesslog` with unusual-logon alerts (RDP outside the LAN subnets, password spraying, lockouts); checks and alerts; Trend Vision One connector (EU)
 - [x] Updates: `winupdate` (WSUS/Intune observation mode), `winget`, `reboot`; maintenance windows in policies; Patch dashboard ranking endpoints by how far behind they are
 - [x] Software: package library (upload or winget catalog, hash-checked), distribution to many endpoints with one MFA approval, silent uninstall from the console; outdated software detected from the inventory also without winget (Server 2019)
-- [x] Console layout: site tree, Clients/Servers tabs, bottom panel per agent, bulk actions with one MFA approval, notes, light and dark themes
+- [x] Console layout: site tree, Clients/Servers tabs, bottom panel per agent, bulk actions with one MFA approval, notes, light and dark themes, Italian and English (selector in the header)
 - [x] Setup checklist with a baseline policy; Authenticode signing of executables and MSI (enterprise CA, dedicated CA or public certificate); optional Active Directory comparison (computers without agent, stale objects, OU tree) without AD credentials on the console
 - [ ] Validation on real Windows
 

@@ -59,7 +59,7 @@ type Server struct {
 	idpHost  string
 	now      func() time.Time
 	client   *http.Client
-	pages    map[string]*template.Template
+	pages    map[string]map[string]*template.Template // language, page
 	packages pkgfiles.Dir
 	winget   *wingetcat.Client
 	ad       adCache
@@ -103,26 +103,31 @@ func New(cfg Config) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) parseTemplates() error {
-	funcs := template.FuncMap{
+// funcs are the template functions for a language.
+func funcs(lang string) template.FuncMap {
+	timeFmt := dateFormat(lang) + " 15:04:05"
+	return template.FuncMap{
+		"t":  func(key string) string { return tr(lang, key) },
+		"tf": func(key string, args ...any) string { return trf(lang, key, args...) },
+		"th": func(key string) template.HTML { return trHTML(lang, key) },
 		"fmtTime": func(t any) string {
 			switch v := t.(type) {
 			case time.Time:
 				if v.IsZero() {
 					return "-"
 				}
-				return v.Local().Format("02/01/2006 15:04:05")
+				return v.Local().Format(timeFmt)
 			case *time.Time:
 				if v == nil {
 					return "-"
 				}
-				return v.Local().Format("02/01/2006 15:04:05")
+				return v.Local().Format(timeFmt)
 			}
 			return "-"
 		},
 		"label": func(v any) string {
 			if l, ok := labels[fmt.Sprint(v)]; ok {
-				return l
+				return tr(lang, l)
 			}
 			return fmt.Sprint(v)
 		},
@@ -142,14 +147,14 @@ func (s *Server) parseTemplates() error {
 			if t == nil || t.IsZero() {
 				return "-"
 			}
-			return t.Local().Format("02/01/2006 15:04")
+			return t.Local().Format(dateFormat(lang) + " 15:04")
 		},
 		"yesNo": func(b *bool) string {
 			switch {
 			case b == nil:
 				return "-"
 			case *b:
-				return "sì"
+				return tr(lang, "sì")
 			}
 			return "no"
 		},
@@ -159,7 +164,7 @@ func (s *Server) parseTemplates() error {
 		},
 		"logonType": func(t int) string {
 			if l, ok := logonTypes[t]; ok {
-				return l
+				return tr(lang, l)
 			}
 			return fmt.Sprint(t)
 		},
@@ -189,23 +194,31 @@ func (s *Server) parseTemplates() error {
 			return s
 		},
 	}
+}
+
+// parseTemplates parses every page once per language, since the template
+// functions are bound at parse time.
+func (s *Server) parseTemplates() error {
 	names, err := fs.Glob(assets, "templates/*.html")
 	if err != nil {
 		return err
 	}
-	s.pages = map[string]*template.Template{}
-	for _, n := range names {
-		base := strings.TrimSuffix(strings.TrimPrefix(n, "templates/"), ".html")
-		if base == "layout" || strings.HasPrefix(base, "_") {
-			continue
+	s.pages = map[string]map[string]*template.Template{}
+	for _, lang := range languages {
+		s.pages[lang] = map[string]*template.Template{}
+		for _, n := range names {
+			base := strings.TrimSuffix(strings.TrimPrefix(n, "templates/"), ".html")
+			if base == "layout" || strings.HasPrefix(base, "_") {
+				continue
+			}
+			// Shared sections (templates/_*.html) come before the page, which
+			// may redefine them.
+			t, err := template.New("layout.html").Funcs(funcs(lang)).ParseFS(assets, "templates/layout.html", "templates/_*.html", n)
+			if err != nil {
+				return fmt.Errorf("template %s: %w", n, err)
+			}
+			s.pages[lang][base] = t
 		}
-		// Shared sections (templates/_*.html) come before the page, which
-		// may redefine them.
-		t, err := template.New("layout.html").Funcs(funcs).ParseFS(assets, "templates/layout.html", "templates/_*.html", n)
-		if err != nil {
-			return fmt.Errorf("template %s: %w", n, err)
-		}
-		s.pages[base] = t
 	}
 	return nil
 }
@@ -251,6 +264,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /sites", s.auth(s.handleSites))
 	mux.Handle("POST /sites", s.role(authn.RoleAdmin, s.handleSaveSite))
 	mux.Handle("POST /theme", s.auth(s.handleTheme))
+	mux.Handle("POST /lang", s.auth(s.handleLang))
 	mux.Handle("GET /ad", s.auth(s.handleAD))
 	mux.Handle("GET /setup", s.role(authn.RoleAdmin, s.handleSetup))
 	mux.Handle("POST /setup/codesign", s.role(authn.RoleAdmin, s.handleSaveCodeSigning))
@@ -295,7 +309,7 @@ func (s *Server) secure(next http.Handler) http.Handler {
 		defer func() {
 			if v := recover(); v != nil {
 				s.log.Error("panic serving request", "path", r.URL.Path, "panic", v)
-				http.Error(w, "errore interno", http.StatusInternalServerError)
+				http.Error(w, s.T(r, "errore interno"), http.StatusInternalServerError)
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -313,18 +327,18 @@ func (s *Server) auth(h ctxHandler) http.Handler {
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
-			http.Error(w, "sessione scaduta", http.StatusUnauthorized)
+			http.Error(w, tr(langOf(r, sess), "sessione scaduta"), http.StatusUnauthorized)
 			return
 		}
 		if r.Method == http.MethodPost {
 			if err := s.checkCSRF(r, sess); err != nil {
-				http.Error(w, "richiesta non valida", http.StatusForbidden)
+				http.Error(w, tr(langOf(r, sess), "richiesta non valida"), http.StatusForbidden)
 				return
 			}
 		}
 		// Refresh the idle timeout.
 		if err := s.save(r.Context(), w, sess); err != nil {
-			s.fail(w, err)
+			s.fail(w, r, err)
 			return
 		}
 		h(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, sess)))
@@ -337,7 +351,7 @@ func (s *Server) role(role string, h ctxHandler) http.Handler {
 		op := sessionFrom(r.Context()).data.Operator
 		if !hasRole(op, role) {
 			s.log.Warn("forbidden", "operator", op.Username, "path", r.URL.Path, "needs", role)
-			http.Error(w, "permesso negato", http.StatusForbidden)
+			http.Error(w, s.T(r, "permesso negato"), http.StatusForbidden)
 			return
 		}
 		h(w, r)
@@ -353,9 +367,9 @@ func hasRole(op *Operator, role string) bool {
 	return false
 }
 
-func (s *Server) fail(w http.ResponseWriter, err error) {
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	s.log.Error("request failed", "err", err)
-	http.Error(w, "errore interno", http.StatusInternalServerError)
+	http.Error(w, s.T(r, "errore interno"), http.StatusInternalServerError)
 }
 
 // page is the data every template receives.
@@ -373,12 +387,14 @@ type page struct {
 	// OpenAlerts is shown in the navigation.
 	OpenAlerts int
 	Theme      string
+	Lang       string
 	Path       string
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title string, data any) {
 	sess := sessionFrom(r.Context())
-	p := page{Title: title, Data: data}
+	lang := langOf(r, sess)
+	p := page{Title: title, Data: data, Lang: lang}
 	if sess != nil && sess.data.Operator != nil {
 		op := sess.data.Operator
 		p.Operator, p.CSRF, p.Flash, p.Theme = op, sess.data.CSRF, sess.data.Flash, sess.data.Theme
@@ -405,9 +421,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title stri
 	if v, ok := data.(interface{ refresh() int }); ok {
 		p.Refresh = v.refresh()
 	}
-	t := s.pages[name]
+	t := s.pages[lang][name]
 	if t == nil {
-		s.fail(w, fmt.Errorf("no template %s", name))
+		s.fail(w, r, fmt.Errorf("no template %s", name))
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -430,7 +446,7 @@ func (s *Server) flashTo(w http.ResponseWriter, r *http.Request, sess *session, 
 	}
 	sess.data.Flash = msg
 	if err := s.save(r.Context(), w, sess); err != nil {
-		s.fail(w, err)
+		s.fail(w, r, err)
 		return
 	}
 	http.Redirect(w, r, to, http.StatusSeeOther)
@@ -440,7 +456,7 @@ func (s *Server) flashTo(w http.ResponseWriter, r *http.Request, sess *session, 
 var logonTypes = map[int]string{2: "interattivo", 3: "rete", 4: "batch", 5: "servizio", 7: "sblocco",
 	8: "rete (testo in chiaro)", 9: "nuove credenziali", 10: "desktop remoto", 11: "credenziali in cache"}
 
-// labels translates states shown in the UI.
+// labels names the states shown in the UI, in Italian (see catalogEN).
 var labels = map[string]string{
 	"pending": "in attesa", "active": "attivo", "revoked": "revocato", "online": "online",
 	"queued": "in coda", "sent": "inviato", "accepted": "accettato", "running": "in esecuzione",

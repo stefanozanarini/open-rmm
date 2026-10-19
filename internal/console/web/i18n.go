@@ -1,0 +1,751 @@
+package web
+
+import (
+	"fmt"
+	"html/template"
+	"net/http"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// Languages of the console. Italian is the source language: the UI text is
+// written in Italian and the Italian string is the key of the catalog.
+const (
+	langIT = "it"
+	langEN = "en"
+)
+
+var languages = []string{langIT, langEN}
+
+// tr translates an Italian UI string; missing entries stay in Italian.
+func tr(lang, key string) string {
+	if lang == langEN {
+		if v, ok := catalogEN[key]; ok {
+			return v
+		}
+	}
+	return key
+}
+
+// trf translates an Italian format string, then formats it.
+func trf(lang, key string, args ...any) string {
+	return fmt.Sprintf(tr(lang, key), args...)
+}
+
+// trHTML is tr for catalog strings holding markup. Only catalog keys, which
+// are constants, are trusted as HTML; anything else is escaped.
+func trHTML(lang, key string) template.HTML {
+	if _, ok := catalogEN[key]; !ok {
+		return template.HTML(template.HTMLEscapeString(key)) // #nosec G203 -- escaped
+	}
+	return template.HTML(tr(lang, key)) // #nosec G203 -- constant catalog text
+}
+
+// acceptLang picks the language from an Accept-Language header: the
+// preferred of the supported languages, Italian when none is listed.
+func acceptLang(header string) string {
+	type tag struct {
+		lang string
+		q    float64
+	}
+	var tags []tag
+	for _, part := range strings.Split(header, ",") {
+		name, params, _ := strings.Cut(strings.TrimSpace(part), ";")
+		q := 1.0
+		if v, ok := strings.CutPrefix(strings.TrimSpace(params), "q="); ok {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				q = f
+			}
+		}
+		base, _, _ := strings.Cut(strings.ToLower(name), "-")
+		if slices.Contains(languages, base) && q > 0 {
+			tags = append(tags, tag{base, q})
+		}
+	}
+	sort.SliceStable(tags, func(i, j int) bool { return tags[i].q > tags[j].q })
+	if len(tags) > 0 {
+		return tags[0].lang
+	}
+	return langIT
+}
+
+// langOf is the session's language, or the browser's before the operator
+// chooses one.
+func langOf(r *http.Request, sess *session) string {
+	if sess != nil && slices.Contains(languages, sess.data.Lang) {
+		return sess.data.Lang
+	}
+	return acceptLang(r.Header.Get("Accept-Language"))
+}
+
+// lang is the language of the request.
+func (s *Server) lang(r *http.Request) string { return langOf(r, sessionFrom(r.Context())) }
+
+// T translates a message for the request's language.
+func (s *Server) T(r *http.Request, key string) string { return tr(s.lang(r), key) }
+
+// Tf translates and formats a message for the request's language.
+func (s *Server) Tf(r *http.Request, key string, args ...any) string {
+	return trf(s.lang(r), key, args...)
+}
+
+// dateFormat is the date layout of a language.
+func dateFormat(lang string) string {
+	if lang == langEN {
+		return "2006-01-02"
+	}
+	return "02/01/2006"
+}
+
+// localReturn keeps a redirect target inside the console.
+func localReturn(ret, fallback string) string {
+	if strings.HasPrefix(ret, "/") && !strings.HasPrefix(ret, "//") && !strings.ContainsAny(ret, "\\\r\n") {
+		return ret
+	}
+	return fallback
+}
+
+func (s *Server) handleLang(w http.ResponseWriter, r *http.Request) {
+	sess := sessionFrom(r.Context())
+	if l := r.PostFormValue("lang"); slices.Contains(languages, l) {
+		sess.data.Lang = l
+	}
+	if err := s.save(r.Context(), w, sess); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	http.Redirect(w, r, localReturn(r.PostFormValue("return"), "/agents"), http.StatusSeeOther)
+}
+
+// catalogEN is the English catalog, keyed by the Italian text.
+var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
+	// Navigation and layout
+	"Client":           "Clients",
+	"Server":           "Servers",
+	"Tutti gli agenti": "All agents",
+	"Job":              "Jobs",
+	"Moduli":           "Modules",
+	"Policy":           "Policies",
+	"Patch":            "Patches",
+	"Patch · client":   "Patches · clients",
+	"Patch · server":   "Patches · servers",
+	"Software":         "Software",
+	"Token":            "Tokens",
+	"Avvisi":           "Alerts",
+	"Attività":         "Activity",
+	"Versioni agente":  "Agent versions",
+	"Impostazioni":     "Settings",
+	"Configurazione":   "Setup",
+	"Tenant":           "Tenant",
+	"Cambia":           "Switch",
+	"Tema":             "Theme",
+	"Tema automatico":  "Automatic theme",
+	"Chiaro":           "Light",
+	"Scuro":            "Dark",
+	"Applica":          "Apply",
+	"Esci":             "Sign out",
+	"Lingua":           "Language",
+
+	// Common words
+	"Nome":             "Name",
+	"Stato":            "Status",
+	"Tipo":             "Type",
+	"Versione":         "Version",
+	"Modulo":           "Module",
+	"Azione":           "Action",
+	"Azioni":           "Actions",
+	"Creato":           "Created",
+	"Da":               "From",
+	"Quando":           "When",
+	"Dettaglio":        "Detail",
+	"Dettagli":         "Details",
+	"Agente":           "Agent",
+	"Agenti":           "Agents",
+	"Utente":           "User",
+	"Sistema":          "System",
+	"Modello":          "Model",
+	"Sede":             "Site",
+	"Sedi":             "Sites",
+	"Salva":            "Save",
+	"Elimina":          "Delete",
+	"Rimuovi":          "Remove",
+	"Crea":             "Create",
+	"Aggiungi":         "Add",
+	"Continua":         "Continue",
+	"Cerca":            "Search",
+	"Errore":           "Error",
+	"Risultato":        "Result",
+	"Parametri":        "Parameters",
+	"Note":             "Notes",
+	"Nessuno.":         "None.",
+	"Tutti":            "All",
+	"Validità":         "Validity",
+	"1 ora":            "1 hour",
+	"8 ore":            "8 hours",
+	"24 ore":           "24 hours",
+	"15 minuti":        "15 minutes",
+	"Ultimo contatto":  "Last contact",
+	"Prendi in carico": "Acknowledge",
+	"%d giorni":        "%d days",
+	"%d su %d":         "%d of %d",
+	"da %s":            "from %s",
+	"da %v":            "from %v",
+	"sì":               "yes",
+	"mai":              "never",
+	"Nessun job.":      "No jobs.",
+
+	// Agent list
+	"seleziona %s":                        "select %s",
+	"apri la pagina dell'agente":          "open the agent page",
+	"avvisi aperti":                       "open alerts",
+	"%d avvisi":                           "%d alerts",
+	"controlli":                           "checks",
+	"aggiornamenti di sicurezza mancanti": "missing security updates",
+	"%d patch":                            "%d patches",
+	"riavvio in sospeso":                  "reboot pending",
+	"riavvio":                             "reboot",
+	"applicazioni da aggiornare":          "applications to update",
+	"%d app":                              "%d apps",
+	"Tutte le sedi":                       "All sites",
+	"Senza sede":                          "No site",
+	"gestisci le sedi":                    "manage sites",
+	"sedi":                                "sites",
+	"Tutte le OU":                         "All OUs",
+	"confronto con AD":                    "comparison with AD",
+	"Tutti (%d)":                          "All (%d)",
+	"Client (%d)":                         "Clients (%d)",
+	"Server (%d)":                         "Servers (%d)",
+	"Nome, utente, modello, seriale, ID Supremo, sede…": "Name, user, model, serial, Supremo ID, site…",
+	"In attesa di approvazione (%d)":                    "Awaiting approval (%d)",
+	"Questi agenti sono connessi ma non ricevono comandi finché non vengono approvati. Verifica che siano PC dell'azienda prima di approvarli.": "These agents are connected but receive no commands until they are approved. Check that they are company PCs before approving them.",
+	"Azioni sui selezionati": "Actions on the selected",
+	"seleziona tutti":        "select all",
+	"nessuno":                "none",
+	"Nessun agente attivo corrispondente alla ricerca.": "No active agents match the search.",
+	"Nessun agente attivo.":                             "No active agents.",
+	"Revocati (%d)":                                     "Revoked (%d)",
+	"Agente selezionato":                                "Selected agent",
+	"apri la pagina":                                    "open the page",
+	"chiudi":                                            "close",
+	"Nessuna azione disponibile per questo agente.":     "No actions available for this agent.",
+
+	// Panel tabs
+	"Riepilogo":  "Summary",
+	"Controlli":  "Checks",
+	"Inventario": "Inventory",
+	"Accessi":    "Logons",
+	"Cronologia": "History",
+	"Comandi":    "Commands",
+
+	// Agent page
+	"Versione agente":              "Agent version",
+	"account disabilitato":         "account disabled",
+	"ultimo accesso al dominio %s": "last domain logon %s",
+	"Registrato":                   "Enrolled",
+	"Approvato":                    "Approved",
+	"Anello aggiornamenti":         "Update ring",
+	"Ultimo aggiornamento":         "Last update",
+	"Certificato valido fino a":    "Certificate valid until",
+	"ID agente":                    "Agent ID",
+	"ID macchina":                  "Machine ID",
+	"Approva":                      "Approve",
+	"Revoca":                       "Revoke",
+	"Avvisi aperti":                "Open alerts",
+	"Controllo":                    "Check",
+	"Aggiornato":                   "Updated",
+	"Nessun controllo. I controlli arrivano dai moduli eseguiti dalle policy (ad esempio <code>trendmicro</code> e <code>protection-status</code>).": "No checks. Checks come from the modules run by policies (for example <code>trendmicro</code> and <code>protection-status</code>).",
+	"Aggiornamenti":                    "Updates",
+	"Windows Update verificato il %s":  "Windows Update checked on %s",
+	"gestione: %s":                     "managed by: %s",
+	"open-rmm osserva soltanto":        "open-rmm only observes",
+	"server %s":                        "server %s",
+	"ultima installazione riuscita %s": "last successful installation %s",
+	"dal %s":                           "since %s",
+	"Aggiornamento":                    "Update",
+	"Uscito":                           "Released",
+	"critico":                          "critical",
+	"aggiornato":                       "up to date",
+	"nessun aggiornamento di Windows mancante.": "no missing Windows updates.",
+	"Applicazioni da aggiornare (winget)":       "Applications to update (winget)",
+	"Applicazione":                              "Application",
+	"Installata":                                "Installed",
+	"Disponibile":                               "Available",
+	"Nessuna applicazione da aggiornare (verificato il %s).": "No applications to update (checked on %s).",
+	"Nessuna verifica. Crea una policy con i moduli <code>winupdate</code> (azione <code>scan</code>) e <code>winget</code> (azione <code>scan</code>).": "No scan yet. Create a policy with the <code>winupdate</code> (action <code>scan</code>) and <code>winget</code> (action <code>scan</code>) modules.",
+	"Raccolto il %s":                "Collected on %s",
+	"ricevuto il %s":                "received on %s",
+	"Produttore e modello":          "Manufacturer and model",
+	"Numero di serie":               "Serial number",
+	"macchina virtuale":             "virtual machine",
+	"Dominio":                       "Domain",
+	"non in dominio":                "not in a domain",
+	"Utente connesso":               "Logged-on user",
+	"Sistema operativo":             "Operating system",
+	"Installato il":                 "Installed on",
+	"Ultimo avvio":                  "Last boot",
+	"non pronto":                    "not ready",
+	"assente o non rilevato":        "absent or not detected",
+	"%d core, %d thread":            "%d cores, %d threads",
+	"Memoria":                       "Memory",
+	"Assistenza remota":             "Remote support",
+	"Dischi e volumi":               "Disks and volumes",
+	"Disco":                         "Disk",
+	"Dimensione":                    "Size",
+	"Libero":                        "Free",
+	"Batteria":                      "Battery",
+	"Salute":                        "Health",
+	"Capacità (attuale / progetto)": "Capacity (full charge / design)",
+	"Cicli":                         "Cycles",
+	"Carica":                        "Charge",
+	"Rete":                          "Network",
+	"Scheda":                        "Adapter",
+	"Indirizzi":                     "Addresses",
+	"Produttore":                    "Manufacturer",
+	"Nessun inventario ricevuto. Crea una policy con il modulo <code>inventory</code> (azione <code>collect</code>), oppure eseguilo come comando.": "No inventory received. Create a policy with the <code>inventory</code> module (action <code>collect</code>), or run it as a command.",
+	"Software installato (%d)":     "Installed software (%d)",
+	"mostra l'elenco":              "show the list",
+	"Editore":                      "Publisher",
+	"Installato":                   "Installed",
+	"Ambito":                       "Scope",
+	"ultima versione nel catalogo": "latest version in the catalog",
+	"disinstalla":                  "uninstall",
+	"Nessun inventario ricevuto.":  "No inventory received.",
+	"Modifiche rilevate":           "Detected changes",
+	"Esegui un comando":            "Run a command",
+	"Prima dell'esecuzione ti verrà chiesto di autenticarti di nuovo con Microsoft: l'approvazione vale solo per quel comando.": "Before it runs you will be asked to sign in again with Microsoft: the approval is valid for that command only.",
+	"Parametri (JSON, facoltativi)": "Parameters (JSON, optional)",
+	"Approva ed esegui":             "Approve and run",
+	"Script PowerShell":             "PowerShell script",
+	"Il testo completo dello script viene registrato nel registro attività.": "The full text of the script is recorded in the activity log.",
+	"Approva ed esegui lo script": "Approve and run the script",
+	"Accessi recenti":             "Recent logons",
+	"ultimi %d eventi":            "last %d events",
+	"Evento":                      "Event",
+	"Esito":                       "Outcome",
+	"Regola":                      "Rule",
+	"Ultima esecuzione":           "Last run",
+	"risultato":                   "result",
+	"Nessun risultato di policy.": "No policy results.",
+	"Ultimi job":                  "Recent jobs",
+	"Nuova nota":                  "New note",
+	"Nessuna nota.":               "No notes.",
+	"Gravità":                     "Severity",
+	"Avviso":                      "Alert",
+	"Volte":                       "Times",
+	"Ultima volta":                "Last time",
+	"(eliminata)":                 "(deleted)",
+
+	// Active Directory
+	"Active Directory": "Active Directory",
+	"Nessun dato da Active Directory. Per attivare il confronto:": "No data from Active Directory. To enable the comparison:",
+	"pubblica il modulo <code>adinventory</code> (Moduli);":       "publish the <code>adinventory</code> module (Modules);",
+	"aggiungi a una policy una regola <code>adinventory</code> · <code>collect</code> ogni 24 ore, eseguita sui soli domain controller con la condizione <code>{\"service_exists\": \"NTDS\"}</code> (o su un altro server membro del dominio).": "add to a policy an <code>adinventory</code> · <code>collect</code> rule every 24 hours, run on domain controllers only with the condition <code>{\"service_exists\": \"NTDS\"}</code> (or on another member server of the domain).",
+	"Il modulo legge la directory con l'account computer dell'endpoint: la console non conserva credenziali di AD.":                                                                                                                              "The module reads the directory with the endpoint's computer account: the console keeps no AD credentials.",
+	"Rilevato %s": "Collected %s",
+	"<strong>Elenco troncato</strong>: il dominio ha più computer di quanti ne legga il modulo.": "<strong>List truncated</strong>: the domain has more computers than the module reads.",
+	"oggetti computer":             "computer objects",
+	"abilitati":                    "enabled",
+	"con agente":                   "with an agent",
+	"attivi senza agente":          "active without an agent",
+	"obsoleti (oltre 90 giorni)":   "stale (over 90 days)",
+	"Computer attivi senza agente": "Active computers without an agent",
+	"Abilitati e con un accesso al dominio negli ultimi 30 giorni, ma senza open-rmm: verifica che ricevano la GPO di installazione.": "Enabled and with a domain logon in the last 30 days, but without open-rmm: check that they receive the installation GPO.",
+	"Ultimo accesso":   "Last logon",
+	"Oggetti obsoleti": "Stale objects",
+	"Abilitati ma senza accessi al dominio da oltre 90 giorni: probabilmente dismessi. Valuta di disabilitarli o rimuoverli da AD.": "Enabled but with no domain logon for over 90 days: probably decommissioned. Consider disabling them or removing them from AD.",
+	"Inattivo da":                       "Idle for",
+	"Agenti Windows non presenti in AD": "Windows agents not in AD",
+	"PC in workgroup, di un altro dominio, o con un nome diverso da quello dell'oggetto computer.": "PCs in a workgroup, in another domain, or with a name different from the computer object's.",
+
+	// Alerts
+	"Prima / ultima volta":    "First / last time",
+	"preso in carico da %s":   "acknowledged by %s",
+	"Aperti":                  "Open",
+	"Nessun avviso.":          "No alerts.",
+	"Nessun avviso aperto.":   "No open alerts.",
+	"Avviso preso in carico.": "Alert acknowledged.",
+
+	// Audit
+	"Registro attività": "Activity log",
+	"Registro in sola aggiunta, con catena di hash verificabile (<code>openrmm-admin audit verify</code>). Ultimi 500 eventi.": "Append-only log with a verifiable hash chain (<code>openrmm-admin audit verify</code>). Last 500 events.",
+	"Chi":     "Who",
+	"Oggetto": "Target",
+
+	// Bulk actions
+	"Azioni su %d agenti": "Actions on %d agents",
+	"Agenti selezionati:": "Selected agents:",
+	"Una sola autenticazione con Microsoft approva l'azione su tutti gli agenti selezionati; ognuno riceve un proprio comando firmato.": "A single Microsoft sign-in approves the action on every selected agent; each one receives its own signed command.",
+	"Installa software":                     "Install software",
+	"Pacchetto":                             "Package",
+	"Seleziona da 1 a %d agenti approvati.": "Select 1 to %d approved agents.",
+
+	// Deployment
+	"Distribuisci %s %s":             "Deploy %s %s",
+	"Installazione":                  "Installation",
+	"anche se non firmato":           "even if unsigned",
+	"modulo software non pubblicato": "software module not published",
+	"Seleziona gli endpoint. Gli endpoint scelti dall'elenco agenti, oppure quelli con una versione più vecchia, sono in cima e già selezionati. Una sola autenticazione con Microsoft approva l'installazione su tutti gli endpoint scelti; ogni endpoint riceve un proprio comando firmato.": "Select the endpoints. Endpoints chosen in the agent list, or those with an older version, are at the top and already selected. A single Microsoft sign-in approves the installation on every chosen endpoint; each endpoint receives its own signed command.",
+	"Versione installata":                                 "Installed version",
+	"da aggiornare":                                       "outdated",
+	"Approva e distribuisci":                              "Approve and deploy",
+	"Seleziona da 1 a %d endpoint.":                       "Select 1 to %d endpoints.",
+	"Pubblica prima il modulo software.":                  "Publish the software module first.",
+	"Applicazione non valida.":                            "Invalid application.",
+	"L'agente open-rmm non si disinstalla dalla console.": "The open-rmm agent cannot be uninstalled from the console.",
+
+	// Jobs
+	"Inviato":   "Sent",
+	"Terminato": "Finished",
+	"Scade":     "Expires",
+	"Solo gli agenti approvati possono ricevere comandi.": "Only approved agents can receive commands.",
+	"Seleziona un'azione.":                                "Select an action.",
+	"Modulo non trovato.":                                 "Module not found.",
+	"Azione non disponibile.":                             "Action not available.",
+	"I parametri devono essere un oggetto JSON.":          "The parameters must be a JSON object.",
+	"Scrivi lo script da eseguire.":                       "Write the script to run.",
+	"Richiesta non valida: %v":                            "Invalid request: %v",
+	"%d comandi approvati e in coda.":                     "%d commands approved and queued.",
+	"Il servizio di firma ha rifiutato il comando: %v":    "The signing service refused the command: %v",
+
+	// Modules and agent versions
+	"I moduli sono firmati con la chiave di rilascio offline e vengono pubblicati da riga di comando (<code>openrmm-admin module publish</code>).": "Modules are signed with the offline release key and published from the command line (<code>openrmm-admin module publish</code>).",
+	"Piattaforme":          "Platforms",
+	"Chiave":               "Key",
+	"Pubblicato":           "Published",
+	"Versioni dell'agente": "Agent versions",
+	"Le release dell'agente sono firmate con la chiave di rilascio offline. Pubblicazione e versioni obiettivo si gestiscono da riga di comando (<code>openrmm-admin release</code>).": "Agent releases are signed with the offline release key. Publishing and target versions are managed from the command line (<code>openrmm-admin release</code>).",
+	"Versioni obiettivo": "Target versions",
+	"Anello":             "Ring",
+	"Piattaforma":        "Platform",
+	"Impostata":          "Set",
+	"Agenti aggiornati":  "Agents updated",
+	"Nessuna versione obiettivo impostata: gli agenti non vengono aggiornati.": "No target version set: agents are not updated.",
+	"Aggiornamenti non riusciti": "Failed updates",
+	"Release pubblicate":         "Published releases",
+	"Pubblicata":                 "Published",
+
+	// Software
+	"Catalogo winget": "winget catalog",
+	"Le applicazioni seguite vengono confrontate con l'inventario di tutti gli endpoint, anche senza winget (ad esempio Windows Server 2019). L'installer viene scaricato dalla console solo via HTTPS e accettato solo se lo SHA-256 corrisponde a quello del manifest winget.": "Tracked applications are compared with the inventory of every endpoint, even without winget (for example Windows Server 2019). The console downloads the installer over HTTPS only and accepts it only if its SHA-256 matches the winget manifest.",
+	"Ultima versione": "Latest version",
+	"Installata su":   "Installed on",
+	"Da aggiornare":   "Outdated",
+	"Riconoscimento":  "Detection",
+	"verificato %s":   "checked %s",
+	"Distribuisci":    "Deploy",
+	"nella libreria":  "in the library",
+	"Scarica %s":      "Download %s",
+	"Inizio del nome in Programmi e funzionalità": "Start of the name in Programs and Features",
+	"rimuovi":                                   "remove",
+	"Nessuna applicazione nel catalogo.":        "No applications in the catalog.",
+	"Id winget, es. 7zip.7zip":                  "winget id, e.g. 7zip.7zip",
+	"Aggiungi al catalogo":                      "Add to the catalog",
+	"Controlla nuove versioni":                  "Check for new versions",
+	"Libreria pacchetti":                        "Package library",
+	"Origine":                                   "Source",
+	"Aggiunto":                                  "Added",
+	"non firmato ammesso":                       "unsigned allowed",
+	"caricato":                                  "uploaded",
+	"La libreria è vuota.":                      "The library is empty.",
+	"Carica un installer":                       "Upload an installer",
+	"Altro exe (servono le opzioni silenziose)": "Other exe (silent options required)",
+	"Opzioni (exe: opzioni silenziose, es. <code>/quiet /norestart</code>; MSI: proprietà, es. <code>ALLUSERS=1</code>)": "Options (exe: silent options, e.g. <code>/quiet /norestart</code>; MSI: properties, e.g. <code>ALLUSERS=1</code>)",
+	"Codice prodotto MSI (facoltativo)":                                             "MSI product code (optional)",
+	"Ammetti l'installazione anche se il file non ha una firma Authenticode valida": "Allow the installation even if the file has no valid Authenticode signature",
+	"Archivio dei pacchetti non configurato (OPENRMM_PACKAGES_DIR).":                "Package store not configured (OPENRMM_PACKAGES_DIR).",
+	"Caricamento non riuscito: %v":                                                  "Upload failed: %v",
+	"Seleziona il file da caricare.":                                                "Select the file to upload.",
+	"Indica il nome del software.":                                                  "Enter the software name.",
+	"Indica la versione.":                                                           "Enter the version.",
+	"Nome del file non valido: usa lettere, cifre, spazi e . _ - ( ) +":             "Invalid file name: use letters, digits, spaces and . _ - ( ) +",
+	"Tipo di installer non valido.":                                                 "Invalid installer type.",
+	"Per un installer exe generico indica le opzioni di installazione silenziosa.":  "For a generic exe installer, enter the silent installation options.",
+	"Il codice prodotto deve essere un GUID tra parentesi graffe.":                  "The product code must be a GUID in curly braces.",
+	"Opzioni troppo lunghe.":                                                        "Options too long.",
+	"Questo file è già nella libreria.":                                             "This file is already in the library.",
+	"%s %s aggiunto alla libreria.":                                                 "%s %s added to the library.",
+	"Id winget non valido (es. 7zip.7zip, Mozilla.Firefox).":                        "Invalid winget id (e.g. 7zip.7zip, Mozilla.Firefox).",
+	"Impossibile leggere %s dal catalogo winget: %v":                                "Cannot read %s from the winget catalog: %v",
+	"%s %s aggiunto al catalogo.":                                                   "%s %s added to the catalog.",
+	"Catalogo aggiornato: %d nuove versioni.":                                       "Catalog refreshed: %d new versions.",
+	"Non riuscito per: %s":                                                          "Failed for: %s",
+	"%s rimosso dal catalogo.":                                                      "%s removed from the catalog.",
+	"Il nome per il riconoscimento deve avere da 2 a 120 caratteri.":                "The detection name must be 2 to 120 characters long.",
+	"Riconoscimento di %s aggiornato.":                                              "Detection of %s updated.",
+	"Download non riuscito: %v":                                                     "Download failed: %v",
+
+	// Patches
+	"in regola": "compliant",
+	"con aggiornamenti di sicurezza mancanti":      "with missing security updates",
+	"indietro di più di un Patch Tuesday":          "more than one Patch Tuesday behind",
+	"con riavvio in sospeso":                       "with a pending reboot",
+	"con applicazioni da aggiornare":               "with applications to update",
+	"senza verifica negli ultimi 7 giorni":         "not scanned in the last 7 days",
+	"gestiti da WSUS o Intune (solo osservazione)": "managed by WSUS or Intune (observed only)",
+	"Endpoint, dal più indietro":                   "Endpoints, most behind first",
+	"Sicurezza mancanti":                           "Missing security",
+	"Più vecchio":                                  "Oldest",
+	"Altri":                                        "Other",
+	"Riavvio":                                      "Reboot",
+	"App da aggiornare":                            "Apps to update",
+	"Gestione":                                     "Management",
+	"Ultima verifica":                              "Last scan",
+	"da %d gg":                                     "for %d d",
+	"nessuna verifica di Windows Update":           "no Windows Update scan",
+	"osservazione":                                 "observed",
+	"vecchia":                                      "old",
+	"Nessun endpoint attivo.":                      "No active endpoints.",
+	"Applicazioni più diffuse da aggiornare":       "Most widespread applications to update",
+	"Id winget":                                    "winget id",
+	"Nessun dato da winget. Crea una policy con il modulo <code>winget</code> (azione <code>scan</code>).": "No data from winget. Create a policy with the <code>winget</code> module (action <code>scan</code>).",
+
+	// Policies
+	"Le policy eseguono periodicamente i moduli sugli agenti, anche quando sono offline. Ogni regola può avere condizioni (servizio, file o chiave di registro presenti, client/server): il modulo viene scaricato ed eseguito solo dove la condizione è vera. Ogni versione va approvata con una nuova autenticazione.": "Policies run modules on the agents periodically, even while they are offline. Each rule can have conditions (service, file or registry key present, client/server): the module is downloaded and run only where the condition is true. Each version must be approved with a new sign-in.",
+	"Nuova policy":       "New policy",
+	"Modifica policy":    "Edit policy",
+	"Si applica a":       "Applies to",
+	"Regole":             "Rules",
+	"Modificata":         "Modified",
+	"Nessuna policy.":    "No policies.",
+	"Solo client":        "Clients only",
+	"Solo server":        "Servers only",
+	"Regole (JSON)":      "Rules (JSON)",
+	"Formato ed esempio": "Format and example",
+	"Ogni regola indica il modulo (id e versione pubblicati), l'azione e l'intervallo (<code>15m</code>, <code>24h</code>; minimo 1m, massimo 7 giorni). Condizioni facoltative in <code>when</code>: <code>service_exists</code>, <code>file_exists</code>, <code>registry_key_exists</code> (<code>HKLM\\…</code>), <code>os_family</code> (<code>client</code>/<code>server</code>), combinabili con <code>all</code>, <code>any</code>, <code>not</code>. Finestra facoltativa in <code>window</code>, nell'ora locale dell'endpoint: <code>{\"days\":[\"sat\",\"sun\"],\"start\":\"22:00\",\"end\":\"05:00\"}</code> (giorni <code>mon</code>…<code>sun</code>, vuoto = ogni giorno; una fine prima dell'inizio attraversa la mezzanotte).": "Each rule names the module (published id and version), the action and the interval (<code>15m</code>, <code>24h</code>; at least 1m, at most 7 days). Optional conditions in <code>when</code>: <code>service_exists</code>, <code>file_exists</code>, <code>registry_key_exists</code> (<code>HKLM\\…</code>), <code>os_family</code> (<code>client</code>/<code>server</code>), combined with <code>all</code>, <code>any</code>, <code>not</code>. Optional window in <code>window</code>, in the endpoint's local time: <code>{\"days\":[\"sat\",\"sun\"],\"start\":\"22:00\",\"end\":\"05:00\"}</code> (days <code>mon</code>…<code>sun</code>, empty = every day; an end before the start crosses midnight).",
+	"Salvando, ti verrà chiesto di autenticarti di nuovo con Microsoft per approvare esattamente questa versione.": "When you save, you will be asked to sign in again with Microsoft to approve exactly this version.",
+	"Approva e salva":                                 "Approve and save",
+	"(versione %d → nuova)":                           "(version %d → new)",
+	"policy non valida":                               "invalid policy",
+	"policy non trovata":                              "policy not found",
+	"regole: JSON non valido: %v":                     "rules: invalid JSON: %v",
+	"regola %q: intervallo non valido (es. 15m, 24h)": "rule %q: invalid interval (e.g. 15m, 24h)",
+	"regola %q: modulo %s %s non pubblicato":          "rule %q: module %s %s not published",
+	"regola %q: il modulo %s non ha l'azione %q":      "rule %q: module %s has no action %q",
+	"regola %q: i moduli che eseguono script non possono stare in una policy": "rule %q: modules that run scripts cannot be part of a policy",
+	"Policy non valida: %v":                                                 "Invalid policy: %v",
+	"approvazione non valida per questa policy":                             "approval not valid for this policy",
+	"Il servizio di firma ha rifiutato la policy: %v":                       "The signing service refused the policy: %v",
+	"La policy è stata modificata da qualcun altro nel frattempo: riprova.": "The policy was changed by someone else in the meantime: try again.",
+	"Policy %q (versione %d) salvata: gli agenti la ricevono subito.":       "Policy %q (version %d) saved: agents receive it right away.",
+	"Policy %q eliminata.":                                                  "Policy %q deleted.",
+
+	// Settings
+	"Accessi RDP": "RDP logons",
+	"L'accesso remoto (RDP) è previsto solo dalle reti indicate qui. Un accesso RDP da un altro indirizzo genera un avviso critico. Una subnet per riga, ad esempio <code>192.168.10.0/24</code>; un indirizzo singolo vale /32. Se l'elenco è vuoto valgono le reti private:": "Remote access (RDP) is expected only from the networks listed here. An RDP logon from another address raises a critical alert. One subnet per line, for example <code>192.168.10.0/24</code>; a single address counts as /32. If the list is empty, the private networks apply:",
+	"Reti da cui l'RDP è consentito": "Networks RDP is allowed from",
+	"Subnet non valida: %v":          "Invalid subnet: %v",
+	"Al massimo 200 subnet.":         "At most 200 subnets.",
+	"Impostazioni salvate.":          "Settings saved.",
+
+	// Setup
+	"Passi per mettere in servizio la console:": "Steps to put the console into service:",
+	"completati":       "completed",
+	"facoltativo":      "optional",
+	"fatto":            "done",
+	"da verificare":    "to check",
+	"da fare":          "to do",
+	"Firma del codice": "Code signing",
+	"Eseguibili e MSI dell'agente vanno firmati con Authenticode. Le chiavi si creano con <code>openrmm-admin</code> sulla macchina che costruisce l'MSI, <strong>mai sulla console</strong>: qui si registra solo il certificato pubblico, per scaricarlo e distribuirlo via GPO e per ricevere un avviso prima della scadenza.": "The agent's executables and MSI must be signed with Authenticode. Keys are created with <code>openrmm-admin</code> on the machine that builds the MSI, <strong>never on the console</strong>: only the public certificate is registered here, to download it and deploy it with a GPO and to get an alert before it expires.",
+	"Come ottenere il certificato":                                          "How to get the certificate",
+	"<strong>CA aziendale (AD CS)</strong>, consigliata se c'è un dominio:": "<strong>Enterprise CA (AD CS)</strong>, recommended when there is a domain:",
+	"Aggiungi a <code>codesign.crt</code> i certificati della CA emittente e della radice. I PC del dominio considerano già attendibile la CA: serve solo distribuire <code>codesign.cer</code> tra gli <em>Autori attendibili</em>.": "Append the issuing CA and root certificates to <code>codesign.crt</code>. Domain PCs already trust the CA: you only need to deploy <code>codesign.cer</code> to the <em>Trusted Publishers</em>.",
+	"<strong>CA dedicata</strong>, senza AD CS:":                                                                  "<strong>Dedicated CA</strong>, without AD CS:",
+	"Sposta subito <code>codesign-ca.key</code> su un supporto offline: serve solo per rinnovare il certificato.": "Move <code>codesign-ca.key</code> to offline storage right away: it is only needed to renew the certificate.",
+	"<strong>Certificato pubblico</strong> (acquistato, o Microsoft Trusted Signing): genera la richiesta con <code>codesign csr</code> e invia <code>codesign.csr</code> all'autorità.": "<strong>Public certificate</strong> (purchased, or Microsoft Trusted Signing): create the request with <code>codesign csr</code> and send <code>codesign.csr</code> to the authority.",
+	"Verifica e firma:": "Check and sign:",
+	"poi":               "then",
+	"Group Policy: <em>Configurazione computer → Criteri → Impostazioni di Windows → Impostazioni sicurezza → Criteri chiave pubblica</em>: <code>codesign.cer</code> in <em>Autori attendibili</em> e, per una CA dedicata, <code>codesign-ca.cer</code> in <em>Autorità di certificazione radice attendibili</em>.": "Group Policy: <em>Computer Configuration → Policies → Windows Settings → Security Settings → Public Key Policies</em>: <code>codesign.cer</code> in <em>Trusted Publishers</em> and, for a dedicated CA, <code>codesign-ca.cer</code> in <em>Trusted Root Certification Authorities</em>.",
+	"Soggetto":                  "Subject",
+	"Emesso da":                 "Issued by",
+	"in scadenza":               "expiring",
+	"Identificazione personale": "Thumbprint",
+	"Per la GPO":                "For the GPO",
+	"Certificato (PEM: prima il certificato di firma, poi le CA)": "Certificate (PEM: the signing certificate first, then the CAs)",
+	"Salva il certificato":       "Save the certificate",
+	"Accesso con Entra ID e MFA": "Sign-in with Entra ID and MFA",
+	"Gli operatori accedono con Entra ID; ogni comando e ogni policy richiede una nuova autenticazione MFA.": "Operators sign in with Entra ID; every command and every policy requires a new MFA sign-in.",
+	"Definisci le sedi con le loro subnet: gli agenti vengono raggruppati automaticamente nell'albero.":      "Define the sites with their subnets: agents are grouped automatically in the tree.",
+	"%d sedi definite.":              "%d sites defined.",
+	"Reti da cui è consentito l'RDP": "Networks RDP is allowed from",
+	"Si usano le reti private predefinite. Indica le subnet delle LAN per ricevere un avviso critico sugli RDP da altre reti (VPN comprese).": "The default private networks are used. Enter the LAN subnets to get a critical alert on RDP from other networks (VPNs included).",
+	"%d subnet: %s.":        "%d subnets: %s.",
+	"%d moduli pubblicati.": "%d modules published.",
+	"Da pubblicare (openrmm-admin module sign e module publish): %s.": "To publish (openrmm-admin module sign and module publish): %s.",
+	"Policy di base":         "Baseline policy",
+	"Crea la policy di base": "Create the baseline policy",
+	"Pubblica prima i moduli: la policy di base li esegue periodicamente.": "Publish the modules first: the baseline policy runs them periodically.",
+	"Inventario, aggiornamenti, stato della protezione, accessi, Trend Micro dove installato e Active Directory sui domain controller. La policy è precompilata con i moduli pubblicati e va approvata con MFA.": "Inventory, updates, protection status, logons, Trend Micro where installed and Active Directory on domain controllers. The policy is prefilled with the published modules and must be approved with MFA.",
+	"%d policy attive.":          "%d active policies.",
+	"Distribuzione degli agenti": "Agent deployment",
+	"%d agenti attivi, %d in attesa di approvazione, %d token validi.":                              "%d active agents, %d awaiting approval, %d valid tokens.",
+	"Token pronto: distribuisci l'MSI con la GPO (docs/AGENT-INSTALL.md) e approva i primi agenti.": "Token ready: deploy the MSI with the GPO (docs/AGENT-INSTALL.md) and approve the first agents.",
+	"Crea un token di registrazione da inserire nella GPO o nelle proprietà dell'MSI.":              "Create an enrollment token to put in the GPO or in the MSI properties.",
+	"Firma del codice (Authenticode)":                                                               "Code signing (Authenticode)",
+	"Certificato":                                                                                   "Certificate",
+	"Il certificato registrato non è più valido: %v":                                                "The registered certificate is no longer valid: %v",
+	"Certificato %s valido fino al %s.":                                                             "Certificate %s valid until %s.",
+	"Il certificato scade il %s: rinnovalo e ricostruisci l'MSI.":                                   "The certificate expires on %s: renew it and rebuild the MSI.",
+	"Firma eseguibili e MSI, altrimenti SmartScreen e gli antivirus possono bloccarli.":             "Sign executables and MSI, otherwise SmartScreen and antivirus software can block them.",
+	"Active Directory (facoltativo)":                                                                "Active Directory (optional)",
+	"Confronta i computer del dominio con gli agenti (PC senza agente, oggetti obsoleti) e raggruppa gli agenti per OU. Nessuna credenziale di AD sulla console.": "Compare the domain computers with the agents (PCs without an agent, stale objects) and group the agents by OU. No AD credentials on the console.",
+	"Domini: %s.": "Domains: %s.",
+	"Hai incollato una chiave privata: non è stata salvata. Incolla solo il certificato e conserva la chiave sulla macchina di build.": "You pasted a private key: it was not saved. Paste only the certificate and keep the key on the build machine.",
+	"Certificato non valido: %v":       "Invalid certificate: %v",
+	"Certificato di firma aggiornato.": "Signing certificate updated.",
+
+	// Sites
+	"Gli agenti vengono assegnati alla prima sede che contiene uno degli indirizzi IPv4 delle loro schede di rete (dall'inventario) o l'indirizzo da cui si collegano. Un PC fuori sede compare in \"Senza sede\".": "Agents are assigned to the first site that contains one of the IPv4 addresses of their network adapters (from the inventory) or the address they connect from. A PC outside every site appears under \"No site\".",
+	"Subnet (una per riga)":       "Subnets (one per line)",
+	"Nessuna sede.":               "No sites.",
+	"Nuova sede":                  "New site",
+	"Sede di Bologna":             "Bologna office",
+	"Sede eliminata.":             "Site deleted.",
+	"Nome della sede non valido.": "Invalid site name.",
+	"Subnet non valide (una per riga, es. 192.168.10.0/24, al massimo 100).": "Invalid subnets (one per line, e.g. 192.168.10.0/24, at most 100).",
+	"Esiste già una sede con questo nome.":                                   "A site with this name already exists.",
+	"Sede %s salvata.":                                                       "Site %s saved.",
+	"La nota deve avere da 1 a 4000 caratteri.":                              "The note must be 1 to 4000 characters long.",
+	"Nota aggiunta.":                                                         "Note added.",
+
+	// Agent approval
+	"L'agente non è in attesa di approvazione.": "The agent is not awaiting approval.",
+	"Agente %s approvato.":                      "Agent %s approved.",
+	"Agente %s revocato.":                       "Agent %s revoked.",
+
+	// Enrollment tokens
+	"Token di registrazione": "Enrollment tokens",
+	"Nuovo token":            "New token",
+	"Copialo ora: <strong>non verrà più mostrato</strong>.": "Copy it now: <strong>it will not be shown again</strong>.",
+	"Utilizzi: %d":                    "Uses: %d",
+	"scade il %s":                     "expires on %s",
+	"approvazione automatica":         "automatic approval",
+	"approvazione manuale":            "manual approval",
+	"Crea un token":                   "Create a token",
+	"Descrizione":                     "Description",
+	"es. GPO sede principale":         "e.g. head office GPO",
+	"Numero massimo di registrazioni": "Maximum number of enrollments",
+	"Validità (giorni)":               "Validity (days)",
+	"Approvazione automatica degli agenti registrati con questo token":                                                                                    "Automatic approval of the agents enrolled with this token",
+	"Lascia l'approvazione automatica disattivata per i token distribuiti via GPO: il registro delle policy è leggibile da tutti gli utenti del dominio.": "Leave automatic approval off for tokens deployed with a GPO: the policy registry is readable by every domain user.",
+	"Crea token":      "Create token",
+	"Token esistenti": "Existing tokens",
+	"Utilizzi":        "Uses",
+	"Scadenza":        "Expiry",
+	"Approvazione":    "Approval",
+	"automatica":      "automatic",
+	"manuale":         "manual",
+	"esaurito":        "used up",
+	"valido":          "valid",
+	"Numero di utilizzi non valido (1-100000).": "Invalid number of uses (1-100000).",
+	"Validità non valida (1-90 giorni).":        "Invalid validity (1-90 days).",
+
+	// Errors and sign-in
+	"errore interno":                         "internal error",
+	"sessione scaduta":                       "session expired",
+	"richiesta non valida":                   "invalid request",
+	"permesso negato":                        "permission denied",
+	"nessun tenant":                          "no tenant",
+	"tenant non autorizzato":                 "tenant not authorized",
+	"accesso non avviato o scaduto: riprova": "sign-in not started or expired: try again",
+	"accesso non riuscito: %s":               "sign-in failed: %s",
+	"accesso non valido o scaduto: riprova":  "sign-in invalid or expired: try again",
+	"accesso non riuscito":                   "sign-in failed",
+	"accesso negato":                         "access denied",
+	"accesso negato: è richiesta l'autenticazione a più fattori": "access denied: multi-factor authentication is required",
+	"accesso negato: nessun ruolo open-rmm assegnato":            "access denied: no open-rmm role assigned",
+	"accesso negato: directory non autorizzata":                  "access denied: directory not authorized",
+	"accesso non valido": "invalid sign-in",
+	"l'approvazione deve essere fatta dallo stesso operatore": "the approval must be given by the same operator",
+	"approvazione non valida per questa richiesta":            "approval not valid for this request",
+
+	// Status labels
+	"in attesa":                       "pending",
+	"attivo":                          "active",
+	"revocato":                        "revoked",
+	"online":                          "online",
+	"in coda":                         "queued",
+	"inviato":                         "sent",
+	"accettato":                       "accepted",
+	"in esecuzione":                   "running",
+	"completato":                      "succeeded",
+	"fallito":                         "failed",
+	"rifiutato":                       "rejected",
+	"scaduto":                         "expired",
+	"download":                        "downloading",
+	"pronto":                          "staged",
+	"installato":                      "installed",
+	"ripristinato":                    "rolled back",
+	"tutti":                           "all",
+	"solo client":                     "clients only",
+	"solo server":                     "servers only",
+	"client":                          "client",
+	"server":                          "server",
+	"non noto":                        "unknown",
+	"non attivo":                      "inactive",
+	"sospeso":                         "suspended",
+	"cifratura in corso":              "encrypting",
+	"decifratura in corso":            "decrypting",
+	"computer":                        "machine",
+	"utente":                          "user",
+	"portatile":                       "laptop",
+	"desktop":                         "desktop",
+	"all-in-one":                      "all-in-one",
+	"mini PC":                         "mini PC",
+	"tablet":                          "tablet",
+	"software installato":             "software installed",
+	"software rimosso":                "software removed",
+	"software aggiornato":             "software updated",
+	"hardware":                        "hardware",
+	"sistema operativo":               "operating system",
+	"firmware":                        "firmware",
+	"stato disco":                     "disk health",
+	"cifratura":                       "encryption",
+	"accesso remoto":                  "remote access",
+	"attenzione":                      "warning",
+	"errore":                          "failing",
+	"critica":                         "critical",
+	"informazione":                    "info",
+	"ok":                              "ok",
+	"controllo non superato":          "check failing",
+	"RDP fuori dalle reti consentite": "RDP outside the allowed networks",
+	"RDP da indirizzo nuovo":          "RDP from a new address",
+	"accessi falliti ripetuti":        "repeated failed logons",
+	"password spraying":               "password spraying",
+	"account bloccato":                "account locked out",
+	"eventi troncati":                 "events truncated",
+	"accesso":                         "logon",
+	"sicurezza":                       "security",
+	"cumulativo":                      "rollup",
+	"aggiornamento":                   "update",
+	"definizioni":                     "definitions",
+	"feature pack":                    "feature pack",
+	"service pack":                    "service pack",
+	"nuova versione":                  "upgrade",
+	"strumenti":                       "tools",
+	"driver":                          "driver",
+	"WSUS":                            "WSUS",
+	"Intune":                          "Intune",
+	"open-rmm":                        "open-rmm",
+	"Windows Update":                  "Windows Update",
+	"componenti di Windows":           "Windows components",
+	"file da sostituire":              "pending file renames",
+	"accesso fallito":                 "failed logon",
+	"blocco account":                  "account lockout",
+	"autenticazione RDP":              "RDP authentication",
+	"sessione RDP":                    "RDP session",
+	"RDP disconnesso":                 "RDP disconnected",
+	"RDP riconnesso":                  "RDP reconnected",
+
+	// Windows logon types
+	"interattivo":            "interactive",
+	"rete":                   "network",
+	"batch":                  "batch",
+	"servizio":               "service",
+	"sblocco":                "unlock",
+	"rete (testo in chiaro)": "network (cleartext)",
+	"nuove credenziali":      "new credentials",
+	"desktop remoto":         "remote desktop",
+	"credenziali in cache":   "cached credentials",
+}
