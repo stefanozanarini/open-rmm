@@ -50,6 +50,7 @@ type Pending struct {
 type SessionData struct {
 	Operator  *Operator `json:"operator,omitempty"`
 	CSRF      string    `json:"csrf"`
+	Theme     string    `json:"theme,omitempty"` // "", light, dark
 	Tenant    string    `json:"tenant,omitempty"`
 	Pending   *Pending  `json:"pending,omitempty"`
 	Flash     string    `json:"flash,omitempty"`

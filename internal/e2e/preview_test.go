@@ -53,6 +53,9 @@ func TestPreview(t *testing.T) {
 		}
 	}
 	publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "script"))
+	publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "software"))
+	e.store.PutSite(ctx, store.Site{TenantID: e.tenant, ID: ids.NewUUID(), Name: "Bologna", Subnets: []string{"192.168.1.0/24"}})
+	e.store.PutSite(ctx, store.Site{TenantID: e.tenant, ID: ids.NewUUID(), Name: "Milano", Subnets: []string{"10.20.0.0/16"}})
 	e.store.AppendAudit(ctx, audit.Event{TenantID: e.tenant, Actor: "agent:x", Action: "agent.enrolled", Target: e.agentID,
 		Details: map[string]any{"hostname": "pc01"}})
 
@@ -88,6 +91,9 @@ func previewInventory(t *testing.T, e *consoleEnv, agentID string, i int) {
 	makers := []string{"LENOVO", "Dell Inc.", "Dell Inc.", "Acer"}
 	inv.System.Model, inv.System.Manufacturer = models[i], makers[i]
 	inv.OS.LoggedOnUser = []string{`CORP\mario`, `CORP\giulia`, "", `CORP\magazzino`}[i]
+	if i == 3 {
+		inv.Network[0].IPv4 = []string{"10.20.3.15"}
+	}
 	data, _ := json.Marshal(inv)
 	var changes []store.InventoryChange
 	if i == 0 {
@@ -134,5 +140,9 @@ func previewInventory(t *testing.T, e *consoleEnv, agentID string, i int) {
 	}
 	e.store.PutInventory(context.Background(), store.Inventory{TenantID: e.tenant, AgentID: agentID, Data: data,
 		Summary: store.InventorySummary{CollectedAt: inv.CollectedAt, Manufacturer: inv.System.Manufacturer, Model: inv.System.Model,
-			Serial: inv.System.Serial, LoggedOnUser: inv.OS.LoggedOnUser, SupremoID: inv.RemoteAccess.SupremoID}}, changes)
+			Serial: inv.System.Serial, LoggedOnUser: inv.OS.LoggedOnUser, SupremoID: inv.RemoteAccess.SupremoID, IPv4: inv.IPv4()}}, changes)
+	if i == 0 {
+		e.store.AddNote(ctx, store.Note{TenantID: e.tenant, ID: ids.NewUUID(), AgentID: agentID, Author: "Mario Rossi (mario@cliente.it)",
+			Body: "Portatile del responsabile amministrativo. Sostituita la batteria a settembre."})
+	}
 }

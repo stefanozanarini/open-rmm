@@ -422,6 +422,7 @@ type deployRow struct {
 	Agent     store.Agent
 	Installed string
 	Outdated  bool
+	Checked   bool
 }
 
 type deployData struct {
@@ -496,17 +497,25 @@ func (s *Server) handleDeployForm(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	preset := map[string]bool{}
+	for _, id := range r.URL.Query()["agent"] {
+		preset[id] = true
+	}
 	for _, a := range agents {
 		if a.Status != store.AgentActive || a.Host.OS != "windows" {
 			continue
 		}
 		row := deployRow{Agent: a, Installed: installed[a.ID]}
 		row.Outdated = row.Installed != "" && wingetcat.CompareVersions(row.Installed, p.Version) < 0
+		row.Checked = row.Outdated
+		if len(preset) > 0 {
+			row.Checked = preset[a.ID]
+		}
 		d.Rows = append(d.Rows, row)
 	}
 	sort.SliceStable(d.Rows, func(i, j int) bool {
-		if d.Rows[i].Outdated != d.Rows[j].Outdated {
-			return d.Rows[i].Outdated
+		if d.Rows[i].Checked != d.Rows[j].Checked {
+			return d.Rows[i].Checked
 		}
 		return d.Rows[i].Agent.Host.Hostname < d.Rows[j].Agent.Host.Hostname
 	})

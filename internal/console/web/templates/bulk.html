@@ -1,0 +1,40 @@
+{{define "content"}}
+{{with .Data}}
+<p>Agenti selezionati: {{range $i, $a := .Agents}}{{if $i}}, {{end}}{{$a.Host.Hostname}}{{end}}.</p>
+<p class="muted">Una sola autenticazione con Microsoft approva l'azione su tutti gli agenti selezionati; ognuno riceve un proprio comando firmato.</p>
+{{if .Commands}}
+<h2>Esegui un comando</h2>
+<form method="post" action="/agents/bulk" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <label>Azione
+    <select name="target">{{range .Commands}}<option value="{{.Module}}|{{.Version}}|{{.Action}}">{{.Module}} {{.Version}} · {{.Action}}{{if .Description}} — {{.Description}}{{end}}</option>{{end}}</select>
+  </label>
+  <label>Parametri (JSON, facoltativi) <input name="params" value="{}" spellcheck="false"></label>
+  {{template "ttl"}}
+  <button class="primary">Approva ed esegui</button>
+</form>
+{{end}}
+{{range .Scripts}}
+<h2>Script PowerShell</h2>
+<form method="post" action="/agents/bulk" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range $.Data.Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <input type="hidden" name="target" value="{{.Module}}|{{.Version}}|{{.Action}}">
+  <label>Script ({{.Module}} {{.Version}}) <textarea name="script" rows="10" spellcheck="false"></textarea></label>
+  {{template "ttl"}}
+  <p class="muted">Il testo completo dello script viene registrato nel registro attività.</p>
+  <button class="primary">Approva ed esegui lo script</button>
+</form>
+{{end}}
+{{if .Packages}}
+<h2>Installa software</h2>
+<form method="post" action="/agents/bulk" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <label>Pacchetto <select name="package">{{range .Packages}}<option value="{{.SHA256}}">{{.Name}} {{.Version}} ({{.FileName}})</option>{{end}}</select></label>
+  <button>Continua</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

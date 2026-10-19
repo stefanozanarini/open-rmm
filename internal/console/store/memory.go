@@ -32,6 +32,8 @@ type Memory struct {
 	updates     map[string]UpdateStatus
 	packages    map[string]Package
 	catalog     map[string]CatalogApp
+	sites       map[string]Site
+	notes       []Note
 }
 
 func NewMemory() *Memory {

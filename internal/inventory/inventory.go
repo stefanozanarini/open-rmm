@@ -337,3 +337,16 @@ func (inv *Inventory) VisibleSoftware() []Software {
 	}
 	return out
 }
+
+// IPv4 returns the IPv4 addresses of the adapters (at most 32).
+func (inv *Inventory) IPv4() []string {
+	var out []string
+	for _, n := range inv.Network {
+		for _, a := range n.IPv4 {
+			if len(out) < 32 {
+				out = append(out, a)
+			}
+		}
+	}
+	return out
+}

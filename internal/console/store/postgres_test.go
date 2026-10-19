@@ -47,6 +47,7 @@ func TestPostgresInventories(t *testing.T)           { testInventories(t, openTe
 func TestPostgresSecurity(t *testing.T)              { testSecurity(t, openTestDB(t)) }
 func TestPostgresUpdateStatus(t *testing.T)          { testUpdateStatus(t, openTestDB(t)) }
 func TestPostgresPackagesAndCatalog(t *testing.T)    { testPackagesAndCatalog(t, openTestDB(t)) }
+func TestPostgresSitesAndNotes(t *testing.T)         { testSitesAndNotes(t, openTestDB(t)) }
 
 func TestPostgresTenantIsolation(t *testing.T) {
 	db := openTestDB(t)

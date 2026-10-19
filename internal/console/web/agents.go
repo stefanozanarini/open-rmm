@@ -1,0 +1,396 @@
+package web
+
+import (
+	"errors"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/stefanozanarini/open-rmm/internal/accesslog"
+	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/open-rmm/internal/updates"
+)
+
+// agentRow is an agent in a list, with its status icons.
+type agentRow struct {
+	store.Agent
+	Inv        store.InventorySummary
+	Online     bool
+	Checks     string // worst check status
+	Site       string
+	Alerts     int
+	Reboot     bool
+	Missing    int // missing security updates
+	ThirdParty int
+	Current    bool // shown in the bottom panel
+	Checked    bool
+}
+
+type siteView struct {
+	store.Site
+	Count int
+}
+
+// panelTab is a tab of the bottom panel.
+type panelTab struct {
+	ID, Label, URL string
+	Current        bool
+}
+
+type agentsData struct {
+	Family, Query, Site      string
+	Counts                   map[string]int
+	Sites                    []siteView
+	NoSite                   int
+	Pending, Active, Revoked []agentRow
+	Selected                 *agentData
+	Tab                      string
+	Tabs                     []panelTab
+	// Links keep the current filters.
+	SelectAllURL, ClearURL string
+}
+
+func (s *Server) online(a store.Agent) bool {
+	return a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) < 10*time.Minute
+}
+
+func (r agentRow) matches(q string) bool {
+	for _, f := range []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser,
+		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion, r.Site} {
+		if strings.Contains(strings.ToLower(f), q) {
+			return true
+		}
+	}
+	return false
+}
+
+// siteMatcher assigns agents to sites by their adapter or source address.
+type siteMatcher struct {
+	sites    []store.Site
+	prefixes [][]netip.Prefix
+}
+
+func newSiteMatcher(sites []store.Site) siteMatcher {
+	m := siteMatcher{sites: sites}
+	for _, st := range sites {
+		p, _ := accesslog.ParseSubnets(st.Subnets)
+		m.prefixes = append(m.prefixes, p)
+	}
+	return m
+}
+
+func (m siteMatcher) match(a store.Agent, inv store.InventorySummary) (id, name string) {
+	addrs := append([]string(nil), inv.IPv4...)
+	if a.LastSeenIP != nil {
+		addrs = append(addrs, a.LastSeenIP.String())
+	}
+	for i, st := range m.sites {
+		for _, ip := range addrs {
+			if accesslog.Allowed(ip, m.prefixes[i]) {
+				return st.ID, st.Name
+			}
+		}
+	}
+	return "", ""
+}
+
+var tabs = []struct{ ID, Label string }{
+	{"summary", "Riepilogo"}, {"checks", "Controlli"}, {"patches", "Patch"}, {"software", "Software"},
+	{"inventory", "Inventario"}, {"logons", "Accessi"}, {"policies", "Policy"}, {"history", "Cronologia"},
+	{"notes", "Note"}, {"commands", "Comandi"},
+}
+
+func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, "nessun tenant", http.StatusForbidden)
+		return
+	}
+	q := r.URL.Query()
+	agents, err := s.store.ListAgents(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	sums, err := s.store.InventorySummaries(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	worst, err := s.store.WorstChecks(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	sites, err := s.store.ListSites(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	open, err := s.store.ListAlerts(r.Context(), t, "", true, 5000)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	alerts := map[string]int{}
+	for _, a := range open {
+		alerts[a.AgentID]++
+	}
+	statuses, err := s.store.ListUpdateStatus(r.Context(), t, "")
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	d := agentsData{Family: q.Get("family"), Query: strings.TrimSpace(q.Get("q")), Site: q.Get("site"), Counts: map[string]int{}}
+	if d.Family != "client" && d.Family != "server" {
+		d.Family = ""
+	}
+	selected := q.Get("agent")
+	checked := map[string]bool{}
+	for _, id := range q["sel"] {
+		checked[id] = true
+	}
+	all := q.Get("select") == "all"
+	matcher := newSiteMatcher(sites)
+	siteCount := map[string]int{}
+	needle := strings.ToLower(d.Query)
+	for _, a := range agents {
+		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a), Checks: worst[a.ID], Alerts: alerts[a.ID],
+			Current: a.ID == selected}
+		var siteID string
+		siteID, row.Site = matcher.match(a, row.Inv)
+		for _, st := range statuses {
+			if st.AgentID != a.ID {
+				continue
+			}
+			switch st.Source {
+			case updates.SourceWindows:
+				row.Reboot, row.Missing = st.Reboot, st.Important
+			case updates.SourceWinget:
+				row.ThirdParty = st.ThirdParty
+			}
+		}
+		// Counters follow the site filter; the site tree follows the family.
+		if d.Site == "" || d.Site == siteID || (d.Site == "none" && siteID == "") {
+			d.Counts[""]++
+			if a.Host.OSFamily == "client" || a.Host.OSFamily == "server" {
+				d.Counts[a.Host.OSFamily]++
+			}
+		}
+		if d.Family == "" || a.Host.OSFamily == d.Family {
+			if siteID == "" {
+				d.NoSite++
+			} else {
+				siteCount[siteID]++
+			}
+		}
+		if (d.Family != "" && a.Host.OSFamily != d.Family) || (d.Site == "none" && siteID != "") ||
+			(d.Site != "" && d.Site != "none" && d.Site != siteID) || (needle != "" && !row.matches(needle)) {
+			continue
+		}
+		row.Checked = checked[a.ID] || (all && a.Status == store.AgentActive)
+		switch a.Status {
+		case store.AgentPending:
+			d.Pending = append(d.Pending, row)
+		case store.AgentActive:
+			d.Active = append(d.Active, row)
+		default:
+			d.Revoked = append(d.Revoked, row)
+		}
+	}
+	for _, st := range sites {
+		d.Sites = append(d.Sites, siteView{Site: st, Count: siteCount[st.ID]})
+	}
+	base := url.Values{}
+	for _, k := range []string{"family", "q", "site"} {
+		if v := q.Get(k); v != "" {
+			base.Set(k, v)
+		}
+	}
+	link := func(extra url.Values) string {
+		v := url.Values{}
+		for k, vs := range base {
+			v[k] = vs
+		}
+		for k, vs := range extra {
+			v[k] = vs
+		}
+		if len(v) == 0 {
+			return "/agents"
+		}
+		return "/agents?" + v.Encode()
+	}
+	d.SelectAllURL, d.ClearURL = link(url.Values{"select": {"all"}}), link(nil)
+	if selected != "" && ids.IsUUID(selected) {
+		det, err := s.agentDetails(r, t, selected)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+		case err != nil:
+			s.fail(w, err)
+			return
+		default:
+			det.Panel = true
+			d.Selected = det
+			d.Tab = q.Get("tab")
+			valid := false
+			for _, tb := range tabs {
+				valid = valid || tb.ID == d.Tab
+			}
+			if !valid {
+				d.Tab = "summary"
+			}
+			for _, tb := range tabs {
+				d.Tabs = append(d.Tabs, panelTab{ID: tb.ID, Label: tb.Label, Current: tb.ID == d.Tab,
+					URL: link(url.Values{"agent": {selected}, "tab": {tb.ID}})})
+			}
+			det.Return = link(url.Values{"agent": {selected}, "tab": {d.Tab}})
+		}
+	}
+	title := map[string]string{"": "Agenti", "client": "Client", "server": "Server"}[d.Family]
+	s.render(w, r, "agents", title, d)
+}
+
+// rowLink is the URL that opens an agent in the bottom panel.
+func rowLink(d agentsData, agentID string) string {
+	v := url.Values{"agent": {agentID}}
+	if d.Family != "" {
+		v.Set("family", d.Family)
+	}
+	if d.Query != "" {
+		v.Set("q", d.Query)
+	}
+	if d.Site != "" {
+		v.Set("site", d.Site)
+	}
+	if d.Tab != "" {
+		v.Set("tab", d.Tab)
+	}
+	return "/agents?" + v.Encode()
+}
+
+// safeReturn keeps redirects inside the agent pages.
+func safeReturn(ret, fallback string) string {
+	if (strings.HasPrefix(ret, "/agents?") || strings.HasPrefix(ret, "/agents/")) && !strings.ContainsAny(ret, "\\\r\n") &&
+		!strings.HasPrefix(ret, "//") {
+		return ret
+	}
+	return fallback
+}
+
+func (s *Server) handleAddNote(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	id := r.PathValue("id")
+	if !ok || !ids.IsUUID(id) {
+		http.NotFound(w, r)
+		return
+	}
+	op := sessionFrom(r.Context()).data.Operator
+	back := safeReturn(r.PostFormValue("return"), "/agents/"+id)
+	body := strings.TrimSpace(r.PostFormValue("body"))
+	if body == "" || len(body) > 4000 {
+		s.flash(w, r, "La nota deve avere da 1 a 4000 caratteri.", back)
+		return
+	}
+	n := store.Note{TenantID: t, ID: ids.NewUUID(), AgentID: id, Body: body, Author: op.Name + " (" + op.Username + ")"}
+	if err := s.store.AddNote(r.Context(), n); errors.Is(err, store.ErrNotFound) {
+		http.NotFound(w, r)
+		return
+	} else if err != nil {
+		s.fail(w, err)
+		return
+	}
+	s.audit(r.Context(), t, op, "agent.note_added", id, map[string]any{"note": n.ID})
+	s.flash(w, r, "Nota aggiunta.", back)
+}
+
+// ---- sites ----
+
+type sitesData struct {
+	Sites []siteView
+}
+
+func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, "nessun tenant", http.StatusForbidden)
+		return
+	}
+	sites, err := s.store.ListSites(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	var d sitesData
+	for _, st := range sites {
+		d.Sites = append(d.Sites, siteView{Site: st})
+	}
+	s.render(w, r, "sites", "Sedi", d)
+}
+
+func (s *Server) handleSaveSite(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, "nessun tenant", http.StatusForbidden)
+		return
+	}
+	op := sessionFrom(r.Context()).data.Operator
+	id := r.PostFormValue("id")
+	if id == "" {
+		id = ids.NewUUID()
+	} else if !ids.IsUUID(id) {
+		http.NotFound(w, r)
+		return
+	}
+	if r.PostFormValue("delete") != "" {
+		if err := s.store.DeleteSite(r.Context(), t, id); err != nil && !errors.Is(err, store.ErrNotFound) {
+			s.fail(w, err)
+			return
+		}
+		s.audit(r.Context(), t, op, "site.deleted", id, nil)
+		s.flash(w, r, "Sede eliminata.", "/sites")
+		return
+	}
+	name := strings.TrimSpace(r.PostFormValue("name"))
+	if !versionTxt.MatchString(name) {
+		s.flash(w, r, "Nome della sede non valido.", "/sites")
+		return
+	}
+	fields := strings.FieldsFunc(r.PostFormValue("subnets"), func(c rune) bool { return c == '\n' || c == '\r' || c == ',' || c == ' ' })
+	prefixes, err := accesslog.ParseSubnets(fields)
+	if err != nil || len(prefixes) > 100 {
+		s.flash(w, r, "Subnet non valide (una per riga, es. 192.168.10.0/24, al massimo 100).", "/sites")
+		return
+	}
+	st := store.Site{TenantID: t, ID: id, Name: name}
+	for _, p := range prefixes {
+		st.Subnets = append(st.Subnets, p.String())
+	}
+	switch err := s.store.PutSite(r.Context(), st); {
+	case errors.Is(err, store.ErrSiteExists):
+		s.flash(w, r, "Esiste già una sede con questo nome.", "/sites")
+		return
+	case err != nil:
+		s.fail(w, err)
+		return
+	}
+	s.audit(r.Context(), t, op, "site.saved", id, map[string]any{"name": name, "subnets": st.Subnets})
+	s.flash(w, r, "Sede "+name+" salvata.", "/sites")
+}
+
+// ---- theme ----
+
+func (s *Server) handleTheme(w http.ResponseWriter, r *http.Request) {
+	sess := sessionFrom(r.Context())
+	switch th := r.PostFormValue("theme"); th {
+	case "light", "dark", "":
+		sess.data.Theme = th
+	}
+	if err := s.save(r.Context(), w, sess); err != nil {
+		s.fail(w, err)
+		return
+	}
+	http.Redirect(w, r, safeReturn(r.PostFormValue("return"), "/agents"), http.StatusSeeOther)
+}

@@ -42,87 +42,6 @@ func (s *Server) handleSelectTenant(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/agents", http.StatusSeeOther)
 }
 
-// agentRow is an agent in a list, with its inventory summary.
-type agentRow struct {
-	store.Agent
-	Inv    store.InventorySummary
-	Online bool
-	Checks string // worst check status
-}
-
-type agentsData struct {
-	Family                   string // "", client, server
-	Query                    string
-	Counts                   map[string]int
-	Pending, Active, Revoked []agentRow
-}
-
-// online reports whether an agent was seen recently.
-func (s *Server) online(a store.Agent) bool {
-	return a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) < 10*time.Minute
-}
-
-func (r agentRow) matches(q string) bool {
-	for _, f := range []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser,
-		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion} {
-		if strings.Contains(strings.ToLower(f), q) {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
-	t, ok := tenantOf(r)
-	if !ok {
-		http.Error(w, "nessun tenant", http.StatusForbidden)
-		return
-	}
-	agents, err := s.store.ListAgents(r.Context(), t)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	sums, err := s.store.InventorySummaries(r.Context(), t)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	worst, err := s.store.WorstChecks(r.Context(), t)
-	if err != nil {
-		s.fail(w, err)
-		return
-	}
-	d := agentsData{Family: r.URL.Query().Get("family"), Query: strings.TrimSpace(r.URL.Query().Get("q")), Counts: map[string]int{}}
-	if d.Family != "client" && d.Family != "server" {
-		d.Family = ""
-	}
-	q := strings.ToLower(d.Query)
-	for _, a := range agents {
-		d.Counts[""]++
-		if a.Host.OSFamily == "client" || a.Host.OSFamily == "server" {
-			d.Counts[a.Host.OSFamily]++
-		}
-		if d.Family != "" && a.Host.OSFamily != d.Family {
-			continue
-		}
-		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a), Checks: worst[a.ID]}
-		if q != "" && !row.matches(q) {
-			continue
-		}
-		switch a.Status {
-		case store.AgentPending:
-			d.Pending = append(d.Pending, row)
-		case store.AgentActive:
-			d.Active = append(d.Active, row)
-		default:
-			d.Revoked = append(d.Revoked, row)
-		}
-	}
-	title := map[string]string{"": "Agenti", "client": "Client", "server": "Server"}[d.Family]
-	s.render(w, r, "agents", title, d)
-}
-
 // runnable is a module action that can run on an agent.
 type runnable struct {
 	Module, Version, Action, Description string
@@ -148,6 +67,11 @@ type agentData struct {
 	// Outdated maps installed application names to the newer version in
 	// the winget catalog.
 	Outdated map[string]string
+	Notes    []store.Note
+	// Return is where forms on this agent go back to; Panel is set when the
+	// agent is shown in the bottom panel of the agent list.
+	Return string
+	Panel  bool
 }
 
 func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +81,7 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a, err := s.store.GetAgent(r.Context(), t, id)
+	d, err := s.agentDetails(r, t, id)
 	if errors.Is(err, store.ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -166,12 +90,20 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	s.render(w, r, "agent", d.Agent.Host.Hostname, d)
+}
+
+// agentDetails loads everything shown about one agent.
+func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error) {
+	a, err := s.store.GetAgent(r.Context(), t, id)
+	if err != nil {
+		return nil, err
+	}
 	jobs, err := s.store.ListJobs(r.Context(), t, id, 20)
 	if err != nil {
-		s.fail(w, err)
-		return
+		return nil, err
 	}
-	d := agentData{Agent: a, Jobs: jobs, Online: s.online(a)}
+	d := &agentData{Agent: a, Jobs: jobs, Online: s.online(a), Return: "/agents/" + id}
 	switch inv, err := s.store.GetInventory(r.Context(), t, id); {
 	case err == nil:
 		if d.Inv, err = inventory.Parse(inv.Data); err != nil {
@@ -180,30 +112,27 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 			d.InvAt, d.Software = inv.ReceivedAt, d.Inv.VisibleSoftware()
 		}
 	case !errors.Is(err, store.ErrNotFound):
-		s.fail(w, err)
-		return
+		return nil, err
 	}
 	if d.Changes, err = s.store.ListInventoryChanges(r.Context(), t, id, 100); err != nil {
-		s.fail(w, err)
-		return
+		return nil, err
 	}
 	if d.Checks, err = s.store.ListChecks(r.Context(), t, id); err != nil {
-		s.fail(w, err)
-		return
+		return nil, err
 	}
 	alerts, err := s.store.ListAlerts(r.Context(), t, id, true, 100)
 	if err != nil {
-		s.fail(w, err)
-		return
+		return nil, err
 	}
 	d.Alerts = s.alertViews(r, t, alerts)
 	if d.Logons, err = s.store.ListLogonEvents(r.Context(), t, id, 100); err != nil {
-		s.fail(w, err)
-		return
+		return nil, err
 	}
 	if d.Updates, err = s.agentUpdates(r, t, id); err != nil {
-		s.fail(w, err)
-		return
+		return nil, err
+	}
+	if d.Notes, err = s.store.ListNotes(r.Context(), t, id, 100); err != nil {
+		return nil, err
 	}
 	d.Outdated = map[string]string{}
 	if d.Inv != nil {
@@ -218,16 +147,12 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	d.Results, err = s.policyResults(r, t, id)
-	if err != nil {
-		s.fail(w, err)
-		return
+	if d.Results, err = s.policyResults(r, t, id); err != nil {
+		return nil, err
 	}
 	if a.Status == store.AgentActive {
-		d.Actions, err = s.runnableOn(r, a)
-		if err != nil {
-			s.fail(w, err)
-			return
+		if d.Actions, err = s.runnableOn(r, a); err != nil {
+			return nil, err
 		}
 		for _, x := range d.Actions {
 			if x.AdHoc {
@@ -237,7 +162,7 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.render(w, r, "agent", a.Host.Hostname, d)
+	return d, nil
 }
 
 func (s *Server) runnableOn(r *http.Request, a store.Agent) ([]runnable, error) {
@@ -260,9 +185,7 @@ func (s *Server) runnableOn(r *http.Request, a store.Agent) ([]runnable, error) 
 				AdHoc: man.HasCapability(modules.CapAdHocScript)})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].Module+out[i].Version+out[i].Action < out[j].Module+out[j].Version+out[j].Action
-	})
+	sortRunnables(out)
 	return out, nil
 }
 
@@ -662,4 +585,10 @@ func (s *Server) policyResults(r *http.Request, tenant, agent string) ([]resultV
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+func sortRunnables(out []runnable) {
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Module+out[i].Version+out[i].Action < out[j].Module+out[j].Version+out[j].Action
+	})
 }

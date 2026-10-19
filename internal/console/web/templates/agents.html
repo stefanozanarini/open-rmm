@@ -1,15 +1,22 @@
 {{define "agentrows"}}
-<table>
-<thead><tr><th>Nome</th><th>Controlli</th><th>Utente</th><th>Modello</th><th>Sistema</th><th>Supremo</th><th>Agente</th><th>Ultimo contatto</th></tr></thead>
+<table class="agents">
+<thead><tr>{{if .Select}}<th></th>{{end}}<th>Nome</th><th>Stato</th><th>Sede</th><th>Utente</th><th>Modello</th><th>Sistema</th><th>Supremo</th><th>Ultimo contatto</th></tr></thead>
 <tbody>
-{{range .}}<tr>
-  <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}} <a href="/agents/{{.ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}</td>
-  <td>{{with .Checks}}<span class="badge chk-{{.}}">{{label .}}</span>{{end}}</td>
+{{range .Rows}}<tr{{if .Current}} class="current"{{end}}>
+  {{if $.Select}}<td><input type="checkbox" name="agent" value="{{.ID}}"{{if .Checked}} checked{{end}} aria-label="seleziona {{.Host.Hostname}}"></td>{{end}}
+  <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}}
+    <a href="{{rowLink $.View .ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}
+    <a class="open" href="/agents/{{.ID}}" title="apri la pagina dell'agente">↗</a></td>
+  <td class="icons">{{with .Alerts}}<span class="badge sev-critical" title="avvisi aperti">{{.}} avvisi</span>{{end}}
+    {{with .Checks}}{{if ne . "ok"}}<span class="badge chk-{{.}}" title="controlli">{{label .}}</span>{{end}}{{end}}
+    {{with .Missing}}<span class="badge chk-failing" title="aggiornamenti di sicurezza mancanti">{{.}} patch</span>{{end}}
+    {{if .Reboot}}<span class="badge chk-warning" title="riavvio in sospeso">riavvio</span>{{end}}
+    {{with .ThirdParty}}<span class="badge chk-warning" title="applicazioni da aggiornare">{{.}} app</span>{{end}}</td>
+  <td>{{.Site}}</td>
   <td>{{.Inv.LoggedOnUser}}</td>
-  <td>{{.Inv.Manufacturer}} {{.Inv.Model}}{{with .Inv.Serial}}<br><span class="muted">{{.}}</span>{{end}}</td>
+  <td>{{.Inv.Manufacturer}} {{.Inv.Model}}</td>
   <td>{{.Host.OSVersion}}</td>
   <td>{{with .Inv.SupremoID}}<code>{{.}}</code>{{end}}</td>
-  <td>{{.Host.AgentVersion}}</td>
   <td>{{fmtTime .LastSeenAt}}</td>
 </tr>{{end}}
 </tbody>
@@ -17,15 +24,25 @@
 {{end}}
 {{define "content"}}
 {{with .Data}}
+<div class="workspace">
+<aside class="tree" aria-label="Sedi">
+  <p class="tree-title">{{$.Tenant.Name}}</p>
+  <a href="/agents{{qs "family" .Family "q" .Query}}" {{if not .Site}}class="current"{{end}}>Tutte le sedi</a>
+  {{range .Sites}}<a href="/agents{{qs "site" .ID "family" $.Data.Family "q" $.Data.Query}}" {{if eq $.Data.Site .ID}}class="current"{{end}}>{{.Name}} <span class="muted">{{.Count}}</span></a>{{end}}
+  <a href="/agents{{qs "site" "none" "family" .Family "q" .Query}}" {{if eq .Site "none"}}class="current"{{end}}>Senza sede <span class="muted">{{.NoSite}}</span></a>
+  <a class="muted small" href="/sites">{{if $.IsAdmin}}gestisci le sedi{{else}}sedi{{end}}</a>
+</aside>
+<div class="main">
 <div class="toolbar">
   <nav class="tabs">
-    <a href="/agents" {{if eq .Family ""}}class="current"{{end}}>Tutti ({{index .Counts ""}})</a>
-    <a href="/agents?family=client" {{if eq .Family "client"}}class="current"{{end}}>Client ({{index .Counts "client"}})</a>
-    <a href="/agents?family=server" {{if eq .Family "server"}}class="current"{{end}}>Server ({{index .Counts "server"}})</a>
+    <a href="/agents{{qs "site" .Site "q" .Query}}" {{if eq .Family ""}}class="current"{{end}}>Tutti ({{index .Counts ""}})</a>
+    <a href="/agents{{qs "family" "client" "site" .Site "q" .Query}}" {{if eq .Family "client"}}class="current"{{end}}>Client ({{index .Counts "client"}})</a>
+    <a href="/agents{{qs "family" "server" "site" .Site "q" .Query}}" {{if eq .Family "server"}}class="current"{{end}}>Server ({{index .Counts "server"}})</a>
   </nav>
   <form method="get" action="/agents" class="search">
     {{if .Family}}<input type="hidden" name="family" value="{{.Family}}">{{end}}
-    <input type="search" name="q" value="{{.Query}}" placeholder="Nome, utente, modello, seriale, ID Supremo…">
+    {{if .Site}}<input type="hidden" name="site" value="{{.Site}}">{{end}}
+    <input type="search" name="q" value="{{.Query}}" placeholder="Nome, utente, modello, seriale, ID Supremo, sede…">
     <button>Cerca</button>
   </form>
 </div>
@@ -33,14 +50,46 @@
 <section class="warn">
 <h2>In attesa di approvazione ({{len .Pending}})</h2>
 <p>Questi agenti sono connessi ma non ricevono comandi finché non vengono approvati. Verifica che siano PC dell'azienda prima di approvarli.</p>
-{{template "agentrows" .Pending}}
+{{template "agentrows" (rowsCtx . .Pending false)}}
 </section>
 {{end}}
-<h2>Attivi ({{len .Active}})</h2>
-{{if .Active}}{{template "agentrows" .Active}}{{else}}<p class="muted">Nessun agente attivo{{if .Query}} corrispondente alla ricerca{{end}}.</p>{{end}}
+{{if .Active}}
+<form method="get" action="/agents/bulk">
+{{template "agentrows" (rowsCtx . .Active $.CanRun)}}
+{{if $.CanRun}}<div class="actions">
+  <button class="primary">Azioni sui selezionati</button>
+  <a href="{{.SelectAllURL}}">seleziona tutti</a> · <a href="{{.ClearURL}}">nessuno</a>
+</div>{{end}}
+</form>
+{{else}}<p class="muted">Nessun agente attivo{{if .Query}} corrispondente alla ricerca{{end}}.</p>{{end}}
 {{if .Revoked}}
 <h2>Revocati ({{len .Revoked}})</h2>
-{{template "agentrows" .Revoked}}
+{{template "agentrows" (rowsCtx . .Revoked false)}}
 {{end}}
+
+{{with .Selected}}
+<section class="panel" aria-label="Agente selezionato">
+  <header>
+    <h2>{{.Agent.Host.Hostname}}</h2>
+    <a href="/agents/{{.Agent.ID}}">apri la pagina</a>
+    <a href="{{$.Data.ClearURL}}">chiudi</a>
+  </header>
+  <nav class="tabs">{{range $.Data.Tabs}}<a href="{{.URL}}"{{if .Current}} class="current"{{end}}>{{.Label}}</a>{{end}}</nav>
+  {{$p := panelCtx $ .}}
+  {{if eq $.Data.Tab "summary"}}{{template "agent-facts" $p}}{{template "agent-alerts" $p}}{{template "agent-checks" $p}}
+  {{else if eq $.Data.Tab "checks"}}{{template "agent-alerts" $p}}{{template "agent-checks" $p}}
+  {{else if eq $.Data.Tab "patches"}}{{template "agent-updates" $p}}
+  {{else if eq $.Data.Tab "software"}}{{template "agent-software" $p}}
+  {{else if eq $.Data.Tab "inventory"}}{{template "agent-inventory" $p}}
+  {{else if eq $.Data.Tab "logons"}}{{template "agent-logons" $p}}
+  {{else if eq $.Data.Tab "policies"}}{{template "agent-policies" $p}}
+  {{else if eq $.Data.Tab "history"}}{{template "agent-jobs" $p}}{{template "agent-changes" $p}}
+  {{else if eq $.Data.Tab "notes"}}{{template "agent-notes" $p}}
+  {{else if eq $.Data.Tab "commands"}}{{template "agent-actions" $p}}{{if not .Actions}}<p class="muted">Nessuna azione disponibile per questo agente.</p>{{end}}
+  {{end}}
+</section>
+{{end}}
+</div>
+</div>
 {{end}}
 {{end}}

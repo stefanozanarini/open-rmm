@@ -576,3 +576,44 @@ func testPackagesAndCatalog(t *testing.T, s Store) {
 		t.Fatalf("inventories = %+v", all)
 	}
 }
+
+func TestSitesAndNotes(t *testing.T) { testSitesAndNotes(t, NewMemory()) }
+
+func testSitesAndNotes(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	site := Site{TenantID: tenant.ID, ID: ids.NewUUID(), Name: "Bologna", Subnets: []string{"192.168.10.0/24"}}
+	if err := s.PutSite(ctx, site); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutSite(ctx, Site{TenantID: tenant.ID, ID: ids.NewUUID(), Name: "Bologna"}); err != ErrSiteExists {
+		t.Fatalf("duplicate name: %v", err)
+	}
+	site.Subnets = append(site.Subnets, "10.1.0.0/16")
+	s.PutSite(ctx, site)
+	list, _ := s.ListSites(ctx, tenant.ID)
+	if len(list) != 1 || len(list[0].Subnets) != 2 {
+		t.Fatalf("sites = %+v", list)
+	}
+	if other, _ := s.ListSites(ctx, ids.NewUUID()); len(other) != 0 {
+		t.Fatal("site visible from another tenant")
+	}
+	if err := s.DeleteSite(ctx, tenant.ID, site.ID); err != nil {
+		t.Fatal(err)
+	}
+	agent := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, agent)
+	for _, b := range []string{"first", "second"} {
+		if err := s.AddNote(ctx, Note{TenantID: tenant.ID, ID: ids.NewUUID(), AgentID: agent.ID, Body: b, Author: "op"}); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if notes, _ := s.ListNotes(ctx, tenant.ID, agent.ID, 10); len(notes) != 2 || notes[0].Body != "second" {
+		t.Fatalf("notes = %+v", notes)
+	}
+	if err := s.AddNote(ctx, Note{TenantID: tenant.ID, ID: ids.NewUUID(), AgentID: ids.NewUUID(), Body: "x", Author: "op"}); err != ErrNotFound {
+		t.Fatalf("note for unknown agent: %v", err)
+	}
+}

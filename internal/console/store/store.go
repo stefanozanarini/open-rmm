@@ -114,6 +114,7 @@ type Store interface {
 	UpdateStore
 	PackageStore
 	CatalogStore
+	SiteStore
 }
 
 // HashToken returns the value stored in place of an enrollment token.

@@ -8,12 +8,12 @@
 </dl>
 <form method="post" action="/packages/{{.Package.SHA256}}/deploy" class="stack wide">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
-  <p class="muted">Seleziona gli endpoint. Gli endpoint con una versione più vecchia sono in cima e già selezionati. Una sola autenticazione con Microsoft approva l'installazione su tutti gli endpoint scelti; ogni endpoint riceve un proprio comando firmato.</p>
+  <p class="muted">Seleziona gli endpoint. Gli endpoint scelti dall'elenco agenti, oppure quelli con una versione più vecchia, sono in cima e già selezionati. Una sola autenticazione con Microsoft approva l'installazione su tutti gli endpoint scelti; ogni endpoint riceve un proprio comando firmato.</p>
   <table>
   <thead><tr><th></th><th>Endpoint</th><th>Versione installata</th><th>Ultimo contatto</th></tr></thead>
   <tbody>
   {{range .Rows}}<tr>
-    <td><input type="checkbox" name="agent" value="{{.Agent.ID}}" {{if .Outdated}}checked{{end}}></td>
+    <td><input type="checkbox" name="agent" value="{{.Agent.ID}}" {{if .Checked}}checked{{end}}></td>
     <td>{{.Agent.Host.Hostname}}{{if eq .Agent.Host.OSFamily "server"}} <span class="badge">server</span>{{end}}</td>
     <td>{{if .Installed}}{{.Installed}}{{if .Outdated}} <span class="badge chk-warning">da aggiornare</span>{{end}}{{else}}<span class="muted">-</span>{{end}}</td>
     <td>{{fmtTime .Agent.LastSeenAt}}</td>

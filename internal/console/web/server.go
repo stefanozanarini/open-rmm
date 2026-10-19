@@ -162,6 +162,25 @@ func (s *Server) parseTemplates() error {
 			}
 			return fmt.Sprint(t)
 		},
+		// panelCtx shows an agent's sections inside the agent list.
+		"panelCtx": func(p page, d *agentData) page { p.Data = d; return p },
+		"rowLink":  rowLink,
+		"rowsCtx": func(d agentsData, rows []agentRow, sel bool) map[string]any {
+			return map[string]any{"Rows": rows, "Select": sel, "View": d}
+		},
+		// qs builds a query string from key/value pairs, skipping empty values.
+		"qs": func(kv ...string) string {
+			v := url.Values{}
+			for i := 0; i+1 < len(kv); i += 2 {
+				if kv[i+1] != "" {
+					v.Set(kv[i], kv[i+1])
+				}
+			}
+			if len(v) == 0 {
+				return ""
+			}
+			return "?" + v.Encode()
+		},
 		"short": func(s string) string {
 			if len(s) > 8 {
 				return s[:8]
@@ -176,10 +195,12 @@ func (s *Server) parseTemplates() error {
 	s.pages = map[string]*template.Template{}
 	for _, n := range names {
 		base := strings.TrimSuffix(strings.TrimPrefix(n, "templates/"), ".html")
-		if base == "layout" {
+		if base == "layout" || strings.HasPrefix(base, "_") {
 			continue
 		}
-		t, err := template.New("layout.html").Funcs(funcs).ParseFS(assets, "templates/layout.html", n)
+		// Shared sections (templates/_*.html) come before the page, which
+		// may redefine them.
+		t, err := template.New("layout.html").Funcs(funcs).ParseFS(assets, "templates/layout.html", "templates/_*.html", n)
 		if err != nil {
 			return fmt.Errorf("template %s: %w", n, err)
 		}
@@ -223,6 +244,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /catalog/{id}/match", s.role(authn.RoleAdmin, s.handleCatalogMatch))
 	mux.Handle("POST /catalog/{id}/import", s.role(authn.RoleAdmin, s.handleImportCatalog))
 	mux.Handle("POST /agents/{id}/uninstall", s.role(authn.RoleOperator, s.handleUninstall))
+	mux.Handle("POST /agents/{id}/notes", s.role(authn.RoleOperator, s.handleAddNote))
+	mux.Handle("GET /agents/bulk", s.role(authn.RoleOperator, s.handleBulkForm))
+	mux.Handle("POST /agents/bulk", s.role(authn.RoleOperator, s.handleBulkJobs))
+	mux.Handle("GET /sites", s.auth(s.handleSites))
+	mux.Handle("POST /sites", s.role(authn.RoleAdmin, s.handleSaveSite))
+	mux.Handle("POST /theme", s.auth(s.handleTheme))
 	mux.Handle("POST /alerts/{id}/ack", s.role(authn.RoleOperator, s.handleAckAlert))
 	mux.Handle("GET /settings", s.role(authn.RoleAdmin, s.handleSettings))
 	mux.Handle("POST /settings", s.role(authn.RoleAdmin, s.handleSaveSettings))
@@ -340,6 +367,8 @@ type page struct {
 	Refresh  int
 	// OpenAlerts is shown in the navigation.
 	OpenAlerts int
+	Theme      string
+	Path       string
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title string, data any) {
@@ -347,7 +376,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title stri
 	p := page{Title: title, Data: data}
 	if sess != nil && sess.data.Operator != nil {
 		op := sess.data.Operator
-		p.Operator, p.CSRF, p.Flash = op, sess.data.CSRF, sess.data.Flash
+		p.Operator, p.CSRF, p.Flash, p.Theme = op, sess.data.CSRF, sess.data.Flash, sess.data.Theme
+		p.Path = r.URL.RequestURI()
 		p.IsAdmin, p.CanRun = hasRole(op, authn.RoleAdmin), hasRole(op, authn.RoleOperator)
 		for _, id := range op.Tenants {
 			if t, err := s.store.GetTenant(r.Context(), id); err == nil {

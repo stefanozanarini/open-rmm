@@ -174,7 +174,7 @@ Recurring work (inventory every 24 h, Trend Micro status every 15 min, logon eve
    "action":"collect","every_seconds":300}]}
 ```
 
-- `applies_to` is `all`, `clients` or `servers` (OS installation type reported by the agent). Groups by site or OU will come with the console layout (§11).
+- `applies_to` is `all`, `clients` or `servers` (OS installation type reported by the agent). 📋 Groups by site or OU.
 - A policy is **signed by the signer** (domain `openrmm/policy/v1`) after an operator with the **Admin** role approves it with a fresh MFA sign-in whose nonce is the document's fingerprint — once per policy version, not at every run. Each change or deletion creates a new version; versions are immutable in the database and audited.
 - The core evaluates only **declarative conditions**: `service_exists`, `file_exists`, `registry_key_exists` (HKLM), `os_family`, combined with `all`, `any`, `not` (depth ≤ 4). No product-specific logic enters the core. Results are cached for 5 minutes.
 - The module is fetched only when a rule is due and its condition holds: endpoints without Trend Micro never download the Trend module. This is how "agent detects Trend Micro → downloads and enables the plugin" works without enlarging the core. Modules are pinned by manifest hash.
@@ -462,17 +462,18 @@ Details: [AGENT-INSTALL.md](AGENT-INSTALL.md).
 
 Implemented ✅: agents (pending/active/revoked, approve, revoke), command and script execution with step-up, jobs with live refresh, modules, enrollment tokens, agent updates, audit log.
 
-**Layout (📋, inspired by Tactical RMM's console, no code reused):**
+**Layout ✅ (inspired by Tactical RMM's console, no code reused):**
 
-- left: tree of **tenants → sites** (and OUs when AD is integrated), with an "all" node;
-- top of the main area: tabs **Servers · Workstations · Mixed**, a search box and filters;
-- agent table with status icons (online, pending reboot, alerts, patches needed, maintenance mode), tenant, site, hostname, description, logged-on user, last contact, boot time; multi-select for bulk actions (run command, install/uninstall software, reboot, set ring);
-- bottom panel for the selected agent, with tabs **Summary · Checks · Tasks/Policies · Patches · Software · History · Notes · Assets · Audit**;
-- dark and light themes; still server-rendered with no third-party JavaScript (a small first-party script may be added for table interactions, under the same strict CSP).
+- left: tree of **sites** with an "all" node and "no site"; a site is a list of subnets, and an agent belongs to the first site containing one of its adapter addresses (from the inventory) or the address it last connected from. Sites are managed by Admins. 📋 OUs when AD is integrated; tenants when federated.
+- top of the main area: tabs **All · Clients · Servers**, a search box (name, user, model, serial, remote-access id);
+- agent table with status icons (online, alerts, failing checks, missing patches, pending reboot, outdated applications), site, logged-on user, model, OS, Supremo id, last contact; multi-select for **bulk actions**: a command or script on up to 500 agents with **one MFA approval** (one signed job per agent, only actions available on every selected platform), or a package deployment with the selection preselected;
+- bottom panel for the selected agent, with tabs **Summary · Checks · Patches · Software · Inventory · Logons · Policies · History · Notes · Commands**; the full agent page stays available;
+- **notes** per agent (author and date, audited);
+- light and dark themes (automatic by default, kept in the session); still server-rendered with no JavaScript, under the same strict CSP.
 
 Planned 📋:
 
-- ✅ **Separate Clients and Servers sections**, by OS installation type, with search by name, user, model, serial and remote-access id. 📋 Filters by site and OU; different default policies.
+- ✅ **Separate Clients and Servers sections**, by OS installation type, with search by name, user, model, serial and remote-access id. ✅ Filter by site. 📋 OU; different default policies.
 - ✅ **Update dashboard (Patch):** endpoints ranked by an update score — missing security updates and their age in days and Patch Tuesdays, other updates, pending reboot and for how long, outdated third-party applications — with compliance, counters and the most widespread outdated applications ("Chrome outdated on 37 PCs"); filters Clients/Servers. 📋 Console-side catalog, compliance by site/OU.
 - **Package library**, software distribution and **uninstall from the Software tab** (§8.7).
 - **Policies** editor with per-version MFA approval (§3.7).
@@ -506,7 +507,7 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | 4 | Security plugins: `trendmicro`, `protection-status`, `accesslog` with unusual-logon detection, checks and alerts, Vision One connector | ✅ (to be validated on real endpoints) |
 | 5 | `winupdate`, `winget`, update dashboard, `reboot`, maintenance windows | ✅ (console-side catalog and user helper 📋) |
 | 6 | Package library, winget catalog on the console, `software` (install/uninstall), multi-agent approval | ✅ |
-| 7 | Console layout (tree, tabs, bottom panel); setup wizard with code signing and optional AD | 📋 |
+| 7 | Console layout (site tree, tabs, bottom panel, bulk actions, notes, themes) ✅; setup wizard with code signing and optional AD 📋 | 🔜 |
 | 8 | Federation with full central operations | 📋 |
 | Later | Firmware, further plugins (§8.10), Linux agent packages, interactive shell | 📋 |
 
