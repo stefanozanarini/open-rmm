@@ -386,9 +386,13 @@ The installation type is also sent by the core on connect (one field), so the co
 - **Uninstall from the console:** from the software list of an endpoint, approved with per-command MFA. The module removes the application the right way for its type: `msiexec /x {ProductCode} /qn /norestart` for MSI products (also when only the `UninstallString` points to msiexec), the registered `QuietUninstallString`, or the `UninstallString` plus switches the operator gives explicitly; it never runs an interactive uninstaller, refuses per-user installations and the open-rmm agent, and checks afterwards that the application is gone.
 - 📋 Later: uninstall for a group ("remove 7-Zip 9.20 everywhere"), reading MSI properties at upload, Authenticode check on the console, removal of unused files.
 
-### 8.8 Firmware 📋
+### 8.8 Firmware ✅
 
-`firmware-dell` (Dell Command | Update), `firmware-lenovo` (Thin Installer), Windows Update firmware for other brands. Preconditions: AC power, battery level, **BitLocker recovery key escrowed**, BitLocker suspended for one reboot. Never automatic by default.
+`firmware` uses the vendor tools, which know the right packages for each model: **Dell Command Update** (`dcu-cli`, report XML) and **Lenovo System Update** (`tvsu /CM`, results exported to WMI). Other vendors (Acer) are reported as not supported; Windows Update drivers remain with `winupdate`. The tools are distributed from the package library.
+
+- `scan` runs from the baseline policy; reports go to the Patch dashboard (counts, BIOS pending) and to the agent's Patch tab, with checks.
+- `install` needs an operator's MFA approval (or a signed policy rule), by type (firmware, driver, vendor applications); **BIOS only when explicitly included**, and only on mains power with at least 50% battery; BitLocker is suspended for one reboot before a BIOS update. Never reboots: the reboot is recorded for `reboot` (maintenance windows).
+- 📋 To validate on real Dell and Lenovo endpoints (DCU exit codes and report format, System Update WMI class). Later: BIOS password support, check that the BitLocker recovery key is escrowed before a BIOS update.
 
 ### 8.9 `reboot` ✅
 
@@ -536,7 +540,9 @@ The console matches computers and agents by host name and shows:
 | 6 | Package library, winget catalog on the console, `software` (install/uninstall), multi-agent approval | ✅ |
 | 7 | Console layout (site and OU tree, tabs, bottom panel, bulk actions, notes, themes); setup checklist, Authenticode signing, optional Active Directory | ✅ |
 | 8 | Federation with full central operations | ✅ |
-| Later | Firmware, further plugins (§8.10), Linux agent packages, interactive shell | 📋 |
+| 9 | `firmware`: BIOS, firmware and drivers through Dell Command Update and Lenovo System Update, in the Patch dashboard | ✅ (to be validated on real endpoints) |
+| 10 | Interactive shell | 🔜 |
+| Later | Further plugins (§8.10), Linux agent packages | 📋 |
 
 ---
 

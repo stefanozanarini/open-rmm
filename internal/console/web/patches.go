@@ -2,6 +2,10 @@ package web
 
 import (
 	"encoding/json"
+
+	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
+	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"net/http"
 	"sort"
 	"strings"
@@ -20,6 +24,8 @@ type patchRow struct {
 	Online     bool
 	Windows    *store.UpdateStatus
 	Winget     *store.UpdateStatus
+	Firmware   *store.UpdateStatus
+	BIOS       bool // BIOS update pending
 	Score      int
 	Stale      bool
 	RebootDays int
@@ -40,6 +46,8 @@ type patchesData struct {
 	Behind         int // more than one Patch Tuesday behind
 	RebootPending  int
 	ThirdParty     int
+	Firmware       int // agents with firmware or driver updates
+	BIOS           int // agents with a BIOS update
 	NotScanned     int
 	Managed        int // WSUS or Intune: observed only
 	Compliant      int
@@ -109,6 +117,21 @@ func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		row.Score = updates.Score(sum, third, now)
+		if st, ok := byAgent[a.ID][updates.SourceFirmware]; ok {
+			row.Firmware = &st
+			var rep updates.FirmwareReport
+			if json.Unmarshal(st.Data, &rep) == nil {
+				_, _, row.BIOS = rep.Counts()
+			}
+			row.Score += st.Important*5 + st.Other
+			if row.BIOS {
+				row.Score += 5
+				d.BIOS++
+			}
+			if st.Important+st.Other > 0 {
+				d.Firmware++
+			}
+		}
 		row.Stale = row.Windows == nil || now.Sub(row.Windows.ScannedAt) > staleScan
 		d.Total++
 		switch {
@@ -168,8 +191,12 @@ type agentUpdates struct {
 	WinScan   time.Time
 	Winget    *updates.WingetReport
 	WingetAt  time.Time
-	Summary   updates.Summary
-	HasReport bool
+	Firmware  *updates.FirmwareReport
+	// FirmwareVersion is the newest published firmware module, for the
+	// install form.
+	FirmwareVersion string
+	Summary         updates.Summary
+	HasReport       bool
 }
 
 func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdates, error) {
@@ -191,7 +218,77 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 			if json.Unmarshal(st.Data, &rep) == nil {
 				out.Winget, out.WingetAt, out.HasReport = &rep, st.ScannedAt, true
 			}
+		case updates.SourceFirmware:
+			var rep updates.FirmwareReport
+			if json.Unmarshal(st.Data, &rep) == nil {
+				out.Firmware, out.HasReport = &rep, true
+			}
 		}
 	}
+	if out.Firmware != nil {
+		latest, err := s.latestModules(r)
+		if err != nil {
+			return out, err
+		}
+		out.FirmwareVersion = latest[updates.FirmwareModule]
+	}
 	return out, nil
+}
+
+// handleFirmwareInstall installs vendor updates on one agent, with the
+// operator's MFA approval. BIOS updates are included only on request.
+func (s *Server) handleFirmwareInstall(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	id := r.PathValue("id")
+	if !ok || !ids.IsUUID(id) {
+		http.NotFound(w, r)
+		return
+	}
+	back := "/agents/" + id
+	a, err := s.store.GetAgent(r.Context(), t, id)
+	if err != nil || a.Status != store.AgentActive {
+		s.flash(w, r, s.T(r, "Solo gli agenti approvati possono ricevere comandi."), back)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, s.T(r, "richiesta non valida"), http.StatusBadRequest)
+		return
+	}
+	var types []string
+	for _, v := range r.PostForm["types"] {
+		if v == "firmware" || v == "driver" || v == "application" {
+			types = append(types, v)
+		}
+	}
+	bios := r.PostFormValue("include_bios") != ""
+	if len(types) == 0 && !bios {
+		s.flash(w, r, s.T(r, "Seleziona almeno un tipo di aggiornamento."), back)
+		return
+	}
+	severity := r.PostFormValue("severity")
+	if severity != "critical" && severity != "recommended" {
+		severity = "all"
+	}
+	latest, err := s.latestModules(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	mod, err := s.store.GetModule(r.Context(), updates.FirmwareModule, latest[updates.FirmwareModule])
+	if err != nil {
+		s.flash(w, r, s.T(r, "Modulo non trovato."), back)
+		return
+	}
+	params, err := json.Marshal(map[string]any{"types": types, "include_bios": bios, "severity": severity})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	req := &openrmmv1.JobRequest{TenantId: t, AgentId: id, Module: mod.ID, ModuleVersion: mod.Version, ModuleSha256: mod.ManifestSHA256,
+		Action: "install", ParamsJson: params, TtlSeconds: 4 * 3600, RequestNonce: jobreq.NewRequestNonce()}
+	if err := jobreq.Validate(req); err != nil {
+		s.flash(w, r, s.Tf(r, "Richiesta non valida: %v", err), back)
+		return
+	}
+	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
 }

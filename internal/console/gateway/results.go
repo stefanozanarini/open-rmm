@@ -148,6 +148,14 @@ func (s *Server) ingestUpdates(ctx context.Context, a store.Agent, source string
 			return
 		}
 		st.ScannedAt, st.ThirdParty, data = r.ScannedAt, len(r.Upgrades), r
+	case updates.SourceFirmware:
+		r, err := updates.ParseFirmware(raw, now)
+		if err != nil {
+			s.log.Warn("invalid firmware report", "agent", a.ID, "err", err)
+			return
+		}
+		st.ScannedAt, data = r.ScannedAt, r
+		st.Important, st.Other, _ = r.Counts()
 	default:
 		return
 	}

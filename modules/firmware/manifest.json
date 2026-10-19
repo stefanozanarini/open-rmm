@@ -1,0 +1,13 @@
+{
+  "id": "firmware",
+  "version": "1.0.0",
+  "description": "BIOS, firmware and driver updates with the vendor tools: Dell Command Update and Lenovo System Update. Other vendors are reported as not supported.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "scan": { "description": "Applicable BIOS, firmware and driver updates", "timeout_seconds": 1800 },
+    "install": { "description": "Install updates by type; BIOS only when include_bios is set; never reboots", "timeout_seconds": 7200 }
+  }
+}

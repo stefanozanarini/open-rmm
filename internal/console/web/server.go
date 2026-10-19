@@ -256,6 +256,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agents/{id}/approve", s.role(authn.RoleAdmin, s.handleApprove))
 	mux.Handle("POST /agents/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevoke))
 	mux.Handle("POST /agents/{id}/jobs", s.role(authn.RoleOperator, s.handleRunJob))
+	mux.Handle("POST /agents/{id}/firmware", s.role(authn.RoleOperator, s.handleFirmwareInstall))
 	mux.Handle("GET /jobs", s.auth(s.handleJobs))
 	mux.Handle("GET /jobs/{id}", s.auth(s.handleJob))
 	mux.Handle("GET /modules", s.auth(s.handleModules))
@@ -497,6 +498,7 @@ var labels = map[string]string{
 	"on": "attivo", "off": "non attivo", "suspended": "sospeso", "encrypting": "cifratura in corso", "decrypting": "decifratura in corso",
 	"machine": "computer", "user": "utente", "laptop": "portatile", "desktop": "desktop", "all-in-one": "all-in-one",
 	"mini-pc": "mini PC", "tablet": "tablet",
+	"application": "applicazione", "other": "altro", "recommended": "consigliato", "optional": "facoltativo",
 	"software.added": "software installato", "software.removed": "software rimosso", "software.updated": "software aggiornato",
 	"hardware": "hardware", "os": "sistema operativo", "firmware": "firmware", "disk.health": "stato disco",
 	"encryption": "cifratura", "remote_access": "accesso remoto",

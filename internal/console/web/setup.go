@@ -47,6 +47,7 @@ var recommended = []struct {
 	{inventory.ModuleID, inventory.Action, "24h", nil},
 	{"winupdate", "scan", "24h", nil},
 	{"winget", "scan", "24h", nil},
+	{"firmware", "scan", "24h", nil},
 	{"protection-status", "status", "1h", nil},
 	{accesslog.ModuleID, accesslog.Action, "5m", nil},
 	{"trendmicro", "status", "15m", &policy.Condition{Any: []policy.Condition{

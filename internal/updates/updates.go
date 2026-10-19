@@ -1,5 +1,5 @@
-// Package updates normalizes the reports of the winupdate and winget
-// modules and ranks endpoints by how far behind they are.
+// Package updates normalizes the reports of the winupdate, winget and
+// firmware modules and ranks endpoints by how far behind they are.
 package updates
 
 import (
@@ -15,10 +15,12 @@ import (
 
 // Modules whose results are update reports.
 const (
-	WindowsModule = "winupdate"
-	WingetModule  = "winget"
-	SourceWindows = "windows"
-	SourceWinget  = "winget"
+	WindowsModule  = "winupdate"
+	WingetModule   = "winget"
+	FirmwareModule = "firmware"
+	SourceWindows  = "windows"
+	SourceWinget   = "winget"
+	SourceFirmware = "firmware"
 )
 
 const (
@@ -33,6 +35,8 @@ func SourceOf(module, action string) string {
 		return SourceWindows
 	case module == WingetModule && (action == "scan" || action == "upgrade"):
 		return SourceWinget
+	case module == FirmwareModule && (action == "scan" || action == "install"):
+		return SourceFirmware
 	}
 	return ""
 }
@@ -266,4 +270,84 @@ func Score(s Summary, thirdParty int, now time.Time) int {
 		score += 2
 	}
 	return score
+}
+
+// FirmwareUpdate is a BIOS, firmware, driver or vendor application update.
+type FirmwareUpdate struct {
+	ID        string     `json:"id,omitempty"`
+	Title     string     `json:"title"`
+	Version   string     `json:"version,omitempty"`
+	Category  string     `json:"category"` // bios | firmware | driver | application | other
+	Severity  string     `json:"severity"` // critical | recommended | optional
+	Released  *time.Time `json:"released,omitempty"`
+	SizeBytes int64      `json:"size_bytes,omitempty"`
+}
+
+// FirmwareReport is a normalized firmware result.
+type FirmwareReport struct {
+	ScannedAt   time.Time        `json:"scanned_at"`
+	Vendor      string           `json:"vendor"`
+	Supported   bool             `json:"supported"`
+	Tool        string           `json:"tool,omitempty"`
+	ToolMissing string           `json:"tool_missing,omitempty"`
+	Updates     []FirmwareUpdate `json:"updates"`
+}
+
+var (
+	fwCategories = map[string]bool{"bios": true, "firmware": true, "driver": true, "application": true, "other": true}
+	fwSeverities = map[string]bool{"critical": true, "recommended": true, "optional": true}
+)
+
+// ParseFirmware normalizes a firmware result.
+func ParseFirmware(raw []byte, now time.Time) (*FirmwareReport, error) {
+	r := &FirmwareReport{}
+	if err := decode(raw, r); err != nil {
+		return nil, fmt.Errorf("firmware report: %w", err)
+	}
+	if r.ScannedAt.IsZero() || r.ScannedAt.After(now.Add(5*time.Minute)) {
+		r.ScannedAt = now
+	}
+	r.ScannedAt = r.ScannedAt.UTC()
+	r.Vendor, r.Tool, r.ToolMissing = clip(r.Vendor), clip(r.Tool), clip(r.ToolMissing)
+	if len(r.Updates) > maxItems {
+		r.Updates = r.Updates[:maxItems]
+	}
+	out := r.Updates[:0]
+	for _, u := range r.Updates {
+		u.ID, u.Title, u.Version = clip(u.ID), clip(u.Title), clip(u.Version)
+		if u.Title == "" {
+			continue
+		}
+		if !fwCategories[u.Category] {
+			u.Category = "other"
+		}
+		if !fwSeverities[u.Severity] {
+			u.Severity = "optional"
+		}
+		out = append(out, u)
+	}
+	// BIOS first, then by severity.
+	rank := map[string]int{"critical": 0, "recommended": 1, "optional": 2}
+	sort.SliceStable(out, func(i, j int) bool {
+		if (out[i].Category == "bios") != (out[j].Category == "bios") {
+			return out[i].Category == "bios"
+		}
+		return rank[out[i].Severity] < rank[out[j].Severity]
+	})
+	r.Updates = out
+	return r, nil
+}
+
+// Counts returns the critical updates, the others, and whether a BIOS
+// update is pending.
+func (r *FirmwareReport) Counts() (critical, other int, bios bool) {
+	for _, u := range r.Updates {
+		if u.Severity == "critical" {
+			critical++
+		} else {
+			other++
+		}
+		bios = bios || u.Category == "bios"
+	}
+	return
 }

@@ -75,6 +75,34 @@
 </table>
 {{else}}<p class="muted">{{tf "Nessuna applicazione da aggiornare (verificato il %s)." (fmtTime .ScannedAt)}}</p>{{end}}
 {{end}}
+{{with .Firmware}}
+<h3>{{t "BIOS, firmware e driver"}}</h3>
+{{if .Supported}}
+<p class="muted">{{tf "%s · verificato il %s" .Tool (fmtTime .ScannedAt)}}</p>
+{{if .Updates}}
+<table>
+<thead><tr><th>{{t "Aggiornamento"}}</th><th>{{t "Versione"}}</th><th>{{t "Tipo"}}</th><th>{{t "Importanza"}}</th><th>{{t "Uscito"}}</th></tr></thead>
+<tbody>{{range .Updates}}<tr><td>{{.Title}}</td><td>{{.Version}}</td><td>{{if eq .Category "bios"}}<span class="badge chk-warning">BIOS</span>{{else}}{{label .Category}}{{end}}</td>
+<td>{{if eq .Severity "critical"}}<span class="badge chk-failing">{{t "critico"}}</span>{{else}}{{label .Severity}}{{end}}</td><td>{{isoDate .Released}}</td></tr>{{end}}</tbody>
+</table>
+{{if and $.CanRun $.Data.Updates.FirmwareVersion}}
+<form method="post" action="/agents/{{$.Data.Agent.ID}}/firmware" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <fieldset><legend>{{t "Installa"}}</legend>
+    <label><input type="checkbox" name="types" value="firmware" checked> {{t "firmware"}}</label>
+    <label><input type="checkbox" name="types" value="driver" checked> {{t "driver"}}</label>
+    <label><input type="checkbox" name="types" value="application"> {{t "applicazioni del produttore"}}</label>
+    <label><input type="checkbox" name="include_bios" value="1"> {{t "BIOS (BitLocker viene sospeso per un riavvio)"}}</label>
+  </fieldset>
+  <label>{{t "Importanza"}} <select name="severity"><option value="all">{{t "tutti"}}</option><option value="recommended">{{t "consigliati e critici"}}</option><option value="critical">{{t "solo critici"}}</option></select></label>
+  <p class="muted">{{t "Il PC non viene riavviato: il riavvio necessario viene segnalato al modulo reboot. Richiede la tua approvazione MFA."}}</p>
+  <button class="primary">{{t "Installa con approvazione"}}</button>
+</form>
+{{end}}
+{{else}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento di BIOS, firmware o driver."}}</p>{{end}}
+{{else if .ToolMissing}}<p><span class="badge chk-warning">{{t "strumento mancante"}}</span> {{tf "%s non è installato: distribuiscilo dalla pagina Software." .ToolMissing}}</p>
+{{else}}<p class="muted">{{tf "Produttore %s non supportato per gli aggiornamenti firmware." .Vendor}}</p>{{end}}
+{{end}}
 {{if not .HasReport}}<p class="muted">{{th "Nessuna verifica. Crea una policy con i moduli <code>winupdate</code> (azione <code>scan</code>) e <code>winget</code> (azione <code>scan</code>)."}}</p>{{end}}
 {{end}}
 {{end}}

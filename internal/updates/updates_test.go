@@ -47,3 +47,25 @@ func TestParseWinget(t *testing.T) {
 		t.Fatalf("%+v %v", r, err)
 	}
 }
+
+func TestParseFirmware(t *testing.T) {
+	now := time.Now()
+	r, err := ParseFirmware([]byte(`{"vendor":"dell","supported":true,"tool":"Dell Command Update","updates":[
+	 {"title":"Intel Wi-Fi Driver","category":"driver","severity":"recommended"},
+	 {"title":"Dell BIOS Update","version":"1.21.0","category":"bios","severity":"critical"},
+	 {"title":"Weird","category":"x","severity":"y"},
+	 {"title":"","category":"driver"}]}`), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Updates) != 3 || r.Updates[0].Category != "bios" || r.Updates[2].Category != "other" || r.Updates[2].Severity != "optional" {
+		t.Fatalf("updates = %+v", r.Updates)
+	}
+	critical, other, bios := r.Counts()
+	if critical != 1 || other != 2 || !bios || r.ScannedAt.IsZero() {
+		t.Fatalf("counts = %d %d %v", critical, other, bios)
+	}
+	if SourceOf("firmware", "install") != SourceFirmware || SourceOf("firmware", "other") != "" {
+		t.Fatal("SourceOf")
+	}
+}
