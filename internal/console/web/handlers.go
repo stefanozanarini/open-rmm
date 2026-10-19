@@ -46,6 +46,7 @@ type agentRow struct {
 	store.Agent
 	Inv    store.InventorySummary
 	Online bool
+	Checks string // worst check status
 }
 
 type agentsData struct {
@@ -86,6 +87,11 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	worst, err := s.store.WorstChecks(r.Context(), t)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
 	d := agentsData{Family: r.URL.Query().Get("family"), Query: strings.TrimSpace(r.URL.Query().Get("q")), Counts: map[string]int{}}
 	if d.Family != "client" && d.Family != "server" {
 		d.Family = ""
@@ -99,7 +105,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		if d.Family != "" && a.Host.OSFamily != d.Family {
 			continue
 		}
-		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a)}
+		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a), Checks: worst[a.ID]}
 		if q != "" && !row.matches(q) {
 			continue
 		}
@@ -134,6 +140,9 @@ type agentData struct {
 	InvAt    time.Time
 	Software []inventory.Software
 	Changes  []store.InventoryChange
+	Checks   []store.Check
+	Alerts   []alertView
+	Logons   []store.LogonEvent
 }
 
 func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +179,20 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.Changes, err = s.store.ListInventoryChanges(r.Context(), t, id, 100); err != nil {
+		s.fail(w, err)
+		return
+	}
+	if d.Checks, err = s.store.ListChecks(r.Context(), t, id); err != nil {
+		s.fail(w, err)
+		return
+	}
+	alerts, err := s.store.ListAlerts(r.Context(), t, id, true, 100)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	d.Alerts = s.alertViews(r, t, alerts)
+	if d.Logons, err = s.store.ListLogonEvents(r.Context(), t, id, 100); err != nil {
 		s.fail(w, err)
 		return
 	}

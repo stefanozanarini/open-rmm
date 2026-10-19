@@ -16,18 +16,18 @@ Legend: ✅ implemented · 🔜 next · 📋 planned
 | R3 | Security as a primary requirement | §6 |
 | R4 | Automatic restart after crashes | Service recovery + watchdog + scheduled check (§5) ✅ |
 | R5 | Central console, multi-tenant, federable | §9 |
-| R6 | Windows Update: detection and installation | Module (§8.4) |
+| R6 | Windows Update: detection and installation | Module (§8.5) |
 | R7 | Hardware and software inventory, logon events | Modules (§8.1, §8.2) |
-| R8 | Third-party software and firmware updates | winget, vendor tools (§8.5, §8.7) |
+| R8 | Third-party software and firmware updates | winget, vendor tools (§8.6, §8.8) |
 | R9 | PowerShell commands from the console | `script` module ✅ (§7) |
 | R10 | **Modular agent: new features never require an agent update** | Core principle (§3) ✅ |
 | R11 | Automatic agent update | A/B with rollback (§5) ✅ |
 | R12 | Operators sign in with Microsoft 365 (Entra ID); MFA mandatory | §6.6 ✅ |
 | R13 | Console at the customer, reachable from the internet; **all connections start from the endpoints** | §4, §6.7 |
-| R14 | Coexistence with WSUS and Intune | Observation mode (§8.4) |
-| R15 | Configurable reboots per endpoint group | §8.8 |
+| R14 | Coexistence with WSUS and Intune | Observation mode (§8.5) |
+| R15 | Configurable reboots per endpoint group | §8.9 |
 | R16 | Separate client and server views, distinguished by OS | §11 |
-| R17 | Software distribution by uploading an MSI | §8.6 |
+| R17 | Software distribution by uploading an MSI | §8.7 |
 | R18 | Dashboards of the endpoints that most need updates (Windows and third-party) | §11 |
 | R19 | **Everything doable on a customer console is doable from the central console** | §9 |
 | R20 | Guided first-time setup (web wizard), optional enterprise CA and Active Directory integration | §12 |
@@ -142,7 +142,7 @@ Each module is a zip archive with a manifest signed with the offline **module re
 
 ### 3.4 Core ↔ module protocol ✅
 
-The core starts the module in a temporary working directory with a minimal environment and writes one JSON request line on stdin. The module writes JSON lines on stdout — `progress`, `log` and exactly one final `result` or `error`. Size limits and timeouts are enforced; on violation the core kills the whole process tree (process group on Linux, Job Object on Windows). The SDKs hide the protocol.
+The core starts the module in a temporary working directory with a minimal environment and writes one JSON request line on stdin. The module writes JSON lines on stdout — `progress`, `log` and exactly one final `result` or `error`. Size limits and timeouts are enforced; on violation the core kills the whole process tree (process group on Linux, Job Object on Windows). The SDKs hide the protocol. Each module also gets a private **state directory** that persists between runs (`state_dir`, e.g. a read position); runs of the same module are serialized so it is never shared by two runs.
 
 ### 3.5 Lifecycle of a new feature
 
@@ -332,56 +332,65 @@ All modules are signed plugins outside the agent core, assigned by jobs or polic
 
 The installation type is also sent by the core on connect (one field), so the console splits **clients and servers** before any inventory runs.
 
-### 8.2 `accesslog` — local and RDP logons 📋
+### 8.2 `accesslog` — local and RDP logons ✅
 
-- Collects normalized events incrementally (bookmark, no duplicates): `4624` by logon type (2, 7, 10, 11; 3 filtered), `4625`, `4634`/`4647`, `4672`, `4740`, RDP `1149` (with source IP) and `21`/`24`/`25`.
-- Only normalized events reach the console (volume, GDPR).
-- **Unusual logons**, evaluated in the console:
-  - **RDP from an address outside the site's allowed LAN subnets → high alert** (RDP is expected only from the LANs);
-  - RDP from an internal address never seen for that user/server → warning;
-  - logons outside usual hours, privileged logons, repeated failures (also spread across users: password spraying);
-  - a learning period and operator-marked "expected" addresses limit noise.
+- Collects events incrementally: the last record id of each event log is kept in the module's **state directory** (§3.4), so each run reads only new events; the first run reads the last 24 hours.
+- Events: Security `4624` for logon types 2, 7, 10, 11 (machine and service accounts dropped), `4625` (all types, for failure and spraying detection), `4740`; RemoteConnectionManager `1149` (RDP authentication with source IP); LocalSessionManager `21`/`24`/`25`.
+- Only normalized fields reach the console (time, kind, user, domain, logon type, source IP/host, status). They are kept **90 days** and shown on the agent page.
+- **Unusual logons**, evaluated in the console on the events not seen before:
+  - **RDP from an address outside the allowed subnets → critical alert**. The subnets are set per tenant in **Impostazioni** (Admin, audited); when none are set, the private ranges and loopback are allowed;
+  - RDP from an allowed address never used before by that user on that endpoint → warning, after a 7-day learning period;
+  - ≥ 10 failed logons from one source in one collection → warning; failures on ≥ 5 different users from one source → critical (password spraying);
+  - account lockout → warning.
+- 📋 Later: logons outside working hours, privileged logons (4672), operator-marked expected addresses.
 
-### 8.3 Trend Micro 📋
+### 8.3 Trend Micro and protection status ✅
 
-| Plugin | Where | Checks |
+| Plugin | Where | What |
 |---|---|---|
-| `trendmicro-endpoint` | Clients (Standard Endpoint Protection), servers (Server & Workload Protection) | Product detected, version, services running, connection to Vision One, pattern and engine dates, real-time protection |
-| `trendmicro-ztia` | Where the Zero Trust Internet Access client is installed | Installed, version, service running, connected |
-| Vision One connector (console) | EU region API (`api.eu.xdr.trendmicro.com`), read-only key | The same endpoint as seen from the cloud; mismatches become alerts (e.g. PC online, agent disconnected in Vision One) |
+| `trendmicro` (`status`) | Endpoints with a Trend agent | Products recognized by services and Uninstall entry: Standard Endpoint Protection (`ntrtscan`, `tmlisten`, `TMBMServer`, `TmCCSF`), Server & Workload Protection (`ds_agent`, `ds_notifier`, `AMSP`), Vision One Endpoint Basecamp (`EndpointBasecamp`), Zero Trust Secure Access. Version, service state; a check per product |
+| `protection-status` (`status`) | Clients and servers | Antivirus registered in Windows Security Center (clients), Microsoft Defender when it is the active antivirus, Windows Firewall profiles |
+| Vision One connector (console) | `openrmm-core`, EU region API (`api.eu.xdr.trendmicro.com`), read-only key | Each endpoint as seen from the cloud, Workbench alerts |
 
-Plugins are activated by policy conditions (§3.7). Service and registry names will be confirmed on real endpoints.
+- The service names are the most common ones and **not yet verified on the customer's endpoints**; every definition (services, required services, Uninstall name pattern) can be overridden by the policy parameters, e.g. `{"expect":["sep"],"definitions":{"ztsa":{"services":["…"],"required":["…"]}}}`, without a new module version.
+- Typical policy: rule `trendmicro`·`status` every 15 minutes with `when: {"service_exists":"ntrtscan"}` and params `{"expect":["sep"]}` for clients, `when: {"service_exists":"ds_agent"}` and `{"expect":["swp"]}` for servers. Endpoints without Trend never download the module.
+- **Vision One connector:** every 15 minutes it lists the endpoint inventory and the Workbench alerts of the last period, and matches endpoints to agents by host name. It stores checks `visionone/protection` (agent status, version, last connection: an endpoint online for open-rmm but not connected to Vision One for 24 h fails), `visionone/sensor` and `visionone/registered` (a Windows agent online but missing from Vision One is a warning). Workbench alerts on a matched host become open-rmm alerts (high/critical → critical, medium → warning), raised once per Workbench id. Paging links are followed only on the API host, so the key is never sent elsewhere. 📋 API field names to verify against the live tenant.
 
-### 8.4 `winupdate` 📋
+### 8.4 Checks and alerts ✅
+
+- **Checks convention:** any module may add `"checks": [{"id": "sep", "status": "ok|warning|failing", "summary": "…"}]` to its result. The console stores the latest status per agent as `<module>/<id>` (module from the console's own records) and shows them on the agent page and, as the worst status, in the agent lists. A check that starts failing raises an alert.
+- **Alerts** have a severity (info, warning, critical), are merged while open (same key: count and last time) and are taken in charge by an Operator (audited). The number of open alerts is shown in the navigation.
+
+### 8.5 `winupdate` 📋
 
 WUA COM API (`scan`, `download`, `install`, `history`); categories and rings, KB blocking, maintenance windows; WSUS/Intune detection with **managed** and **observation** modes; error-code translation and a separate `wu-repair` module.
 
-### 8.5 `winget` and third-party updates 📋
+### 8.6 `winget` and third-party updates 📋
 
 - On clients: `Microsoft.WinGet.Client` / COM API (never parsing text output); approved package list; rings; pinning; per-user apps through the user helper; `bootstrap` installs App Installer where missing.
 - **Console-side catalog:** the console imports the winget community index and matches it against each endpoint's software inventory, so outdated software is detected also where winget is not available (Windows Server 2019, LTSC). This drives the update dashboards (§11).
 - 📋 Private REST source for internal packages.
 
-### 8.6 Software distribution and removal (`msi-install`, `software-uninstall`) 📋
+### 8.7 Software distribution and removal (`msi-install`, `software-uninstall`) 📋
 
 - Operators upload an MSI to the console's **package library**: the console stores it (file system / object storage, not the database), computes its SHA-256, reads ProductName/Version/ProductCode and checks its Authenticode signature (warning if unsigned).
 - Deployment to PCs or groups is a normal job, approved with per-command MFA; the signed job pins the package hash.
 - The generic `msi-install` module downloads the package over the agent connection, verifies the hash and runs `msiexec /i … /qn /norestart /l*v`; reboots go through the reboot policy. The same flow covers winget packages.
 - **Uninstall from the console:** from an endpoint's software inventory (or for a whole group, e.g. "remove 7-Zip 9.20 everywhere"), the operator picks an application and approves with per-command MFA. The `software-uninstall` module removes it the right way for its type: `msiexec /x {ProductCode} /qn /norestart` for MSI products, `winget uninstall --id` when winget manages it, or the registered `QuietUninstallString` (never the interactive `UninstallString` without a silent switch). The result is verified against the inventory afterwards; reboots go through the reboot policy. Uninstalling the open-rmm agent itself is refused.
 
-### 8.7 Firmware 📋
+### 8.8 Firmware 📋
 
 `firmware-dell` (Dell Command | Update), `firmware-lenovo` (Thin Installer), Windows Update firmware for other brands. Preconditions: AC power, battery level, **BitLocker recovery key escrowed**, BitLocker suspended for one reboot. Never automatic by default.
 
-### 8.8 `reboot` 📋
+### 8.9 `reboot` 📋
 
 Modules never reboot by themselves; they report "reboot required" and the `reboot` module applies the group's reboot policy (never / notify with deferrals / maintenance window only / immediate with notice), quiet hours, presentation mode, battery threshold, pre/post scripts.
 
-### 8.9 Further proposed plugins 📋
+### 8.10 Further proposed plugins 📋
 
 | Priority | Plugin | Purpose |
 |---|---|---|
-| High | `protection-status` | Windows Security Center: registered antivirus, firewall, Defender (covers non-Trend products) |
+| ✅ | `protection-status` | Windows Security Center: registered antivirus, firewall, Defender (covers non-Trend products) |
 | High | `bitlocker` | Status per volume; recovery key escrowed in AD/Entra |
 | High | `local-admins` | Members of the local Administrators group, alert on change |
 | High | `disk-health` | Free space thresholds, disk errors, SMART |
@@ -443,7 +452,7 @@ Planned 📋:
 
 - ✅ **Separate Clients and Servers sections**, by OS installation type, with search by name, user, model, serial and remote-access id. 📋 Filters by site and OU; different default policies.
 - **Update dashboards:** endpoints ranked by an update score — missing Windows updates and their age relative to Patch Tuesday, outdated third-party software (winget and console-side catalog), pending reboots; most-outdated applications ("Chrome outdated on 37 PCs"); compliance by site/OU.
-- **Package library**, software distribution and **uninstall from the Software tab** (§8.6).
+- **Package library**, software distribution and **uninstall from the Software tab** (§8.7).
 - **Policies** editor with per-version MFA approval (§3.7).
 - ✅ Inventory on the agent page (hardware, BitLocker, battery, network, software, change history). 📋 Alerts, federation (tenant switcher across local and federated tenants).
 
@@ -472,11 +481,11 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 | 1 | DMZ / internal split (gateway as relay, `openrmm-core`) | ✅ |
 | 2 | Policies with scheduling and conditional plugins | ✅ |
 | 3 | `inventory` (incl. Supremo/AnyDesk/TeamViewer ids), OS installation type, Clients/Servers sections | ✅ |
-| 4 | Security plugins: `trendmicro-endpoint`, `trendmicro-ztia`, Vision One connector, `accesslog` with unusual-logon detection, `protection-status` | 📋 |
+| 4 | Security plugins: `trendmicro`, `protection-status`, `accesslog` with unusual-logon detection, checks and alerts, Vision One connector | ✅ (to be validated on real endpoints) |
 | 5 | `winupdate`, `winget`, console-side catalog, update dashboards, `reboot`, user helper | 📋 |
 | 6 | Package library, `msi-install`, `software-uninstall`; console layout (tree, tabs, bottom panel); setup wizard with code signing and optional AD | 📋 |
 | 7 | Federation with full central operations | 📋 |
-| Later | Firmware, further plugins (§8.9), Linux agent packages, interactive shell | 📋 |
+| Later | Firmware, further plugins (§8.10), Linux agent packages, interactive shell | 📋 |
 
 ---
 
@@ -486,7 +495,7 @@ A web wizard runs on the first start of the console, protected by a one-time cod
 2. Registry location of the Supremo ID (export from a PC with Supremo installed).
 3. Does the customer have Entra ID P1 (Conditional Access authentication context for per-command MFA)?
 4. Site LAN subnets allowed for RDP.
-5. Default reboot policies for clients and servers (§8.8).
+5. Default reboot policies for clients and servers (§8.9).
 6. Hardware key (YubiKey/HSM) for the offline keys.
 
 ## 15. Decisions

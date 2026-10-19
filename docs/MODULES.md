@@ -68,8 +68,10 @@ The SDK is added automatically under `_sdk/` when signing (`OpenRmm.psm1` for Po
 The agent starts the entrypoint in a temporary working directory with a minimal environment: the service's environment variables are not passed, except a few essential system ones. It writes **one JSON line** on stdin:
 
 ```json
-{"protocol_version":1,"job_id":"…","action":"info","params":{…},"tenant_id":"…","agent_id":"…","work_dir":"…"}
+{"protocol_version":1,"job_id":"…","action":"info","params":{…},"tenant_id":"…","agent_id":"…","work_dir":"…","state_dir":"…"}
 ```
+
+`work_dir` is deleted after the run. `state_dir` (also `OPENRMM_STATE_DIR`) is private to the module and kept between runs, for example to remember the last event read; runs of the same module never overlap. Write state files atomically (temporary file, then rename).
 
 The module writes JSON lines on stdout:
 
@@ -80,7 +82,17 @@ The module writes JSON lines on stdout:
 | result (final) | `{"type":"result","data":{…}}` |
 | error (final) | `{"type":"error","message":"…"}` |
 
-There must be exactly one final event. Lines that are not events are recorded as logs, so stray output (common in PowerShell) does not break the protocol. Limits: line 1 MB, total output 16 MB, result 3 MB, stderr kept 64 KB. If a module exceeds them, breaks the protocol or runs past its timeout, the agent kills it and all its child processes (process group on Linux, Job Object on Windows).
+There must be exactly one final event.
+
+### Checks
+
+A result may include checks, which the console shows on the agent page and in the agent lists, and which raise an alert when they start failing:
+
+```json
+{"type":"result","data":{"…":"…","checks":[{"id":"sep","status":"failing","summary":"servizio tmlisten Stopped"}]}}
+```
+
+`id`: lowercase letters, digits, `.`, `_`, `-` (up to 41 characters); the console stores it as `<module>/<id>`. `status`: `ok`, `warning` or `failing`. At most 50 checks per result. Lines that are not events are recorded as logs, so stray output (common in PowerShell) does not break the protocol. Limits: line 1 MB, total output 16 MB, result 3 MB, stderr kept 64 KB. If a module exceeds them, breaks the protocol or runs past its timeout, the agent kills it and all its child processes (process group on Linux, Job Object on Windows).
 
 ## Writing a PowerShell module
 
@@ -142,6 +154,9 @@ Details in [ENTRA.md](ENTRA.md). The full text of scripts goes to the audit log.
 |---|---|---|
 | `sysinfo` 1.0.0 | Windows, Linux | `info`: hostname, operating system, uptime |
 | `inventory` 1.0.0 | Windows, Linux | `collect`: hardware, OS, BitLocker, battery, network, installed software, Supremo/AnyDesk/TeamViewer ids. Results become the agent's inventory in the console |
+| `accesslog` 1.0.0 | Windows | `collect`: new logon events since the previous run (local, RDP, failures, lockouts). The console stores them and raises alerts for unusual logons |
+| `trendmicro` 1.0.0 | Windows | `status`: Trend Micro products installed, versions, services; one check per product. Parameters: `expect`, `products`, `definitions` (override service names) |
+| `protection-status` 1.0.0 | Windows | `status`: antivirus in Windows Security Center, Defender, firewall; checks `antivirus`, `defender`, `firewall` |
 | `script` 1.0.0 | Windows | `run`: runs `params.script` (PowerShell) and returns output, errors and duration. Capability `adhoc_script` |
 
 ## Policies

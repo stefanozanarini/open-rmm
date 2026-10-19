@@ -1,9 +1,10 @@
 {{define "agentrows"}}
 <table>
-<thead><tr><th>Nome</th><th>Utente</th><th>Modello</th><th>Sistema</th><th>Supremo</th><th>Agente</th><th>Ultimo contatto</th></tr></thead>
+<thead><tr><th>Nome</th><th>Controlli</th><th>Utente</th><th>Modello</th><th>Sistema</th><th>Supremo</th><th>Agente</th><th>Ultimo contatto</th></tr></thead>
 <tbody>
 {{range .}}<tr>
   <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}} <a href="/agents/{{.ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}</td>
+  <td>{{with .Checks}}<span class="badge chk-{{.}}">{{label .}}</span>{{end}}</td>
   <td>{{.Inv.LoggedOnUser}}</td>
   <td>{{.Inv.Manufacturer}} {{.Inv.Model}}{{with .Inv.Serial}}<br><span class="muted">{{.}}</span>{{end}}</td>
   <td>{{.Host.OSVersion}}</td>

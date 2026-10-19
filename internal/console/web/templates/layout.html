@@ -20,7 +20,9 @@
     <a href="/policies">Policy</a>
     <a href="/updates">Aggiornamenti</a>
     {{if .IsAdmin}}<a href="/tokens">Token</a>{{end}}
+    <a href="/alerts">Avvisi{{if .OpenAlerts}} <span class="badge sev-critical">{{.OpenAlerts}}</span>{{end}}</a>
     <a href="/audit">Attività</a>
+    {{if .IsAdmin}}<a href="/settings">Impostazioni</a>{{end}}
   </nav>
   <div class="who">
     {{if gt (len .Tenants) 1}}

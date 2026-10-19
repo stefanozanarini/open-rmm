@@ -95,6 +95,27 @@ func previewInventory(t *testing.T, e *consoleEnv, agentID string, i int) {
 			{At: inv.CollectedAt, Kind: inventory.ChangeHardware, Detail: "memoria: 8.0 GiB → 16.0 GiB"},
 		}
 	}
+	ctx, now := context.Background(), time.Now()
+	status := []string{store.CheckOK, store.CheckFailing, store.CheckOK, store.CheckWarning}[i]
+	e.store.PutCheck(ctx, store.Check{TenantID: e.tenant, AgentID: agentID, CheckID: "trendmicro/sep", Status: status,
+		Summary: map[string]string{store.CheckOK: "Trend Micro Standard Endpoint Protection 14.0.12 attivo",
+			store.CheckFailing: "Trend Micro Standard Endpoint Protection 14.0.12: servizio tmlisten Stopped",
+			store.CheckWarning: "Trend Micro Standard Endpoint Protection 14.0.12 attivo"}[status], UpdatedAt: now})
+	e.store.PutCheck(ctx, store.Check{TenantID: e.tenant, AgentID: agentID, CheckID: "protection-status/firewall",
+		Status: status, Summary: "Windows Firewall attivo su tutti i profili", UpdatedAt: now})
+	if i == 0 {
+		e.store.AddLogonEvents(ctx, e.tenant, agentID, []store.LogonEvent{
+			{Channel: "security", RecordID: 1, At: now.Add(-2 * time.Hour), EventID: 4624, Kind: "logon", User: "mario", Domain: "CORP", LogonType: 2},
+			{Channel: "security", RecordID: 2, At: now.Add(-time.Hour), EventID: 4624, Kind: "logon", User: "mario", Domain: "CORP", LogonType: 10, SourceIP: "203.0.113.7"},
+			{Channel: "security", RecordID: 3, At: now.Add(-50 * time.Minute), EventID: 4625, Kind: "logon_failed", User: "admin", LogonType: 3, SourceIP: "10.0.0.9", Status: "0xc000006d 0xc000006a"},
+		}, now)
+		e.store.RaiseAlert(ctx, store.Alert{TenantID: e.tenant, AgentID: agentID, Severity: store.SeverityCritical, Kind: "rdp.outside_lan",
+			Summary: `Accesso RDP di CORP\mario da 203.0.113.7, fuori dalle reti consentite`, DedupeKey: "a", FirstSeen: now.Add(-time.Hour), LastSeen: now.Add(-time.Hour)})
+	}
+	if i == 1 {
+		e.store.RaiseAlert(ctx, store.Alert{TenantID: e.tenant, AgentID: agentID, Severity: store.SeverityWarning, Kind: "check.failing",
+			Summary: "Controllo trendmicro/sep non superato: servizio tmlisten Stopped", DedupeKey: "b", FirstSeen: now, LastSeen: now})
+	}
 	e.store.PutInventory(context.Background(), store.Inventory{TenantID: e.tenant, AgentID: agentID, Data: data,
 		Summary: store.InventorySummary{CollectedAt: inv.CollectedAt, Manufacturer: inv.System.Manufacturer, Model: inv.System.Model,
 			Serial: inv.System.Serial, LoggedOnUser: inv.OS.LoggedOnUser, SupremoID: inv.RemoteAccess.SupremoID}}, changes)

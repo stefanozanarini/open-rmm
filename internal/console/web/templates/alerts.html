@@ -1,0 +1,27 @@
+{{define "alertrows"}}
+<table>
+<thead><tr><th>Gravità</th><th>Agente</th><th>Avviso</th><th>Volte</th><th>Prima / ultima volta</th><th></th></tr></thead>
+<tbody>
+{{range .Alerts}}<tr>
+  <td><span class="badge sev-{{.Severity}}">{{label .Severity}}</span></td>
+  <td>{{if .Hostname}}<a href="/agents/{{.AgentID}}">{{.Hostname}}</a>{{end}}</td>
+  <td>{{.Summary}}<br><span class="muted">{{label .Kind}}</span></td>
+  <td>{{.Count}}</td>
+  <td>{{fmtTime .FirstSeen}}<br>{{fmtTime .LastSeen}}</td>
+  <td>{{if .AcknowledgedAt}}<span class="muted">preso in carico da {{.AcknowledgedBy}}<br>{{fmtTime .AcknowledgedAt}}</span>
+  {{else if $.CanRun}}<form method="post" action="/alerts/{{.ID}}/ack" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Return}}">
+    <button>Prendi in carico</button></form>{{end}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{end}}
+{{define "content"}}
+<div class="toolbar">
+  <nav class="tabs">
+    <a href="/alerts" {{if not .Data.All}}class="current"{{end}}>Aperti</a>
+    <a href="/alerts?all=1" {{if .Data.All}}class="current"{{end}}>Tutti</a>
+  </nav>
+</div>
+{{if .Data.Alerts}}{{template "alertrows" (alertCtx . .Data.Alerts "/alerts")}}{{else}}<p class="muted">Nessun avviso{{if not .Data.All}} aperto{{end}}.</p>{{end}}
+{{end}}

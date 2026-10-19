@@ -1,0 +1,13 @@
+{
+  "id": "accesslog",
+  "version": "1.0.0",
+  "description": "Local and remote desktop logon events, collected incrementally.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "collect": { "description": "New logon events since the previous run", "timeout_seconds": 300 }
+  }
+}

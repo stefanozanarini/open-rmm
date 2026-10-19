@@ -41,6 +41,9 @@ type Request struct {
 	TenantID        string          `json:"tenant_id"`
 	AgentID         string          `json:"agent_id"`
 	WorkDir         string          `json:"work_dir"`
+	// StateDir persists between runs of the same module (e.g. a read
+	// position); it is private to the module.
+	StateDir string `json:"state_dir,omitempty"`
 }
 
 // Event is one line written by the module.
@@ -58,6 +61,7 @@ type Spec struct {
 	Path      string // absolute path of the entrypoint
 	ModuleDir string
 	WorkDir   string // created by the caller, removed afterwards
+	StateDir  string // created by the caller, kept
 	Timeout   time.Duration
 	Request   Request
 	// OnEvent receives progress and log events while the module runs.
@@ -284,6 +288,7 @@ func environment(spec Spec) []string {
 		"OPENRMM_PROTOCOL_VERSION=1",
 		"OPENRMM_MODULE_DIR="+spec.ModuleDir,
 		"OPENRMM_WORK_DIR="+spec.WorkDir,
+		"OPENRMM_STATE_DIR="+spec.StateDir,
 	)
 }
 

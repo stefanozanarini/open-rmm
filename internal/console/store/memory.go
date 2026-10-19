@@ -28,6 +28,7 @@ type Memory struct {
 	policies    []PolicyVersion
 	results     map[string]PolicyResult
 	inventories map[string]*memInventory
+	security    *memSecurity
 }
 
 func NewMemory() *Memory {

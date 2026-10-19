@@ -103,6 +103,27 @@ docker compose run --rm admin audit verify   -tenant <TENANT>
 
 `reject` and `revoke` are equivalent: the agent is disconnected and can no longer connect.
 
+## 7. Security monitoring (optional)
+
+**RDP subnets.** In the web console, **Impostazioni** (administrators), list the networks remote desktop is expected from, one per line (e.g. `192.168.10.0/24`). An RDP logon from any other address raises a critical alert. Without a list the private ranges are allowed.
+
+**Trend Vision One connector.** Create an API key in Vision One (*Administration → API Keys*) with a role that can only **view** Endpoint Inventory and Workbench, save it to a file and run:
+
+```bash
+./setup-secrets.sh /path/to/client-secret.txt /path/to/visionone-key.txt
+```
+
+Then set in `.env` the open-rmm tenant whose endpoints are compared with Vision One, and the region (`eu` for a tenant hosted in Germany/Frankfurt):
+
+```bash
+OPENRMM_VISIONONE_TENANT=<TENANT>
+OPENRMM_VISIONONE_REGION=eu
+```
+
+and restart `core`. Its log shows `vision one synchronized` every 15 minutes with the number of endpoints matched by host name; results appear as `visionone/…` checks on the agent pages and Workbench alerts under **Avvisi**. The `core` container needs outbound HTTPS to `api.eu.xdr.trendmicro.com`.
+
+**Policies.** Publish the `accesslog`, `trendmicro` and `protection-status` modules and create policies, for example: `accesslog`·`collect` every `5m` on all endpoints; `protection-status`·`status` every `1h`; `trendmicro`·`status` every `15m` with condition `{"service_exists":"ntrtscan"}` and parameters `{"expect":["sep"]}` (servers: `ds_agent` and `swp`). See [MODULES.md](MODULES.md).
+
 ## Signing keys
 
 | Key | Use | Where the private part lives |

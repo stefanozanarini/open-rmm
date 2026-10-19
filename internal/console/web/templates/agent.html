@@ -32,6 +32,19 @@
 </div>
 {{end}}
 
+{{if .Data.Alerts}}
+<h2>Avvisi aperti</h2>
+{{template "agentalerts" (alertCtx . .Data.Alerts (printf "/agents/%s" .Data.Agent.ID))}}
+{{end}}
+
+<h2>Controlli</h2>
+{{if .Data.Checks}}
+<table>
+<thead><tr><th>Controllo</th><th>Stato</th><th>Dettaglio</th><th>Aggiornato</th></tr></thead>
+<tbody>{{range .Data.Checks}}<tr><td>{{.CheckID}}</td><td><span class="badge chk-{{.Status}}">{{label .Status}}</span></td><td>{{.Summary}}</td><td>{{fmtTime .UpdatedAt}}</td></tr>{{end}}</tbody>
+</table>
+{{else}}<p class="muted">Nessun controllo. I controlli arrivano dai moduli eseguiti dalle policy (ad esempio <code>trendmicro</code> e <code>protection-status</code>).</p>{{end}}
+
 <h2>Inventario</h2>
 {{with .Data.Inv}}
 <p class="muted">Raccolto il {{fmtTime .CollectedAt}} · ricevuto il {{fmtTime $.Data.InvAt}}</p>
@@ -151,6 +164,19 @@
 {{end}}
 {{end}}
 
+{{if .Data.Logons}}
+<h2>Accessi recenti</h2>
+<details>
+<summary>ultimi {{len .Data.Logons}} eventi</summary>
+<table>
+<thead><tr><th>Quando</th><th>Evento</th><th>Utente</th><th>Tipo</th><th>Da</th><th>Esito</th></tr></thead>
+<tbody>{{range .Data.Logons}}<tr><td>{{fmtTime .At}}</td><td>{{label .Kind}} <span class="muted">{{.EventID}}</span></td>
+<td>{{if .Domain}}{{.Domain}}\{{end}}{{.User}}</td><td>{{with .LogonType}}{{logonType .}}{{end}}</td>
+<td>{{.SourceIP}}{{with .SourceHost}} <span class="muted">{{.}}</span>{{end}}</td><td>{{.Status}}</td></tr>{{end}}</tbody>
+</table>
+</details>
+{{end}}
+
 <h2>Policy</h2>
 {{if .Data.Results}}
 <table>
@@ -175,4 +201,19 @@
 <label>Validità
   <select name="ttl_minutes"><option value="15">15 minuti</option><option value="60" selected>1 ora</option><option value="480">8 ore</option><option value="1440">24 ore</option></select>
 </label>
+{{end}}
+
+{{define "agentalerts"}}
+<table>
+<thead><tr><th>Gravità</th><th>Avviso</th><th>Volte</th><th>Ultima volta</th><th></th></tr></thead>
+<tbody>
+{{range .Alerts}}<tr>
+  <td><span class="badge sev-{{.Severity}}">{{label .Severity}}</span></td>
+  <td>{{.Summary}}</td><td>{{.Count}}</td><td>{{fmtTime .LastSeen}}</td>
+  <td>{{if $.CanRun}}<form method="post" action="/alerts/{{.ID}}/ack" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Return}}">
+    <button>Prendi in carico</button></form>{{end}}</td>
+</tr>{{end}}
+</tbody>
+</table>
 {{end}}

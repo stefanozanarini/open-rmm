@@ -6,34 +6,50 @@ import (
 	"errors"
 	"time"
 
+	"github.com/stefanozanarini/open-rmm/internal/accesslog"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/inventory"
 	"github.com/stefanozanarini/open-rmm/internal/policy"
 )
 
-// isInventoryJob reports whether a job's result is an inventory. Module and
-// action come from the console's own records, never from the agent.
-func (s *Server) isInventoryJob(ctx context.Context, a store.Agent, jobID string) bool {
+// jobOrigin returns the module and action of a job of agent a, from the
+// console's own records (never from the agent).
+func (s *Server) jobOrigin(ctx context.Context, a store.Agent, jobID string) (module, action string, ok bool) {
 	j, err := s.store.GetJob(ctx, a.TenantID, jobID)
-	return err == nil && j.AgentID == a.ID && j.Module == inventory.ModuleID && j.Action == inventory.Action
+	if err != nil || j.AgentID != a.ID {
+		return "", "", false
+	}
+	return j.Module, j.Action, true
 }
 
-// isInventoryRule reports whether a policy rule collects the inventory.
-func (s *Server) isInventoryRule(ctx context.Context, tenantID, policyID, ruleID string) bool {
+// ruleOrigin returns the module and action of a policy rule.
+func (s *Server) ruleOrigin(ctx context.Context, tenantID, policyID, ruleID string) (module, action string, ok bool) {
 	pv, err := s.store.GetPolicy(ctx, tenantID, policyID)
 	if err != nil {
-		return false
+		return "", "", false
 	}
 	p, err := policy.Parse(pv.Document)
 	if err != nil {
-		return false
+		return "", "", false
 	}
 	for _, r := range p.Rules {
 		if r.ID == ruleID {
-			return r.Module == inventory.ModuleID && r.Action == inventory.Action
+			return r.Module, r.Action, true
 		}
 	}
-	return false
+	return "", "", false
+}
+
+// afterSuccess processes the result of a successful module run: checks
+// reported by any module, inventories and logon events.
+func (s *Server) afterSuccess(ctx context.Context, a store.Agent, module, action string, raw []byte) {
+	s.ingestChecks(ctx, a, module, raw)
+	switch {
+	case module == inventory.ModuleID && action == inventory.Action:
+		s.ingestInventory(ctx, a, raw)
+	case module == accesslog.ModuleID && action == accesslog.Action:
+		s.ingestLogons(ctx, a, raw)
+	}
 }
 
 // ingestInventory stores an inventory result and records what changed.

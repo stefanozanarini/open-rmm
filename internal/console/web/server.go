@@ -140,6 +140,16 @@ func (s *Server) parseTemplates() error {
 			}
 			return "no"
 		},
+		// alertCtx passes the page (for CSRF and roles) to the alert rows.
+		"alertCtx": func(p page, alerts []alertView, ret string) map[string]any {
+			return map[string]any{"Alerts": alerts, "CSRF": p.CSRF, "CanRun": p.CanRun, "Return": ret}
+		},
+		"logonType": func(t int) string {
+			if l, ok := logonTypes[t]; ok {
+				return l
+			}
+			return fmt.Sprint(t)
+		},
 		"short": func(s string) string {
 			if len(s) > 8 {
 				return s[:8]
@@ -190,6 +200,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /tokens", s.role(authn.RoleAdmin, s.handleTokens))
 	mux.Handle("POST /tokens", s.role(authn.RoleAdmin, s.handleCreateToken))
 	mux.Handle("GET /audit", s.auth(s.handleAudit))
+	mux.Handle("GET /alerts", s.auth(s.handleAlerts))
+	mux.Handle("POST /alerts/{id}/ack", s.role(authn.RoleOperator, s.handleAckAlert))
+	mux.Handle("GET /settings", s.role(authn.RoleAdmin, s.handleSettings))
+	mux.Handle("POST /settings", s.role(authn.RoleAdmin, s.handleSaveSettings))
 	mux.Handle("GET /policies", s.auth(s.handlePolicies))
 	mux.Handle("GET /policies/new", s.role(authn.RoleAdmin, s.handlePolicyForm))
 	mux.Handle("GET /policies/{id}", s.role(authn.RoleAdmin, s.handlePolicyForm))
@@ -297,6 +311,8 @@ type page struct {
 	CanRun   bool
 	Data     any
 	Refresh  int
+	// OpenAlerts is shown in the navigation.
+	OpenAlerts int
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title string, data any) {
@@ -312,6 +328,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title stri
 				if id == sess.data.Tenant {
 					p.Tenant = t
 				}
+			}
+		}
+		if sess.data.Tenant != "" {
+			if open, err := s.store.ListAlerts(r.Context(), sess.data.Tenant, "", true, 1000); err == nil {
+				p.OpenAlerts = len(open)
 			}
 		}
 		if sess.data.Flash != "" {
@@ -353,6 +374,10 @@ func (s *Server) flashTo(w http.ResponseWriter, r *http.Request, sess *session, 
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
 
+// logonTypes names the Windows logon types.
+var logonTypes = map[int]string{2: "interattivo", 3: "rete", 4: "batch", 5: "servizio", 7: "sblocco",
+	8: "rete (testo in chiaro)", 9: "nuove credenziali", 10: "desktop remoto", 11: "credenziali in cache"}
+
 // labels translates states shown in the UI.
 var labels = map[string]string{
 	"pending": "in attesa", "active": "attivo", "revoked": "revocato", "online": "online",
@@ -366,4 +391,10 @@ var labels = map[string]string{
 	"software.added": "software installato", "software.removed": "software rimosso", "software.updated": "software aggiornato",
 	"hardware": "hardware", "os": "sistema operativo", "firmware": "firmware", "disk.health": "stato disco",
 	"encryption": "cifratura", "remote_access": "accesso remoto",
+	"warning": "attenzione", "failing": "errore", "critical": "critica", "info": "informazione", "ok": "ok",
+	"check.failing": "controllo non superato", "rdp.outside_lan": "RDP fuori dalle reti consentite",
+	"rdp.new_source": "RDP da indirizzo nuovo", "logon.failures": "accessi falliti ripetuti",
+	"logon.spray": "password spraying", "account.lockout": "account bloccato", "logon.truncated": "eventi troncati",
+	"logon": "accesso", "logon_failed": "accesso fallito", "lockout": "blocco account", "rdp_auth": "autenticazione RDP",
+	"rdp_session_logon": "sessione RDP", "rdp_disconnect": "RDP disconnesso", "rdp_reconnect": "RDP riconnesso",
 }

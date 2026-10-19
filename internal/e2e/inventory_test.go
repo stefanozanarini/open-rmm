@@ -64,6 +64,7 @@ func TestInventoryChangesAreRecorded(t *testing.T) {
 	if j := e.waitFinal(t, e.queue(t, agentID, v1, "collect", "{}")); j.State != store.JobSucceeded {
 		t.Fatalf("first inventory: %s %s", j.State, j.Error)
 	}
+	waitFor(t, func() bool { _, err := e.inventory(agentID); return err == nil })
 	first, err := e.inventory(agentID)
 	if err != nil || first.Summary.SupremoID != "123456789" || first.Summary.Model != "Latitude 5440" {
 		t.Fatalf("first inventory = %+v, %v", first.Summary, err)
@@ -72,7 +73,11 @@ func TestInventoryChangesAreRecorded(t *testing.T) {
 	if j := e.waitFinal(t, e.queue(t, agentID, v2, "collect", "{}")); j.State != store.JobSucceeded {
 		t.Fatalf("second inventory: %s %s", j.State, j.Error)
 	}
-	changes, _ := e.store.ListInventoryChanges(context.Background(), e.tenant, agentID, 10)
+	var changes []store.InventoryChange
+	waitFor(t, func() bool {
+		changes, _ = e.store.ListInventoryChanges(context.Background(), e.tenant, agentID, 10)
+		return len(changes) >= 2
+	})
 	kinds := map[string]string{}
 	for _, c := range changes {
 		kinds[c.Kind] = c.Detail
@@ -95,6 +100,7 @@ func TestOnlyInventoryModuleFeedsInventory(t *testing.T) {
 	if j := e.waitFinal(t, e.queue(t, agentID, v, "collect", "{}")); j.State != store.JobSucceeded {
 		t.Fatalf("job: %s %s", j.State, j.Error)
 	}
+	time.Sleep(300 * time.Millisecond) // results are processed after the job is stored
 	if _, err := e.inventory(agentID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("inventory from another module: %v", err)
 	}

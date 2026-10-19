@@ -375,3 +375,108 @@ func testInventories(t *testing.T, s Store) {
 		t.Fatalf("unknown agent: %v", err)
 	}
 }
+
+func TestSecurity(t *testing.T) { testSecurity(t, NewMemory()) }
+
+func testSecurity(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	agent := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "pc"},
+		CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, agent)
+	now := time.Now().UTC().Truncate(time.Second)
+
+	// Settings.
+	if cur, err := s.GetSettings(ctx, tenant.ID); err != nil || len(cur.RDPAllowedSubnets) != 0 {
+		t.Fatalf("default settings = %+v, %v", cur, err)
+	}
+	if err := s.PutSettings(ctx, tenant.ID, Settings{RDPAllowedSubnets: []string{"10.0.0.0/8"}}, "t"); err != nil {
+		t.Fatal(err)
+	}
+	if cur, _ := s.GetSettings(ctx, tenant.ID); len(cur.RDPAllowedSubnets) != 1 {
+		t.Fatalf("settings = %+v", cur)
+	}
+
+	// Checks.
+	c := Check{TenantID: tenant.ID, AgentID: agent.ID, CheckID: "trendmicro/sep", Status: CheckOK, Summary: "ok", UpdatedAt: now}
+	if prev, err := s.PutCheck(ctx, c); err != nil || prev != "" {
+		t.Fatalf("first check: %q %v", prev, err)
+	}
+	c.Status, c.UpdatedAt = CheckFailing, now.Add(time.Minute)
+	if prev, _ := s.PutCheck(ctx, c); prev != CheckOK {
+		t.Fatalf("prev = %q", prev)
+	}
+	old := c
+	old.Status, old.UpdatedAt = CheckOK, now.Add(-time.Hour)
+	s.PutCheck(ctx, old)
+	if cs, _ := s.ListChecks(ctx, tenant.ID, agent.ID); len(cs) != 1 || cs[0].Status != CheckFailing {
+		t.Fatalf("checks = %+v", cs)
+	}
+	if w, _ := s.WorstChecks(ctx, tenant.ID); w[agent.ID] != CheckFailing {
+		t.Fatalf("worst = %+v", w)
+	}
+
+	// Alerts: merged while open, new after acknowledgement.
+	a := Alert{TenantID: tenant.ID, AgentID: agent.ID, Severity: SeverityWarning, Kind: "k", Summary: "one", DedupeKey: "key",
+		FirstSeen: now, LastSeen: now}
+	if created, err := s.RaiseAlert(ctx, a); err != nil || !created {
+		t.Fatalf("raise: %v %v", created, err)
+	}
+	a.Summary, a.LastSeen = "two", now.Add(time.Minute)
+	if created, _ := s.RaiseAlert(ctx, a); created {
+		t.Fatal("open alert not merged")
+	}
+	open, _ := s.ListAlerts(ctx, tenant.ID, "", true, 10)
+	if len(open) != 1 || open[0].Count != 2 || open[0].Summary != "two" {
+		t.Fatalf("alerts = %+v", open)
+	}
+	if err := s.AcknowledgeAlert(ctx, tenant.ID, open[0].ID, "op", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AcknowledgeAlert(ctx, tenant.ID, ids.NewUUID(), "op", now); err != ErrNotFound {
+		t.Fatalf("unknown alert: %v", err)
+	}
+	if created, _ := s.RaiseAlert(ctx, a); !created {
+		t.Fatal("acknowledged alert reopened instead of a new one")
+	}
+	once := a
+	once.Once = true
+	if created, _ := s.RaiseAlert(ctx, once); created {
+		t.Fatal("Once alert raised although the key exists")
+	}
+	once.DedupeKey = "other"
+	if created, _ := s.RaiseAlert(ctx, once); !created {
+		t.Fatal("Once alert with a new key not raised")
+	}
+	if all, _ := s.ListAlerts(ctx, tenant.ID, agent.ID, false, 10); len(all) != 3 {
+		t.Fatalf("all alerts = %d", len(all))
+	}
+	if other, _ := s.ListAlerts(ctx, ids.NewUUID(), "", false, 10); len(other) != 0 {
+		t.Fatal("alerts visible from another tenant")
+	}
+
+	// Logon events: deduplicated, retention, history.
+	ev := []LogonEvent{
+		{Channel: "security", RecordID: 1, At: now.Add(-48 * time.Hour), EventID: 4624, Kind: "logon", User: "mario", LogonType: 10, SourceIP: "10.0.0.5"},
+		{Channel: "security", RecordID: 2, At: now, EventID: 4625, Kind: "logon_failed", User: "x", SourceIP: "10.0.0.9"},
+		{Channel: "security", RecordID: 3, At: now.Add(-100 * 24 * time.Hour), EventID: 4624, Kind: "logon", User: "old"},
+	}
+	added, err := s.AddLogonEvents(ctx, tenant.ID, agent.ID, ev, now)
+	if err != nil || len(added) != 2 || added[0].RecordID != 1 {
+		t.Fatalf("added = %+v, %v", added, err)
+	}
+	if again, _ := s.AddLogonEvents(ctx, tenant.ID, agent.ID, ev, now); len(again) != 0 {
+		t.Fatalf("duplicates stored: %+v", again)
+	}
+	first, seen, err := s.LogonHistory(ctx, tenant.ID, agent.ID, "mario", "10.0.0.5", now)
+	if err != nil || !seen || !first.Equal(now.Add(-48*time.Hour)) {
+		t.Fatalf("history = %v %v %v", first, seen, err)
+	}
+	if _, seen, _ := s.LogonHistory(ctx, tenant.ID, agent.ID, "mario", "10.0.0.6", now); seen {
+		t.Fatal("unknown source reported as seen")
+	}
+	if list, _ := s.ListLogonEvents(ctx, tenant.ID, agent.ID, 10); len(list) != 2 || list[0].RecordID != 2 {
+		t.Fatalf("list = %+v", list)
+	}
+}

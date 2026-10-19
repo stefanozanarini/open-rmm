@@ -1,0 +1,13 @@
+{{define "content"}}
+<form method="post" action="/settings" class="stack">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <h2>Accessi RDP</h2>
+  <p class="muted">L'accesso remoto (RDP) è previsto solo dalle reti indicate qui. Un accesso RDP da un altro indirizzo genera un avviso critico.
+  Una subnet per riga, ad esempio <code>192.168.10.0/24</code>; un indirizzo singolo vale /32.
+  Se l'elenco è vuoto valgono le reti private: {{range $i, $p := .Data.Defaults}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}.</p>
+  <label>Reti da cui l'RDP è consentito
+    <textarea name="rdp_subnets" rows="8" spellcheck="false" placeholder="192.168.10.0/24">{{.Data.Subnets}}</textarea>
+  </label>
+  <button class="primary">Salva</button>
+</form>
+{{end}}

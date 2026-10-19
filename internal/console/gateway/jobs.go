@@ -128,8 +128,10 @@ func (s *Server) recordJobUpdate(ctx context.Context, a store.Agent, u *openrmmv
 	final := upd.State.Final()
 	switch {
 	case err == nil:
-		if upd.State == store.JobSucceeded && s.isInventoryJob(ctx, a, u.GetJobId()) {
-			s.ingestInventory(ctx, a, upd.Result)
+		if upd.State == store.JobSucceeded {
+			if module, action, ok := s.jobOrigin(ctx, a, u.GetJobId()); ok {
+				s.afterSuccess(ctx, a, module, action, upd.Result)
+			}
 		}
 		if final {
 			s.log.Info("job finished", "agent", a.ID, "job", u.GetJobId(), "state", upd.State)

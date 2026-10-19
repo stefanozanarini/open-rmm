@@ -58,6 +58,7 @@ type Executor struct {
 	sem      chan struct{}
 	outbox   string
 	work     string
+	state    string // persistent per-module state, <data>/module-state/<module>
 	platform string
 
 	ctx context.Context
@@ -66,6 +67,9 @@ type Executor struct {
 	session Session
 	running map[string]bool
 	wg      sync.WaitGroup
+	// modLocks serializes the runs of each module, so a module's state
+	// directory is never used by two runs at once.
+	modLocks map[string]*sync.Mutex
 }
 
 // New prepares an executor. ctx bounds every job: cancelling it interrupts
@@ -80,11 +84,13 @@ func New(ctx context.Context, cfg *config.Config, tenantID, agentID string, log 
 		sem:      make(chan struct{}, cfg.MaxConcurrentJobs),
 		outbox:   filepath.Join(cfg.DataDir, "outbox"),
 		work:     filepath.Join(cfg.DataDir, "work"),
+		state:    filepath.Join(cfg.DataDir, "module-state"),
 		platform: runtime.GOOS + "/" + runtime.GOARCH,
 		ctx:      ctx,
 		running:  map[string]bool{},
+		modLocks: map[string]*sync.Mutex{},
 	}
-	for _, d := range []string{e.outbox, e.work} {
+	for _, d := range []string{e.outbox, e.work, e.state} {
 		if err := secfile.EnsureDir(d); err != nil {
 			return nil, err
 		}
@@ -96,6 +102,17 @@ func New(ctx context.Context, cfg *config.Config, tenantID, agentID string, log 
 		}
 	}
 	return e, nil
+}
+
+func (e *Executor) moduleLock(id string) *sync.Mutex {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	l := e.modLocks[id]
+	if l == nil {
+		l = &sync.Mutex{}
+		e.modLocks[id] = l
+	}
+	return l
 }
 
 // Attach makes s the live session and resends pending final updates.
@@ -288,6 +305,13 @@ func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
 		return fail(job, "work directory: %v", err)
 	}
 	defer os.RemoveAll(workDir)
+	stateDir := filepath.Join(e.state, m.ID)
+	if err := secfile.EnsureDir(stateDir); err != nil {
+		return fail(job, "state directory: %v", err)
+	}
+	modLock := e.moduleLock(m.ID)
+	modLock.Lock()
+	defer modLock.Unlock()
 	// Re-hash right before running: the cache could have changed since Get.
 	if err := modules.VerifyFiles(m, inst.FilesDir); err != nil {
 		return reject(job, "module integrity check failed: %v", err)
@@ -307,8 +331,9 @@ func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
 		Timeout:   action.Timeout(),
 		Request: runner.Request{
 			ProtocolVersion: modules.ProtocolVersion, JobID: job.GetJobId(), Action: job.GetAction(),
-			Params: params, TenantID: e.tenantID, AgentID: e.agentID, WorkDir: workDir,
+			Params: params, TenantID: e.tenantID, AgentID: e.agentID, WorkDir: workDir, StateDir: stateDir,
 		},
+		StateDir: stateDir,
 		OnEvent: func(ev runner.Event) {
 			switch ev.Type {
 			case "progress":

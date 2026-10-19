@@ -74,8 +74,15 @@ services:
       OPENRMM_CORE_KEY: /run/openrmm/pki/core.key
       OPENRMM_GATEWAY_TUNNEL: ${OPENRMM_GATEWAY_TUNNEL:-gateway:8444}
       OPENRMM_GATEWAY_NAME: ${OPENRMM_GATEWAY_NAME:-}
+      # Optional Vision One connector (read-only API key in secrets/core).
+      OPENRMM_VISIONONE_TENANT: ${OPENRMM_VISIONONE_TENANT:-}
+      OPENRMM_VISIONONE_REGION: ${OPENRMM_VISIONONE_REGION:-eu}
+      OPENRMM_VISIONONE_KEY_FILE: /run/openrmm/secrets/visionone-key
     volumes:
       - ./pki/core:/run/openrmm/pki:ro
+      - ./secrets/core:/run/openrmm/secrets:ro
+    # The tunnel network also gives the outbound HTTPS the Vision One
+    # connector needs.
     networks: [internal, tunnel]
     read_only: true
     cap_drop: [ALL]

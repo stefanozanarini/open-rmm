@@ -1,0 +1,13 @@
+{
+  "id": "protection-status",
+  "version": "1.0.0",
+  "description": "Antivirus registered in Windows Security Center, Microsoft Defender and Windows Firewall status.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "status": { "description": "Antivirus, Defender and firewall status", "timeout_seconds": 120 }
+  }
+}

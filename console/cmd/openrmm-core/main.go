@@ -35,6 +35,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
 	"github.com/stefanozanarini/open-rmm/internal/console/relay"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/open-rmm/internal/console/visionone"
 	"github.com/stefanozanarini/open-rmm/internal/pki"
 )
 
@@ -149,6 +150,10 @@ func run(log *slog.Logger) error {
 	// Wakes agent sessions when jobs are queued (PostgreSQL LISTEN/NOTIFY).
 	go gw.Run(ctx)
 
+	if err := startVisionOne(ctx, db, log); err != nil {
+		return err
+	}
+
 	d := &relay.Dialer{Target: target, Log: log,
 		TLS: relay.CoreTLS(env("OPENRMM_GATEWAY_NAME", host), roots[0], coreCert)}
 	ts := gw.TunnelGRPCServer()
@@ -183,5 +188,32 @@ func run(log *slog.Logger) error {
 	case <-time.After(15 * time.Second):
 		ts.Stop()
 	}
+	return nil
+}
+
+// startVisionOne starts the optional Vision One connector for one tenant.
+func startVisionOne(ctx context.Context, db store.Store, log *slog.Logger) error {
+	tenant := os.Getenv("OPENRMM_VISIONONE_TENANT")
+	if tenant == "" {
+		return nil
+	}
+	key, err := readEnvFile("OPENRMM_VISIONONE_KEY_FILE")
+	if err != nil {
+		return err
+	}
+	c, err := visionone.NewClient(env("OPENRMM_VISIONONE_REGION", "eu"), string(key), nil)
+	if err != nil {
+		return err
+	}
+	interval, err := time.ParseDuration(env("OPENRMM_VISIONONE_INTERVAL", "15m"))
+	if err != nil || interval < time.Minute {
+		return fmt.Errorf("OPENRMM_VISIONONE_INTERVAL must be a duration of at least 1m")
+	}
+	if _, err := db.GetTenant(ctx, tenant); err != nil {
+		return fmt.Errorf("OPENRMM_VISIONONE_TENANT: %w", err)
+	}
+	s := &visionone.Syncer{Client: c, Store: db, TenantID: tenant, Log: log.With("connector", "visionone"), Interval: interval}
+	go s.Run(ctx)
+	log.Info("vision one connector started", "tenant", tenant, "region", env("OPENRMM_VISIONONE_REGION", "eu"), "interval", interval)
 	return nil
 }

@@ -61,3 +61,7 @@ h3 + table, table + table { margin-top:8px; }
 .badge.bl-on { background:#dcfae6; color:var(--ok); }
 .badge.bl-off, .badge.bl-suspended { background:#fee4e2; color:var(--danger); }
 @media (max-width: 900px) { .grid2 { grid-template-columns:1fr; } form.search input { min-width:0; } }
+.badge.chk-ok { background:#dcfae6; color:var(--ok); }
+.badge.chk-warning, .badge.sev-warning { background:#fff1c2; color:#8a5a00; }
+.badge.chk-failing, .badge.sev-critical { background:#fee4e2; color:var(--danger); }
+.badge.sev-info { background:#e0eaff; }

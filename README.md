@@ -33,9 +33,10 @@ Phase 0 (foundations):
 - [x] DMZ split: internet-facing gateway as a relay without database or CA key; internal core opens the tunnel
 - [x] Signed policies: periodic module actions with declarative conditions (conditional plugins), approved with MFA once per version
 - [x] `inventory` module: hardware, BitLocker, battery, software, Supremo/AnyDesk/TeamViewer ids; change history; Clients and Servers sections
+- [x] Security plugins: `trendmicro`, `protection-status`, `accesslog` with unusual-logon alerts (RDP outside the LAN subnets, password spraying, lockouts); checks and alerts; Trend Vision One connector (EU)
 - [ ] Validation on real Windows
 
-Next: security plugins (Trend Micro, logon monitoring), Windows and third-party updates with dashboards, software distribution, setup wizard, federation. See the [roadmap](docs/ARCHITECTURE.md#13-roadmap).
+Next: Windows and third-party updates with dashboards, software distribution, setup wizard, federation. See the [roadmap](docs/ARCHITECTURE.md#13-roadmap).
 
 ## Documentation
 

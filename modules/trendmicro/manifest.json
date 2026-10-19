@@ -1,0 +1,13 @@
+{
+  "id": "trendmicro",
+  "version": "1.0.0",
+  "description": "Status of the Trend Micro agents: Standard Endpoint Protection, Server & Workload Protection, Vision One endpoint sensor, Zero Trust Secure Access.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "status": { "description": "Installed Trend Micro products, versions and service state", "timeout_seconds": 120 }
+  }
+}
