@@ -205,6 +205,15 @@
 {{end}}
 
 {{define "agent-actions"}}
+{{if and .CanRun .Data.Shell}}
+<h2>{{t "Shell interattiva"}}</h2>
+<form method="post" action="/agents/{{.Data.Agent.ID}}/shell" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>{{t "Durata"}} <select name="minutes"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">60 min</option></select></label>
+  <button class="primary">{{t "Apri la shell"}}</button>
+</form>
+<p class="muted">{{t "Una sessione PowerShell su questo PC, approvata con MFA. Il PC deve consentirla con la policy locale (GPO) e ogni riga digitata è registrata."}}</p>
+{{end}}
 {{if and .CanRun .Data.Actions}}
 {{$csrf := .CSRF}}{{$id := .Data.Agent.ID}}
 <h2>{{t "Esegui un comando"}}</h2>

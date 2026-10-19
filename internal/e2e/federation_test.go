@@ -76,7 +76,7 @@ func link(t *testing.T, central, customer *consoleEnv, hub *federation.Hub) (*ht
 	if bundle == "" {
 		t.Fatalf("no link token: %s", body)
 	}
-	cc, ccsrf := customer.login(t, admin)
+	cc, ccsrf := customer.loginTo(t, admin)
 	if _, body, _ = post(t, cc, customer.console.URL+"/federation/join", url.Values{"csrf": {ccsrf}, "bundle": {bundle}}); !strings.Contains(body, "Console collegata") {
 		t.Fatalf("join: %s", body)
 	}

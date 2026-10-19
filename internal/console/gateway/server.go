@@ -71,6 +71,7 @@ type Server struct {
 	mu       sync.Mutex
 	sessions map[string]*session // by tenant/agent
 	packages pkgfiles.Dir
+	shells   shellHub
 }
 
 type session struct {

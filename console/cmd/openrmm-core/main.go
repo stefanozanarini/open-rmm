@@ -15,6 +15,8 @@
 //	OPENRMM_GATEWAY_TUNNEL     gateway tunnel address, host:port (e.g. gateway:8444)
 //	OPENRMM_GATEWAY_NAME       DNS name in the gateway certificate (default: host of OPENRMM_GATEWAY_TUNNEL)
 //	OPENRMM_HEALTH_LISTEN      local health endpoint (default 127.0.0.1:8090)
+//	OPENRMM_SHELL_SOCKET       Unix socket of the shell broker, shared with the web
+//	                           console (default /run/openrmm-shell/shell.sock; "off" disables)
 //
 // "openrmm-core healthcheck" exits 0 when a tunnel to the gateway is open.
 package main
@@ -29,8 +31,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
+
+	"google.golang.org/grpc"
+
+	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 
 	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
 	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
@@ -155,6 +162,9 @@ func run(log *slog.Logger) error {
 	if err := startVisionOne(ctx, db, log); err != nil {
 		return err
 	}
+	if err := startShellBroker(ctx, gw, log); err != nil {
+		return err
+	}
 
 	d := &relay.Dialer{Target: target, Log: log,
 		TLS: relay.CoreTLS(env("OPENRMM_GATEWAY_NAME", host), roots[0], coreCert)}
@@ -217,5 +227,35 @@ func startVisionOne(ctx context.Context, db store.Store, log *slog.Logger) error
 	s := &visionone.Syncer{Client: c, Store: db, TenantID: tenant, Log: log.With("connector", "visionone"), Interval: interval}
 	go s.Run(ctx)
 	log.Info("vision one connector started", "tenant", tenant, "region", env("OPENRMM_VISIONONE_REGION", "eu"), "interval", interval)
+	return nil
+}
+
+// startShellBroker serves the interactive shell sessions to the web console
+// on a Unix socket readable only by the console's user.
+func startShellBroker(ctx context.Context, gw *gateway.Server, log *slog.Logger) error {
+	sock := env("OPENRMM_SHELL_SOCKET", "/run/openrmm-shell/shell.sock")
+	if sock == "off" {
+		return nil
+	}
+	_ = os.Remove(sock)
+	if err := os.MkdirAll(filepath.Dir(sock), 0o750); err != nil {
+		return err
+	}
+	lis, err := net.Listen("unix", sock)
+	if err != nil {
+		return err
+	}
+	if err := os.Chmod(sock, 0o600); err != nil {
+		return err
+	}
+	gs := grpc.NewServer(grpc.MaxRecvMsgSize(1 << 20))
+	openrmmv1.RegisterShellBrokerServiceServer(gs, gw.Broker())
+	go func() { <-ctx.Done(); gs.Stop() }()
+	go func() {
+		if err := gs.Serve(lis); err != nil {
+			log.Error("shell broker", "err", err)
+		}
+	}()
+	log.Info("shell broker listening", "socket", sock)
 	return nil
 }

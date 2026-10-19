@@ -51,7 +51,7 @@ Both executables are signed before they go into the MSI, then the MSI itself, wi
 2. **Configuration.** In the computers' Group Policy Object: **Computer Configuration → Policies → Administrative Templates → open-rmm**:
    - console address and enrollment token;
    - *Trust and keys*: root certificate and the three public keys;
-   - *Local policies*: whether ad-hoc PowerShell scripts are allowed, concurrent commands.
+   - *Local policies*: whether ad-hoc PowerShell scripts are allowed, whether **interactive shell sessions** are allowed (off unless enabled: enable it only on the computers where operators need it), concurrent commands.
 3. **Installation.** Copy the MSI to a network share readable by the computers (e.g. `\\fileserver\deploy$\open-rmm\`), then **Computer Configuration → Policies → Software Settings → Software installation → New → Package → Assigned**.
 
 At the next restart the PCs install the agent, which enrolls and appears in the console **pending approval**.

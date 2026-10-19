@@ -77,6 +77,13 @@
       <enabledValue><decimal value="1"/></enabledValue>
       <disabledValue><decimal value="0"/></disabledValue>
     </policy>
+    <policy name="AllowInteractiveShell" class="Machine" displayName="$(string.AllowInteractiveShell)" explainText="$(string.AllowInteractiveShell_Help)"
+            key="SOFTWARE\Policies\open-rmm" valueName="AllowInteractiveShell">
+      <parentCategory ref="OpenRMM_Local"/>
+      <supportedOn ref="SUPPORTED_OPENRMM"/>
+      <enabledValue><decimal value="1"/></enabledValue>
+      <disabledValue><decimal value="0"/></disabledValue>
+    </policy>
     <policy name="MaxConcurrentJobs" class="Machine" displayName="$(string.MaxConcurrentJobs)" explainText="$(string.MaxConcurrentJobs_Help)"
             presentation="$(presentation.MaxConcurrentJobs)" key="SOFTWARE\Policies\open-rmm">
       <parentCategory ref="OpenRMM_Local"/>

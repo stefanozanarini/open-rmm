@@ -21,6 +21,8 @@ WARNING: the values of this policy are readable by every user of the computer. U
       <string id="ReleaseSigningKeys">Agent release keys</string>
       <string id="Keys_Help">Public keys as ed25519:..., comma separated. The agent only accepts commands, modules or updates signed with one of them.</string>
       <string id="AllowAdHocScripts">Allow ad-hoc PowerShell scripts</string>
+      <string id="AllowInteractiveShell">Allow interactive shell sessions</string>
+      <string id="AllowInteractiveShell_Help">When enabled, operators can open an interactive PowerShell session on this computer from the console, after a multi-factor sign-in for each session (at most 60 minutes, every command recorded in the console's audit log). When disabled or not configured, sessions are refused.</string>
       <string id="AllowAdHocScripts_Help">When disabled, this computer refuses modules that run scripts received from the console (script module), whatever the console asks. When not configured, scripts are allowed.</string>
       <string id="MaxConcurrentJobs">Concurrent commands</string>
       <string id="MaxConcurrentJobs_Help">Maximum number of commands the agent runs at the same time (1-32, default 4).</string>

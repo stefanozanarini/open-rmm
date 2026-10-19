@@ -1,0 +1,13 @@
+{{define "content"}}
+{{with .Data}}
+<link rel="stylesheet" href="/static/vendor/xterm/xterm.css">
+<p class="muted">{{tf "Sessione approvata da %s · al massimo %d minuti · ogni riga digitata è registrata nel registro attività." .By .Minutes}}
+ <a href="/agents/{{.Agent.ID}}">{{t "Torna all'agente"}}</a></p>
+<div class="shell-bar"><span id="shell-status">{{t "Connessione…"}}</span> <button type="button" id="shell-close" class="danger">{{t "Chiudi la sessione"}}</button></div>
+<div id="terminal" class="terminal" data-ws="/shell/{{.Job.ID}}/ws"
+  data-connected="{{t "Connesso"}}" data-closed="{{t "Sessione terminata"}}"></div>
+<script src="/static/vendor/xterm/xterm.js"></script>
+<script src="/static/vendor/xterm/addon-fit.js"></script>
+<script src="/static/shell.js"></script>
+{{end}}
+{{end}}

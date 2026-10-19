@@ -118,3 +118,5 @@ section.warn { background:var(--warn); border-color:var(--line); }
 .card.bad { background:var(--card); }
 .card.warn { background:var(--warn); }
 header form.theme select, header form.lang select { padding:2px 4px; font-size:13px; }
+.terminal { height:70vh; background:#000; padding:6px; border:1px solid var(--line); }
+.shell-bar { display:flex; gap:12px; align-items:center; justify-content:space-between; margin:8px 0; }

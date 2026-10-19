@@ -81,6 +81,7 @@ services:
     volumes:
       - ./pki/core:/run/openrmm/pki:ro
       - ./secrets/core:/run/openrmm/secrets:ro
+      - shell-socket:/run/openrmm-shell
       # Package library, written by the web console, served to agents.
       - packages:/var/lib/openrmm/packages:ro
     # The tunnel network also gives the outbound HTTPS the Vision One
@@ -134,6 +135,7 @@ services:
       - ./secrets/server:/run/openrmm/secrets:ro
       - ./console-tls:/run/openrmm/tls:ro
       - signer-socket:/run/openrmm-signer
+      - shell-socket:/run/openrmm-shell
       - packages:/var/lib/openrmm/packages
     ports:
       - "${OPENRMM_CONSOLE_BIND:-127.0.0.1:8080}:8080"
@@ -215,4 +217,5 @@ volumes:
   db-data: {}
   packages: {}
   signer-socket: {}
+  shell-socket: {}
   signer-state: {}

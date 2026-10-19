@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package openrmm.v1;
+
+import "openrmm/v1/agent.proto";
+
+option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
+
+// ShellBrokerService joins the web console to the interactive shell sessions that
+// agents open with the core. It listens on a Unix socket shared only with
+// the web console.
+service ShellBrokerService {
+  // Attach joins a session: the first frame names the tenant and the job.
+  // One attachment per session at a time.
+  rpc Attach(stream ShellFrame) returns (stream ShellFrame);
+}

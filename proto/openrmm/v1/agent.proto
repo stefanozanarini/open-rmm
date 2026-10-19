@@ -34,6 +34,23 @@ service AgentService {
   // GetAgentRelease streams the executables of a signed release offered to
   // the agent (see AgentUpdateOffer).
   rpc GetAgentRelease(GetAgentReleaseRequest) returns (stream ReleaseChunk);
+
+  // Shell carries an interactive shell session opened by a signed job of a
+  // module with the interactive_shell capability. The agent opens the
+  // stream; its first frame names the job.
+  rpc Shell(stream ShellFrame) returns (stream ShellFrame);
+}
+
+// ShellFrame is a piece of an interactive shell session: terminal output
+// from the agent, keystrokes and window size towards it.
+message ShellFrame {
+  string job_id = 1;    // first frame of each side
+  bytes data = 2;
+  uint32 cols = 3;      // resize, when both are set
+  uint32 rows = 4;
+  bool close = 5;       // end of the session
+  string error = 6;
+  string tenant_id = 7; // broker: first frame of the console
 }
 
 message GetAgentReleaseRequest {

@@ -68,6 +68,7 @@ func ForgetEnrollToken() error {
 //	ModuleSigningKeys  idem
 //	ReleaseSigningKeys idem
 //	AllowAdHocScripts REG_DWORD 0/1, or REG_SZ "0"/"1" (empty: not set)
+//	AllowInteractiveShell REG_DWORD 0/1 (default 0)
 //	MaxConcurrentJobs REG_DWORD     1-32
 func overlayOS(c *Config) error {
 	for _, path := range []string{installKey, policyKey} {
@@ -117,6 +118,9 @@ func overlayKey(c *Config, path string) error {
 	keys(k, "ReleaseSigningKeys", &c.ReleaseSigningKeys)
 	if v, _, err := k.GetIntegerValue("MaxConcurrentJobs"); err == nil && v <= 32 {
 		c.MaxConcurrentJobs = int(v)
+	}
+	if v, _, err := k.GetIntegerValue("AllowInteractiveShell"); err == nil {
+		c.AllowInteractiveShell = v != 0
 	}
 	// DWORD (ADMX, manual) or string "0"/"1" (MSI); empty means "not set".
 	if v, _, err := k.GetIntegerValue("AllowAdHocScripts"); err == nil {

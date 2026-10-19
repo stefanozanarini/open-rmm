@@ -20,7 +20,7 @@ import (
 const (
 	handshakeTimeout = 10 * time.Second
 	// Tunnels kept per link: concurrent requests to one customer console.
-	tunnelsPerLink = 4
+	tunnelsPerLink = 6
 	summaryEvery   = 5 * time.Minute
 )
 

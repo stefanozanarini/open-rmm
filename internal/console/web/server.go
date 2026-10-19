@@ -56,6 +56,9 @@ type Config struct {
 	// link.
 	FedVerifier *authn.Verifier
 	Uplink      *federation.Uplink
+	// Shell reaches the interactive shell sessions held by the core (nil:
+	// shells are not available).
+	Shell openrmmv1.ShellBrokerServiceClient
 }
 
 // Server serves the console.
@@ -78,6 +81,7 @@ type Server struct {
 	linkAddr    string
 	fedVerifier *authn.Verifier
 	uplink      *federation.Uplink
+	shell       openrmmv1.ShellBrokerServiceClient
 }
 
 // New returns a Server.
@@ -96,7 +100,7 @@ func New(cfg Config) (*Server, error) {
 	s := &Server{
 		store: cfg.Store, verifier: cfg.Verifier, signer: cfg.Signer, log: cfg.Logger,
 		packages: cfg.Packages, winget: cfg.Winget,
-		hub: cfg.Hub, linkAddr: cfg.LinkAddr, fedVerifier: cfg.FedVerifier, uplink: cfg.Uplink,
+		hub: cfg.Hub, linkAddr: cfg.LinkAddr, fedVerifier: cfg.FedVerifier, uplink: cfg.Uplink, shell: cfg.Shell,
 		origin: u.Scheme + "://" + u.Host, idpHost: authURL.Scheme + "://" + authURL.Host,
 		now: cfg.Now, client: cfg.HTTPClient,
 		oauth: oauth2.Config{
@@ -257,6 +261,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agents/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevoke))
 	mux.Handle("POST /agents/{id}/jobs", s.role(authn.RoleOperator, s.handleRunJob))
 	mux.Handle("POST /agents/{id}/firmware", s.role(authn.RoleOperator, s.handleFirmwareInstall))
+	mux.Handle("POST /agents/{id}/shell", s.role(authn.RoleOperator, s.handleOpenShell))
+	mux.Handle("GET /shell/{id}", s.role(authn.RoleOperator, s.handleShellPage))
+	mux.Handle("GET /shell/{id}/ws", s.role(authn.RoleOperator, s.handleShellSocket))
 	mux.Handle("GET /jobs", s.auth(s.handleJobs))
 	mux.Handle("GET /jobs/{id}", s.auth(s.handleJob))
 	mux.Handle("GET /modules", s.auth(s.handleModules))

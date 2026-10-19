@@ -21,6 +21,8 @@ ATTENZIONE: i valori di questo criterio sono leggibili da tutti gli utenti del c
       <string id="ReleaseSigningKeys">Chiavi di rilascio dell'agente</string>
       <string id="Keys_Help">Chiavi pubbliche nella forma ed25519:..., separate da virgola. L'agente accetta solo comandi, moduli o aggiornamenti firmati con una di queste chiavi.</string>
       <string id="AllowAdHocScripts">Consenti gli script PowerShell ad hoc</string>
+      <string id="AllowInteractiveShell">Consenti le sessioni di shell interattiva</string>
+      <string id="AllowInteractiveShell_Help">Se attivato, gli operatori possono aprire dalla console una sessione PowerShell interattiva su questo computer, dopo un accesso con autenticazione a più fattori per ogni sessione (al massimo 60 minuti, ogni comando registrato nel registro attività della console). Se disattivato o non configurato, le sessioni sono rifiutate.</string>
       <string id="AllowAdHocScripts_Help">Se disattivato, questo computer rifiuta i moduli che eseguono script ricevuti dalla console (modulo script), qualunque cosa chieda la console. Se non configurato, gli script sono consentiti.</string>
       <string id="MaxConcurrentJobs">Comandi eseguiti contemporaneamente</string>
       <string id="MaxConcurrentJobs_Help">Numero massimo di comandi eseguiti contemporaneamente dall'agente (1-32, predefinito 4).</string>

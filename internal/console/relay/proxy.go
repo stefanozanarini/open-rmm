@@ -59,6 +59,7 @@ var allowed = map[string]bool{
 	openrmmv1.AgentService_GetModule_FullMethodName:        true,
 	openrmmv1.AgentService_GetPackage_FullMethodName:       true,
 	openrmmv1.AgentService_GetAgentRelease_FullMethodName:  true,
+	openrmmv1.AgentService_Shell_FullMethodName:            true,
 }
 
 // Gateway is the DMZ side: it accepts agents and forwards their calls over

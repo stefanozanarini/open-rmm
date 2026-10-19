@@ -70,6 +70,7 @@ type agentData struct {
 	Outdated map[string]string
 	Notes    []store.Note
 	AD       *adPlace // computer object in Active Directory
+	Shell    bool     // an interactive shell can be opened
 	// Return is where forms on this agent go back to; Panel is set when the
 	// agent is shown in the bottom panel of the agent list.
 	Return string
@@ -143,6 +144,9 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 	if pl, ok := adPlaces(snaps)[adinv.HostKey(a.Host.Hostname)]; ok {
 		d.AD = &pl
 	}
+	if s.shell != nil && a.Status == store.AgentActive {
+		_, d.Shell = s.shellModuleFor(r, a)
+	}
 	d.Outdated = map[string]string{}
 	if d.Inv != nil {
 		if apps, err := s.store.ListCatalogApps(r.Context(), t); err == nil {
@@ -186,8 +190,8 @@ func (s *Server) runnableOn(r *http.Request, a store.Agent) ([]runnable, error) 
 		if err != nil {
 			continue
 		}
-		if _, ok := man.Entrypoints[platform]; !ok {
-			continue
+		if _, ok := man.Entrypoints[platform]; !ok || man.HasCapability(modules.CapInteractiveShell) {
+			continue // shells open from their own button, one agent at a time
 		}
 		for name, act := range man.Actions {
 			out = append(out, runnable{Module: man.ID, Version: man.Version, Action: name, Description: act.Description,
@@ -275,7 +279,7 @@ func (s *Server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if _, ok := man.Actions[action]; !ok {
+	if _, ok := man.Actions[action]; !ok || man.HasCapability(modules.CapInteractiveShell) {
 		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}

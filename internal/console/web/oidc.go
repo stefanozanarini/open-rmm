@@ -224,6 +224,10 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 	case 0:
 		s.fail(w, r, errors.New("signer returned no jobs"))
 	case 1:
+		if s.isShellModule(r.Context(), req.GetModule(), req.GetModuleVersion()) {
+			http.Redirect(w, r, "/shell/"+created[0], http.StatusSeeOther)
+			return
+		}
 		http.Redirect(w, r, "/jobs/"+created[0], http.StatusSeeOther)
 	default:
 		s.flashTo(w, r, sess, trf(lang, "%d comandi approvati e in coda.", len(created)), "/jobs")

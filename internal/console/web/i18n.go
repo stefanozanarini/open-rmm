@@ -819,4 +819,20 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"applicazione":       "application",
 	"altro":              "other",
 	"consigliato":        "recommended",
+
+	// Interactive shell
+	"Apri la shell":                  "Open the shell",
+	"Chiudi la sessione":             "Close the session",
+	"Connessione…":                   "Connecting…",
+	"Connesso":                       "Connected",
+	"Durata":                         "Duration",
+	"La sessione non è disponibile.": "The session is not available.",
+	"La shell interattiva non è disponibile su questa console.":                                                "The interactive shell is not available on this console.",
+	"Sessione approvata da %s · al massimo %d minuti · ogni riga digitata è registrata nel registro attività.": "Session approved by %s · at most %d minutes · every line typed is recorded in the activity log.",
+	"Sessione chiusa.":   "Session closed.",
+	"Sessione terminata": "Session ended",
+	"Shell interattiva":  "Interactive shell",
+	"Shell su %s":        "Shell on %s",
+	"Torna all'agente":   "Back to the agent",
+	"Una sessione PowerShell su questo PC, approvata con MFA. Il PC deve consentirla con la policy locale (GPO) e ogni riga digitata è registrata.": "A PowerShell session on this PC, approved with MFA. The PC must allow it through its local policy (GPO), and every line typed is recorded.",
 }

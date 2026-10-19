@@ -32,6 +32,9 @@ const (
 // classes of modules regardless of what the console asks.
 const (
 	CapAdHocScript = "adhoc_script" // runs arbitrary code supplied in the job
+	// CapInteractiveShell: the agent opens an interactive shell for the
+	// job; the module only provides the session's startup script.
+	CapInteractiveShell = "interactive_shell"
 )
 
 // Execution contexts.
@@ -162,7 +165,7 @@ func (m *Manifest) Validate(complete bool) error {
 		}
 	}
 	for _, c := range m.Capabilities {
-		if c != CapAdHocScript {
+		if c != CapAdHocScript && c != CapInteractiveShell {
 			return fmt.Errorf("unknown capability %q", c)
 		}
 	}

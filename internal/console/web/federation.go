@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"regexp"
 	"slices"
@@ -61,8 +62,9 @@ func (s *Server) federate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			if o := r.Header.Get("Origin"); o != "" && o != s.origin {
+		upgrade := strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+		if upgrade || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+			if o := r.Header.Get("Origin"); (o != "" || upgrade) && o != s.origin {
 				http.Error(w, tr(langOf(r, sess), "richiesta non valida"), http.StatusForbidden)
 				return
 			}
@@ -75,6 +77,10 @@ func (s *Server) federate(next http.Handler) http.Handler {
 		}
 		if r.URL.Path == uploadPath {
 			extendDeadlines(w, 30*time.Minute)
+		}
+		if upgrade {
+			s.forwardUpgrade(w, r, sess, link)
+			return
 		}
 		s.forward(w, r, sess, link, r.Method, r.URL.RequestURI(), r.Body, r.Header.Get("Content-Type"), r.ContentLength)
 	})
@@ -138,6 +144,31 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, sess *session, 
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		s.log.Debug("relay response", "err", err)
 	}
+}
+
+// forwardUpgrade relays a WebSocket (interactive shell) to a linked
+// console; the upgraded connection then uses one tunnel of the link.
+func (s *Server) forwardUpgrade(w http.ResponseWriter, r *http.Request, sess *session, link store.FederationLink) {
+	rp := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			u, _ := url.Parse(federation.URL + localReturn(r.URL.RequestURI(), "/"))
+			pr.Out.URL, pr.Out.Host = u, ""
+			for _, h := range []string{"Cookie", "Authorization", "X-Forwarded-For", "Forwarded"} {
+				pr.Out.Header.Del(h)
+			}
+			pr.Out.Header.Set(federation.HeaderOperator, s.assertion(r, sess))
+		},
+		Transport: s.hub.Client(link.ID).Transport,
+		ModifyResponse: func(resp *http.Response) error {
+			resp.Header.Del("Set-Cookie")
+			return nil
+		},
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			s.log.Warn("linked console unreachable", "link", link.ID, "err", err)
+			http.Error(w, tr(langOf(r, sess), "La sessione non è disponibile."), http.StatusBadGateway)
+		},
+	}
+	rp.ServeHTTP(w, r)
 }
 
 // ---- federation page ----

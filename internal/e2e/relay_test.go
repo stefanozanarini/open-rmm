@@ -129,6 +129,7 @@ func TestViaRelay(t *testing.T) {
 		"jobs after approval":      TestPendingAgentGetsJobsOnlyAfterApproval,
 		"agent update":             TestAgentStagesTargetedRelease,
 		"package delivery":         TestPackageDeliveredToAgent,
+		"shell session":            TestShellSessionThroughBroker,
 	} {
 		t.Run(name, fn)
 	}

@@ -39,6 +39,15 @@ type Session interface {
 	// FetchPackage downloads a package of job jobID to dest, verifying its
 	// size and SHA-256.
 	FetchPackage(ctx context.Context, jobID string, ref *openrmmv1.PackageRef, dest string) error
+	// OpenShell opens the stream of an interactive shell session.
+	OpenShell(ctx context.Context) (ShellStream, error)
+}
+
+// ShellStream carries an interactive shell session.
+type ShellStream interface {
+	Send(*openrmmv1.ShellFrame) error
+	Recv() (*openrmmv1.ShellFrame, error)
+	CloseSend() error
 }
 
 // PolicyRun identifies a scheduled run of a policy rule.
@@ -323,6 +332,20 @@ func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
 	if m.HasCapability(modules.CapAdHocScript) && !e.cfg.AdHocScriptsAllowed() {
 		log.Warn("ad-hoc script refused by local policy")
 		return reject(job, "ad-hoc scripts are disabled by local policy on this endpoint")
+	}
+	if m.HasCapability(modules.CapInteractiveShell) {
+		if quiet {
+			return reject(job, "interactive shells cannot be scheduled by policies")
+		}
+		if !e.cfg.InteractiveShellAllowed() {
+			log.Warn("interactive shell refused by local policy")
+			return reject(job, "interactive shell sessions are disabled by local policy on this endpoint")
+		}
+		if err := modules.VerifyFiles(m, inst.FilesDir); err != nil {
+			return reject(job, "module integrity check failed: %v", err)
+		}
+		send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_ACCEPTED})
+		return e.runShell(job, filepath.Join(inst.FilesDir, filepath.FromSlash(ep.Path)), send, log)
 	}
 	send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_ACCEPTED})
 

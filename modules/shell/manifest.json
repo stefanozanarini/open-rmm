@@ -1,0 +1,16 @@
+{
+  "id": "shell",
+  "version": "1.0.0",
+  "description": "Interactive shell session (PowerShell on Windows), opened by the agent on a pseudo-terminal for one MFA-approved session. Needs the local policy AllowInteractiveShell.",
+  "protocol_version": 1,
+  "capabilities": ["interactive_shell"],
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Shell.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Shell.ps1" },
+    "linux/amd64": { "type": "sh", "path": "shell.sh" },
+    "linux/arm64": { "type": "sh", "path": "shell.sh" }
+  },
+  "actions": {
+    "open": { "description": "Open an interactive session (params: minutes, at most 60)", "timeout_seconds": 3600 }
+  }
+}

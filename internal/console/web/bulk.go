@@ -138,7 +138,7 @@ func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if _, ok := man.Actions[target[2]]; !ok {
+	if _, ok := man.Actions[target[2]]; !ok || man.HasCapability(modules.CapInteractiveShell) {
 		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}

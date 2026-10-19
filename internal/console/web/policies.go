@@ -165,7 +165,7 @@ func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request
 		if _, ok := man.Actions[fr.Action]; !ok {
 			return nil, nil, errors.New(s.Tf(r, "regola %q: il modulo %s non ha l'azione %q", fr.ID, fr.Module, fr.Action))
 		}
-		if man.HasCapability(modules.CapAdHocScript) {
+		if man.HasCapability(modules.CapAdHocScript) || man.HasCapability(modules.CapInteractiveShell) {
 			return nil, nil, errors.New(s.Tf(r, "regola %q: i moduli che eseguono script non possono stare in una policy", fr.ID))
 		}
 		p.Rules = append(p.Rules, policy.Rule{ID: fr.ID, Module: fr.Module, ModuleVersion: fr.Version,

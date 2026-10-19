@@ -19,7 +19,7 @@ Legend: ✅ implemented · 🔜 next · 📋 planned
 | R6 | Windows Update: detection and installation | Module (§8.5) |
 | R7 | Hardware and software inventory, logon events | Modules (§8.1, §8.2) |
 | R8 | Third-party software and firmware updates | winget, vendor tools (§8.6, §8.8) |
-| R9 | PowerShell commands from the console | `script` module ✅ (§7) |
+| R9 | PowerShell commands from the console | `script` module ✅ (§7), interactive shell ✅ (§8.11) |
 | R10 | **Modular agent: new features never require an agent update** | Core principle (§3) ✅ |
 | R11 | Automatic agent update | A/B with rollback (§5) ✅ |
 | R12 | Operators sign in with Microsoft 365 (Entra ID); MFA mandatory | §6.6 ✅ |
@@ -412,6 +412,17 @@ Modules never reboot by themselves; they report a pending reboot and the `reboot
 
 📋 Later: user deferrals and presentation mode through the user helper, pre/post scripts.
 
+### 8.11 Interactive shell (`shell`) ✅
+
+A PowerShell session (bash on Linux) on one endpoint, in a terminal in the browser.
+
+- **One MFA approval per session**, not per command: the operator approves "shell on this agent for N minutes" (at most 60, default 30) with a fresh MFA sign-in bound to that request, like any job; the signer signs it. A conscious exception to per-command approval (decision of 2026-10-19), compensated by the limits below.
+- **Opt-in on the endpoint**: the local policy `AllowInteractiveShell` (GPO, ADMX) is off by default; without it the agent rejects the job. Policies can never schedule a shell, it is not offered as a generic command or in bulk actions, and only the operator who approved a session can attach to it.
+- **The agent runs a fixed shell** (Windows PowerShell by absolute path, or bash) on a **ConPTY** / Unix PTY inside a Job Object / process group, started with the signed module's startup script; it ends the session at the time limit, after 15 minutes without keystrokes, or when the operator closes it, killing the whole process tree.
+- **Path**: agent → Shell stream (through the DMZ relay) → core, which checks that the stream belongs to an unfinished shell job of that agent → **shell broker** on a Unix socket shared only with the web console → WebSocket (same origin) → **xterm.js**, served by the console itself (`static/vendor/xterm`, MIT). The shell page alone allows scripts (`script-src 'self'`) and inline styles (needed by xterm.js).
+- **Audit**: session attached and detached, and **every line typed** (`shell.input`, rebuilt from the keystrokes) in the console's audit log; the job result records duration, bytes and how the session ended. Output is not recorded.
+- **Federation**: works from a central console too; the WebSocket is relayed over the link, the customer console audits the central operator.
+
 ### 8.10 Further proposed plugins 📋
 
 | Priority | Plugin | Purpose |
@@ -541,7 +552,7 @@ The console matches computers and agents by host name and shows:
 | 7 | Console layout (site and OU tree, tabs, bottom panel, bulk actions, notes, themes); setup checklist, Authenticode signing, optional Active Directory | ✅ |
 | 8 | Federation with full central operations | ✅ |
 | 9 | `firmware`: BIOS, firmware and drivers through Dell Command Update and Lenovo System Update, in the Patch dashboard | ✅ (to be validated on real endpoints) |
-| 10 | Interactive shell | 🔜 |
+| 10 | Interactive shell: MFA per session, opt-in local policy, ConPTY, xterm.js, every line audited | ✅ (to be validated on real Windows) |
 | Later | Further plugins (§8.10), Linux agent packages | 📋 |
 
 ---
@@ -589,3 +600,4 @@ The console matches computers and agents by host name and shows:
 | 2026-10-19 | Third-party software on servers without winget: **no Chocolatey** for now (community scripts run as SYSTEM; it does not see software installed by hand); the console uses the **winget manifests** to detect outdated software from the inventory and distributes the installers itself, hash-checked, with manual approval |
 | 2026-10-19 | Code-signing keys are created by `openrmm-admin` on the build machine, never by the internet-facing console, which keeps only the public certificate; the setup is a checklist page after the command-line bootstrap rather than a one-time-code wizard |
 | 2026-10-19 | Active Directory is read by the `adinventory` module with a domain member's computer account instead of an LDAPS service account on the console |
+| 2026-10-19 | Interactive shell approved with **MFA per session** (one agent, at most 60 minutes, every line audited, off unless the endpoint's local policy allows it) instead of per command; full terminal with xterm.js served by the console, scripts allowed on that page only |

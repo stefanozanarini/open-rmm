@@ -17,8 +17,8 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}"
 # Mount points of the signer's and the package library's volumes, owned by
 # the runtime user: Docker copies ownership into a named volume the first
 # time it is mounted.
-RUN mkdir -p /rootfs/run/openrmm-signer /rootfs/var/lib/openrmm-signer /rootfs/var/lib/openrmm/packages \
- && chmod 0750 /rootfs/run/openrmm-signer /rootfs/var/lib/openrmm/packages \
+RUN mkdir -p /rootfs/run/openrmm-signer /rootfs/run/openrmm-shell /rootfs/var/lib/openrmm-signer /rootfs/var/lib/openrmm/packages \
+ && chmod 0750 /rootfs/run/openrmm-signer /rootfs/run/openrmm-shell /rootfs/var/lib/openrmm/packages \
  && chmod 0700 /rootfs/var/lib/openrmm-signer
 
 FROM gcr.io/distroless/static-debian12:nonroot

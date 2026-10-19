@@ -11,6 +11,8 @@
 //	                                   behind a TLS reverse proxy
 //	OPENRMM_OIDC_CLIENT_SECRET_FILE    file with the Entra application secret
 //	OPENRMM_SIGNER_SOCKET              signer socket (default /run/openrmm-signer/signer.sock)
+//	OPENRMM_SHELL_SOCKET               shell broker socket of the core, for interactive shells
+//	                                   (default /run/openrmm-shell/shell.sock; "off" disables)
 //	OPENRMM_OIDC_ISSUER, OPENRMM_OIDC_CLIENT_ID, OPENRMM_MFA_CLAIM, OPENRMM_TENANT_MAP
 //	                                   see internal/console/authn
 //
@@ -144,11 +146,20 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	defer conn.Close()
+	var shell openrmmv1.ShellBrokerServiceClient
+	if sock := env("OPENRMM_SHELL_SOCKET", "/run/openrmm-shell/shell.sock"); sock != "off" {
+		sc, err := grpc.NewClient("unix://"+sock, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return err
+		}
+		defer sc.Close()
+		shell = openrmmv1.NewShellBrokerServiceClient(sc)
+	}
 	srv, err := web.New(web.Config{
 		Store: db, Verifier: v, Signer: openrmmv1.NewSignerServiceClient(conn), Logger: log,
 		PublicURL: publicURL, ClientSecret: strings.TrimSpace(string(secret)),
 		Packages: pkgfiles.Dir{Path: env("OPENRMM_PACKAGES_DIR", "/var/lib/openrmm/packages")},
-		Hub:      fed.hub, LinkAddr: fed.linkAddr, FedVerifier: fed.verifier, Uplink: fed.uplink,
+		Hub:      fed.hub, LinkAddr: fed.linkAddr, FedVerifier: fed.verifier, Uplink: fed.uplink, Shell: shell,
 	})
 	if err != nil {
 		return err

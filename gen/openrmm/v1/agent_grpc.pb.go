@@ -134,6 +134,7 @@ const (
 	AgentService_GetModule_FullMethodName        = "/openrmm.v1.AgentService/GetModule"
 	AgentService_GetPackage_FullMethodName       = "/openrmm.v1.AgentService/GetPackage"
 	AgentService_GetAgentRelease_FullMethodName  = "/openrmm.v1.AgentService/GetAgentRelease"
+	AgentService_Shell_FullMethodName            = "/openrmm.v1.AgentService/Shell"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -159,6 +160,10 @@ type AgentServiceClient interface {
 	// GetAgentRelease streams the executables of a signed release offered to
 	// the agent (see AgentUpdateOffer).
 	GetAgentRelease(ctx context.Context, in *GetAgentReleaseRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReleaseChunk], error)
+	// Shell carries an interactive shell session opened by a signed job of a
+	// module with the interactive_shell capability. The agent opens the
+	// stream; its first frame names the job.
+	Shell(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ShellFrame, ShellFrame], error)
 }
 
 type agentServiceClient struct {
@@ -249,6 +254,19 @@ func (c *agentServiceClient) GetAgentRelease(ctx context.Context, in *GetAgentRe
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_GetAgentReleaseClient = grpc.ServerStreamingClient[ReleaseChunk]
 
+func (c *agentServiceClient) Shell(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ShellFrame, ShellFrame], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[4], AgentService_Shell_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ShellFrame, ShellFrame]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ShellClient = grpc.BidiStreamingClient[ShellFrame, ShellFrame]
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -272,6 +290,10 @@ type AgentServiceServer interface {
 	// GetAgentRelease streams the executables of a signed release offered to
 	// the agent (see AgentUpdateOffer).
 	GetAgentRelease(*GetAgentReleaseRequest, grpc.ServerStreamingServer[ReleaseChunk]) error
+	// Shell carries an interactive shell session opened by a signed job of a
+	// module with the interactive_shell capability. The agent opens the
+	// stream; its first frame names the job.
+	Shell(grpc.BidiStreamingServer[ShellFrame, ShellFrame]) error
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -296,6 +318,9 @@ func (UnimplementedAgentServiceServer) GetPackage(*GetPackageRequest, grpc.Serve
 }
 func (UnimplementedAgentServiceServer) GetAgentRelease(*GetAgentReleaseRequest, grpc.ServerStreamingServer[ReleaseChunk]) error {
 	return status.Error(codes.Unimplemented, "method GetAgentRelease not implemented")
+}
+func (UnimplementedAgentServiceServer) Shell(grpc.BidiStreamingServer[ShellFrame, ShellFrame]) error {
+	return status.Error(codes.Unimplemented, "method Shell not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -376,6 +401,13 @@ func _AgentService_GetAgentRelease_Handler(srv interface{}, stream grpc.ServerSt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_GetAgentReleaseServer = grpc.ServerStreamingServer[ReleaseChunk]
 
+func _AgentService_Shell_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(AgentServiceServer).Shell(&grpc.GenericServerStream[ShellFrame, ShellFrame]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ShellServer = grpc.BidiStreamingServer[ShellFrame, ShellFrame]
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -409,6 +441,12 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "GetAgentRelease",
 			Handler:       _AgentService_GetAgentRelease_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "Shell",
+			Handler:       _AgentService_Shell_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "openrmm/v1/agent.proto",

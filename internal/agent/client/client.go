@@ -443,6 +443,11 @@ func (s *session) SendUpdateStatus(u *openrmmv1.UpdateStatus) {
 	}
 }
 
+// OpenShell opens the stream of an interactive shell session.
+func (s *session) OpenShell(ctx context.Context) (executor.ShellStream, error) {
+	return openrmmv1.NewAgentServiceClient(s.conn).Shell(ctx)
+}
+
 // FetchRelease downloads the executables of a release.
 func (s *session) FetchRelease(ctx context.Context, version, platform string) (map[string][]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
