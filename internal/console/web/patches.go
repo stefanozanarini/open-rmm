@@ -187,11 +187,11 @@ func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 
 // agentUpdates is the update section of the agent page.
 type agentUpdates struct {
-	Windows   *updates.WindowsReport
-	WinScan   time.Time
-	Winget    *updates.WingetReport
-	WingetAt  time.Time
-	Firmware  *updates.FirmwareReport
+	Windows  *updates.WindowsReport
+	WinScan  time.Time
+	Winget   *updates.WingetReport
+	WingetAt time.Time
+	Firmware *updates.FirmwareReport
 	// FirmwareVersion is the newest published firmware module, for the
 	// install form.
 	FirmwareVersion string
