@@ -8,6 +8,10 @@
 //   - belongs to an operator with the Operator or Admin role, allowed on
 //     the request's tenant.
 //
+// The token may come from the console's own directory or, when federation
+// is configured on the signer, from the central console's directory (with
+// its roles capped by the federation's maximum role).
+//
 // None of this depends on the console being honest.
 package signer
 
@@ -40,11 +44,11 @@ import (
 type Server struct {
 	openrmmv1.UnimplementedSignerServiceServer
 
-	signer   *signing.Signer
-	verifier *authn.Verifier
-	log      *slog.Logger
-	now      func() time.Time
-	used     *usedTokens
+	signer    *signing.Signer
+	verifiers authn.Set
+	log       *slog.Logger
+	now       func() time.Time
+	used      *usedTokens
 }
 
 // New returns a signer. stateFile persists the used-token register.
@@ -53,7 +57,20 @@ func New(signer *signing.Signer, verifier *authn.Verifier, stateFile string, log
 	if err != nil {
 		return nil, err
 	}
-	return &Server{signer: signer, verifier: verifier, log: log, now: time.Now, used: used}, nil
+	return &Server{signer: signer, verifiers: authn.Set{verifier}, log: log, now: time.Now, used: used}, nil
+}
+
+// Trust also accepts operators of a central console's directory.
+func (s *Server) Trust(v *authn.Verifier) { s.verifiers = append(s.verifiers, v) }
+
+// verify checks a token with the verifier of its issuer.
+func (s *Server) verify(ctx context.Context, raw string) (*authn.Claims, *authn.Verifier, error) {
+	v := s.verifiers.For(raw)
+	if v == nil {
+		return nil, nil, errors.New("token issuer not trusted")
+	}
+	c, err := v.Verify(ctx, raw)
+	return c, v, err
 }
 
 // SignJob verifies the operator's approval and signs the job.
@@ -67,12 +84,12 @@ func (s *Server) SignJob(ctx context.Context, req *openrmmv1.SignJobRequest) (*o
 	if err := jobreq.Validate(r); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	claims, err := s.verifier.Verify(ctx, req.GetIdToken())
+	claims, v, err := s.verify(ctx, req.GetIdToken())
 	if err != nil {
 		return deny("operator authentication rejected", err)
 	}
 	now := s.now()
-	if err := s.verifier.CheckFresh(claims, now); err != nil {
+	if err := v.CheckFresh(claims, now); err != nil {
 		return deny("authentication too old", err)
 	}
 	if !jobreq.CheckAuthNonce(claims.Nonce, r) {
@@ -81,7 +98,7 @@ func (s *Server) SignJob(ctx context.Context, req *openrmmv1.SignJobRequest) (*o
 	if !claims.HasRole(authn.RoleOperator, authn.RoleAdmin) {
 		return deny("operator may not run jobs", authn.ErrNoRole)
 	}
-	if !s.verifier.MayManage(claims, r.GetTenantId()) {
+	if !v.MayManage(claims, r.GetTenantId()) {
 		return deny("operator may not manage this tenant", authn.ErrNoTenant)
 	}
 	// One authentication approves one job.
@@ -90,7 +107,7 @@ func (s *Server) SignJob(ctx context.Context, req *openrmmv1.SignJobRequest) (*o
 	}
 
 	ttl := time.Duration(r.GetTtlSeconds()) * time.Second
-	op := claims.Operator()
+	op := operatorOf(claims, v)
 	resp := &openrmmv1.SignJobResponse{Operator: op}
 	for _, agent := range jobreq.Targets(r) {
 		job := &openrmmv1.Job{
@@ -196,12 +213,12 @@ func (s *Server) SignPolicy(ctx context.Context, req *openrmmv1.SignPolicyReques
 	if p.TenantID != req.GetTenantId() {
 		return nil, status.Error(codes.InvalidArgument, "tenant mismatch")
 	}
-	claims, err := s.verifier.Verify(ctx, req.GetIdToken())
+	claims, v, err := s.verify(ctx, req.GetIdToken())
 	if err != nil {
 		return deny("operator authentication rejected", err)
 	}
 	now := s.now()
-	if err := s.verifier.CheckFresh(claims, now); err != nil {
+	if err := v.CheckFresh(claims, now); err != nil {
 		return deny("authentication too old", err)
 	}
 	if subtle.ConstantTimeCompare([]byte(claims.Nonce), []byte(policy.AuthNonce(raw))) != 1 {
@@ -210,7 +227,7 @@ func (s *Server) SignPolicy(ctx context.Context, req *openrmmv1.SignPolicyReques
 	if !claims.HasRole(authn.RoleAdmin) {
 		return deny("only administrators may approve policies", authn.ErrNoRole)
 	}
-	if !s.verifier.MayManage(claims, p.TenantID) {
+	if !v.MayManage(claims, p.TenantID) {
 		return deny("operator may not manage this tenant", authn.ErrNoTenant)
 	}
 	if err := s.used.add(claims.Nonce, now.Add(2*time.Hour), now); err != nil {
@@ -221,8 +238,16 @@ func (s *Server) SignPolicy(ctx context.Context, req *openrmmv1.SignPolicyReques
 	if err != nil {
 		return nil, status.Error(codes.Internal, "encode envelope")
 	}
-	op := claims.Operator()
+	op := operatorOf(claims, v)
 	s.log.Info("policy signed", "policy", p.ID, "version", p.Version, "name", p.Name, "tenant", p.TenantID,
 		"rules", len(p.Rules), "operator", op, "sha256", fmt.Sprintf("%x", sha256.Sum256(raw)))
 	return &openrmmv1.SignPolicyResponse{Envelope: env, Operator: op}, nil
+}
+
+// operatorOf names the operator, marking those of a central console.
+func operatorOf(c *authn.Claims, v *authn.Verifier) string {
+	if v.Config().MaxRole != "" {
+		return c.Operator() + " [central console]"
+	}
+	return c.Operator()
 }

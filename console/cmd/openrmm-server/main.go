@@ -14,6 +14,14 @@
 //	OPENRMM_OIDC_ISSUER, OPENRMM_OIDC_CLIENT_ID, OPENRMM_MFA_CLAIM, OPENRMM_TENANT_MAP
 //	                                   see internal/console/authn
 //
+// Federation (docs/FEDERATION.md), central console:
+//
+//	OPENRMM_FEDERATION_LISTEN          listener for the links of customer consoles (e.g. :8445)
+//	OPENRMM_FEDERATION_PUBLIC_ADDR     host:port customer consoles dial (put in link tokens)
+//
+// Customer console: OPENRMM_FEDERATION_* of authn.FederationFromEnv (the
+// central console's directory, also configured on the signer).
+//
 // "openrmm-server healthcheck" exits 0 if the console answers on /healthz.
 package main
 
@@ -39,6 +47,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/console/web"
+	"github.com/stefanozanarini/open-rmm/internal/federation"
 )
 
 func main() {
@@ -125,6 +134,10 @@ func run(log *slog.Logger) error {
 	// The signer is reached over a local Unix socket shared between the two
 	// containers; it authenticates requests by their id_token, not by the
 	// channel.
+	fed, err := setupFederation(ctx, log, db)
+	if err != nil {
+		return err
+	}
 	conn, err := grpc.NewClient("unix://"+env("OPENRMM_SIGNER_SOCKET", "/run/openrmm-signer/signer.sock"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -135,8 +148,12 @@ func run(log *slog.Logger) error {
 		Store: db, Verifier: v, Signer: openrmmv1.NewSignerServiceClient(conn), Logger: log,
 		PublicURL: publicURL, ClientSecret: strings.TrimSpace(string(secret)),
 		Packages: pkgfiles.Dir{Path: env("OPENRMM_PACKAGES_DIR", "/var/lib/openrmm/packages")},
+		Hub:      fed.hub, LinkAddr: fed.linkAddr, FedVerifier: fed.verifier, Uplink: fed.uplink,
 	})
 	if err != nil {
+		return err
+	}
+	if err := fed.start(ctx, log, srv); err != nil {
 		return err
 	}
 	go func() {
@@ -183,6 +200,70 @@ func run(log *slog.Logger) error {
 	defer cancel()
 	if err := hs.Shutdown(sctx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
+	}
+	return nil
+}
+
+type fedSetup struct {
+	hub      *federation.Hub
+	listen   string
+	linkAddr string
+	verifier *authn.Verifier
+	uplink   *federation.Uplink
+}
+
+// setupFederation reads the federation settings: the central side when a
+// link listener is configured, the customer side when a central directory
+// is trusted. A console may have neither.
+func setupFederation(ctx context.Context, log *slog.Logger, db *store.Postgres) (*fedSetup, error) {
+	f := &fedSetup{listen: os.Getenv("OPENRMM_FEDERATION_LISTEN"), linkAddr: os.Getenv("OPENRMM_FEDERATION_PUBLIC_ADDR")}
+	if f.listen != "" {
+		if f.linkAddr == "" {
+			return nil, errors.New("OPENRMM_FEDERATION_PUBLIC_ADDR is required with OPENRMM_FEDERATION_LISTEN")
+		}
+		id, err := federation.CentralIdentity(ctx, db, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		f.hub = &federation.Hub{Store: db, ID: id, Log: log}
+	}
+	cfg, ok, err := authn.FederationFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		for attempt := 0; ; attempt++ {
+			if f.verifier, err = authn.NewVerifier(ctx, cfg); err == nil {
+				break
+			}
+			if attempt >= 30 || ctx.Err() != nil {
+				return nil, err
+			}
+			log.Warn("central console directory not reachable yet", "err", err)
+			time.Sleep(5 * time.Second)
+		}
+		f.uplink = &federation.Uplink{Store: db, Log: log}
+	}
+	return f, nil
+}
+
+func (f *fedSetup) start(ctx context.Context, log *slog.Logger, srv *web.Server) error {
+	if f.hub != nil {
+		lis, err := net.Listen("tcp", f.listen)
+		if err != nil {
+			return err
+		}
+		log.Info("federation link listener", "addr", f.listen, "public", f.linkAddr, "fingerprint", f.hub.ID.Fingerprint)
+		go func() {
+			if err := f.hub.Serve(ctx, lis); err != nil {
+				log.Error("federation listener stopped", "err", err)
+			}
+		}()
+		go f.hub.RunSummaries(ctx)
+	}
+	if f.uplink != nil {
+		f.uplink.Handler = srv.LinkHandler()
+		go f.uplink.Run(ctx)
 	}
 	return nil
 }

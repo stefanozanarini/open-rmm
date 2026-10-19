@@ -30,6 +30,8 @@ type Operator struct {
 	Username string   `json:"username"`
 	Roles    []string `json:"roles"`
 	Tenants  []string `json:"tenants"`
+	// Federated: a central console's operator, working over the link.
+	Federated bool `json:"federated,omitempty"`
 }
 
 // Pending is an authentication round trip in progress.
@@ -56,6 +58,11 @@ type SessionData struct {
 	Pending   *Pending  `json:"pending,omitempty"`
 	Flash     string    `json:"flash,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	// Central console: the linked console open in this session, the key of
+	// the operator's session there, and a step-up done for it.
+	Link      string     `json:"link,omitempty"`
+	FedKey    string     `json:"fed_key,omitempty"`
+	FedStepUp *fedStepUp `json:"fed_step_up,omitempty"`
 }
 
 type session struct {
@@ -71,6 +78,9 @@ func sessionFrom(ctx context.Context) *session {
 }
 
 func (s *Server) loadSession(r *http.Request) *session {
+	if fs, ok := r.Context().Value(fedSessionKey{}).(*session); ok {
+		return fs // a central operator's request over the link
+	}
 	c, err := r.Cookie(cookieName)
 	if err != nil || len(c.Value) < 40 || len(c.Value) > 64 {
 		return nil

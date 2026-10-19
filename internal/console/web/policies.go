@@ -204,8 +204,7 @@ func (s *Server) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	opts := append(s.authOptions(p, true), oauth2.SetAuthURLParam("login_hint", sess.data.Operator.Username))
-	http.Redirect(w, r, s.oauth.AuthCodeURL(p.State, opts...), http.StatusSeeOther)
+	s.redirectStepUp(w, r, sess, p)
 }
 
 func (s *Server) completePolicy(w http.ResponseWriter, r *http.Request, sess *session, p *Pending, c *authn.Claims, rawToken string) {

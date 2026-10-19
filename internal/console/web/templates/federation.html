@@ -1,0 +1,75 @@
+{{define "content"}}
+{{with .Data}}
+{{if .Central}}
+<p>{{t "Console dei clienti collegate a questa console. Aprendone una, le pagine sono quelle della console del cliente: ogni azione resta nel suo registro attività e i comandi li firma il suo servizio di firma, con la tua approvazione MFA."}}</p>
+{{with .Bundle}}
+<section class="warn">
+  <h2>{{tf "Token di collegamento per %s" $.Data.NewName}}</h2>
+  <p>{{t "Copialo ora: non sarà più mostrato. Vale 24 ore e una sola volta. Consegnalo all'amministratore della console del cliente su un canale fidato."}}</p>
+  <textarea readonly rows="3" spellcheck="false" aria-label="{{t "Token di collegamento"}}">{{.}}</textarea>
+</section>
+{{end}}
+{{if .Links}}
+<table>
+<thead><tr><th>{{t "Console"}}</th><th>{{t "Stato"}}</th><th>{{t "Agenti"}}</th><th>{{t "Avvisi"}}</th><th>{{t "Patch"}}</th><th>{{t "Ultimo contatto"}}</th><th></th></tr></thead>
+<tbody>
+{{range .Links}}<tr{{if eq .ID $.Data.Open}} class="current"{{end}}>
+  <td><strong>{{.Name}}</strong>{{with .Summary}}{{if .Console}}<br><span class="muted">{{.Console}}</span>{{end}}{{end}}</td>
+  <td>{{if eq .Status "active"}}{{if .Connected}}<span class="badge online">{{t "connessa"}}</span>{{else}}<span class="badge chk-warning">{{t "non connessa"}}</span>{{end}}
+      {{else if eq .Status "pending"}}<span class="badge pending">{{t "in attesa del cliente"}}</span>{{if .TokenExpiresAt}}<br><span class="muted">{{tf "token valido fino a %s" (fmtTime .TokenExpiresAt)}}</span>{{end}}
+      {{else}}<span class="badge revoked">{{label .Status}}</span>{{end}}</td>
+  <td>{{with .Summary}}{{.Agents}} · {{tf "%d online" .Online}}{{if .Pending}} · {{tf "%d da approvare" .Pending}}{{end}}{{end}}</td>
+  <td>{{with .Summary}}{{if .Critical}}<span class="badge sev-critical">{{tf "%d critici" .Critical}}</span> {{end}}{{.OpenAlerts}}{{end}}</td>
+  <td>{{with .Summary}}{{if .MissingSec}}<span class="badge chk-failing">{{tf "%d da aggiornare" .MissingSec}}</span>{{end}}{{if .Reboot}} <span class="badge chk-warning">{{tf "%d da riavviare" .Reboot}}</span>{{end}}{{end}}</td>
+  <td>{{fmtTime .LastSeenAt}}</td>
+  <td class="actions">
+    {{if eq .Status "active"}}<form method="post" action="/federation/open" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="link" value="{{.ID}}"><button class="primary">{{t "Apri"}}</button></form>{{end}}
+    {{if and $.IsAdmin (ne .Status "revoked")}}<form method="post" action="/federation/links/{{.ID}}/revoke" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="danger">{{t "Revoca"}}</button></form>{{end}}
+  </td>
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}<p class="muted">{{t "Nessuna console collegata."}}</p>{{end}}
+{{if .Open}}<form method="post" action="/federation/close" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button>{{t "Torna a questa console"}}</button></form>{{end}}
+{{if $.IsAdmin}}
+<form method="post" action="/federation/links" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <h2>{{t "Nuovo collegamento"}}</h2>
+  <label>{{t "Nome del cliente"}} <input name="name" required maxlength="80"></label>
+  <p class="muted">{{tf "I clienti si collegano a %s." .LinkAddr}}</p>
+  <button class="primary">{{t "Crea il token di collegamento"}}</button>
+</form>
+{{end}}
+{{end}}
+
+{{if .Customer}}
+<h2>{{t "Collegamento a una console centrale"}}</h2>
+<p>{{t "La console centrale indicata nella configurazione può operare qui con i ruoli dei suoi operatori, fino al ruolo massimo indicato. I comandi richiedono la loro approvazione MFA, verificata da questa console e dal suo servizio di firma."}}</p>
+<dl class="facts">
+  <dt>{{t "Directory centrale"}}</dt><dd><code>{{.Issuer}}</code></dd>
+  <dt>{{t "Tenant gestiti"}}</dt><dd><code>{{.TenantMap}}</code></dd>
+  <dt>{{t "Ruolo massimo"}}</dt><dd>{{.MaxRole}}</dd>
+  {{with .Uplink}}
+  <dt>{{t "Console centrale"}}</dt><dd><code>{{.CentralAddr}}</code></dd>
+  <dt>{{t "Stato"}}</dt><dd>{{if .Suspended}}<span class="badge chk-failing">{{t "sospeso"}}</span>{{else if $.Data.Up}}<span class="badge online">{{t "connessa"}}</span>{{else}}<span class="badge chk-warning">{{t "non connessa"}}</span>{{end}}</dd>
+  <dt>{{t "Creato"}}</dt><dd>{{fmtTime .CreatedAt}} {{.CreatedBy}}</dd>
+  {{end}}
+</dl>
+{{if .Uplink}}
+<div class="actions">
+  {{if .Uplink.Suspended}}<form method="post" action="/federation/uplink/resume" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="primary">{{t "Riprendi"}}</button></form>
+  {{else}}<form method="post" action="/federation/uplink/suspend" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="danger">{{t "Sospendi"}}</button></form>{{end}}
+  <form method="post" action="/federation/uplink/leave" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button>{{t "Rimuovi"}}</button></form>
+</div>
+{{else}}
+<form method="post" action="/federation/join" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label>{{t "Token di collegamento ricevuto dalla console centrale"}}
+    <textarea name="bundle" rows="3" spellcheck="false" required placeholder="ormm-link-1.…"></textarea></label>
+  <button class="primary">{{t "Collega"}}</button>
+</form>
+{{end}}
+{{end}}
+{{if and (not .Central) (not .Customer)}}<p class="muted">{{t "La federazione non è configurata su questa console (docs/FEDERATION.md)."}}</p>{{end}}
+{{end}}
+{{end}}

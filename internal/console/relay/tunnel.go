@@ -148,6 +148,7 @@ type Dialer struct {
 	TLS    *tls.Config
 	Count  int // tunnels to keep open, default 1
 	Log    *slog.Logger
+	Peer   string // what the tunnels lead to, for the logs (default "gateway")
 
 	accept chan net.Conn
 	done   chan struct{}
@@ -173,6 +174,9 @@ func (d *Dialer) init() {
 		if d.Count <= 0 {
 			d.Count = 1
 		}
+		if d.Peer == "" {
+			d.Peer = "gateway"
+		}
 	})
 }
 
@@ -195,7 +199,7 @@ func (d *Dialer) keep(ctx context.Context, slot int) {
 		c, err := (&tls.Dialer{Config: d.TLS}).DialContext(dctx, "tcp", d.Target)
 		cancel()
 		if err != nil {
-			d.Log.Warn("tunnel to gateway failed", "slot", slot, "addr", d.Target, "err", err)
+			d.Log.Warn("tunnel failed", "peer", d.Peer, "slot", slot, "addr", d.Target, "err", err)
 			wait := backoff/2 + rand.N(backoff/2+1) // #nosec G404 -- jitter, not a secret
 			select {
 			case <-ctx.Done():
@@ -215,11 +219,11 @@ func (d *Dialer) keep(ctx context.Context, slot int) {
 			_ = c.Close()
 			return
 		}
-		d.Log.Info("tunnel to gateway open", "slot", slot, "addr", d.Target)
+		d.Log.Info("tunnel open", "peer", d.Peer, "slot", slot, "addr", d.Target)
 		select {
 		case <-closed:
 			d.up.Add(-1)
-			d.Log.Warn("tunnel to gateway closed, reopening", "slot", slot)
+			d.Log.Warn("tunnel closed, reopening", "peer", d.Peer, "slot", slot)
 		case <-ctx.Done():
 			d.up.Add(-1)
 			_ = c.Close()

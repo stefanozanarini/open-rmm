@@ -113,6 +113,7 @@ a.open { text-decoration:none; color:var(--muted); font-size:12px; }
 input, select, textarea, button { background:var(--input); color:var(--fg); border-color:var(--line); }
 button.primary, a.button { background:var(--accent); border-color:var(--accent); color:#fff; }
 .flash { background:var(--sel); border-color:var(--line); }
+.federated { background:var(--warn); border:1px solid var(--line); padding:8px 12px; font-weight:600; }
 section.warn { background:var(--warn); border-color:var(--line); }
 .card.bad { background:var(--card); }
 .card.warn { background:var(--warn); }

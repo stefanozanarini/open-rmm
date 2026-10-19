@@ -156,7 +156,10 @@ type consoleEnv struct {
 var admin = opIdentity{OID: ids.NewUUID(), Name: "Mario Rossi", Username: "mario@cliente.it",
 	Roles: []string{authn.RoleAdmin}, AMR: []string{"pwd", "mfa"}}
 
-func startConsole(t *testing.T) *consoleEnv {
+// consoleOpt adjusts a console before it starts (federation tests).
+type consoleOpt func(cfg *web.Config, sg *signer.Server, tenant string)
+
+func startConsole(t *testing.T, opts ...consoleOpt) *consoleEnv {
 	t.Helper()
 	ctx := context.Background()
 	tid, clientID := ids.NewUUID(), "console-app"
@@ -204,12 +207,22 @@ func startConsole(t *testing.T) *consoleEnv {
 	wc := wingetcat.New()
 	wc.HTTP, wc.APIBase, wc.RawBase = wg.Client(), wg.URL, wg.URL
 	pkgDir := pkgfiles.Dir{Path: t.TempDir()}
-	ws, err := web.New(web.Config{Store: st, Verifier: v, Signer: sc, PublicURL: console.URL, ClientSecret: "secret",
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPClient: http.DefaultClient, Packages: pkgDir, Winget: wc})
+	wcfg := web.Config{Store: st, Verifier: v, Signer: sc, PublicURL: console.URL, ClientSecret: "secret",
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPClient: http.DefaultClient, Packages: pkgDir, Winget: wc}
+	for _, o := range opts {
+		o(&wcfg, sg, tenant)
+	}
+	ws, err := web.New(wcfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	console.Config.Handler = ws.Handler()
+	if wcfg.Uplink != nil {
+		wcfg.Uplink.Handler = ws.LinkHandler()
+		uctx, cancel := context.WithCancel(ctx)
+		t.Cleanup(cancel)
+		go wcfg.Uplink.Run(uctx)
+	}
 
 	// A pending Linux agent and a published module that supports it.
 	agentID := ids.NewUUID()

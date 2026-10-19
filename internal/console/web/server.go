@@ -23,6 +23,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
+	"github.com/stefanozanarini/open-rmm/internal/federation"
 	"github.com/stefanozanarini/open-rmm/internal/inventory"
 )
 
@@ -46,6 +47,15 @@ type Config struct {
 	Packages pkgfiles.Dir
 	// Winget reads the winget catalog; nil means the public repository.
 	Winget *wingetcat.Client
+	// Federation, central side: Hub accepts the links of customer consoles;
+	// LinkAddr is the address they dial (put in link tokens).
+	Hub      *federation.Hub
+	LinkAddr string
+	// Federation, customer side: FedVerifier verifies the operators of the
+	// trusted central console (nil: links carry nothing); Uplink runs the
+	// link.
+	FedVerifier *authn.Verifier
+	Uplink      *federation.Uplink
 }
 
 // Server serves the console.
@@ -63,6 +73,11 @@ type Server struct {
 	packages pkgfiles.Dir
 	winget   *wingetcat.Client
 	ad       adCache
+
+	hub         *federation.Hub
+	linkAddr    string
+	fedVerifier *authn.Verifier
+	uplink      *federation.Uplink
 }
 
 // New returns a Server.
@@ -81,6 +96,7 @@ func New(cfg Config) (*Server, error) {
 	s := &Server{
 		store: cfg.Store, verifier: cfg.Verifier, signer: cfg.Signer, log: cfg.Logger,
 		packages: cfg.Packages, winget: cfg.Winget,
+		hub: cfg.Hub, linkAddr: cfg.LinkAddr, fedVerifier: cfg.FedVerifier, uplink: cfg.Uplink,
 		origin: u.Scheme + "://" + u.Host, idpHost: authURL.Scheme + "://" + authURL.Host,
 		now: cfg.Now, client: cfg.HTTPClient,
 		oauth: oauth2.Config{
@@ -277,7 +293,15 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /policies/{id}", s.role(authn.RoleAdmin, s.handlePolicyForm))
 	mux.Handle("POST /policies", s.role(authn.RoleAdmin, s.handleSavePolicy))
 	mux.Handle("POST /policies/{id}/delete", s.role(authn.RoleAdmin, s.handleDeletePolicy))
-	return s.secure(mux)
+	mux.Handle("GET /federation", s.auth(s.handleFederation))
+	mux.Handle("POST /federation/links", s.role(authn.RoleAdmin, s.handleCreateLink))
+	mux.Handle("POST /federation/links/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevokeLink))
+	mux.Handle("POST /federation/open", s.auth(s.handleOpenLink))
+	mux.Handle("POST /federation/close", s.auth(s.handleCloseLink))
+	mux.Handle("GET /federation/stepup", s.role(authn.RoleOperator, s.handleFedStepUp))
+	mux.Handle("POST /federation/join", s.role(authn.RoleAdmin, s.handleJoin))
+	mux.Handle("POST /federation/uplink/{action}", s.role(authn.RoleAdmin, s.handleUplinkState))
+	return s.secure(s.federate(mux))
 }
 
 // secure sets the security headers on every response.
@@ -389,6 +413,10 @@ type page struct {
 	Theme      string
 	Lang       string
 	Path       string
+	// Federation: Federated when a central console's operator works on
+	// this console; ShowLinks shows the linked consoles page in the menu.
+	Federated bool
+	ShowLinks bool
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title string, data any) {
@@ -400,6 +428,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title stri
 		p.Operator, p.CSRF, p.Flash, p.Theme = op, sess.data.CSRF, sess.data.Flash, sess.data.Theme
 		p.Path = r.URL.RequestURI()
 		p.IsAdmin, p.CanRun = hasRole(op, authn.RoleAdmin), hasRole(op, authn.RoleOperator)
+		p.Federated = op.Federated
+		p.ShowLinks = !op.Federated && (s.hub != nil || (s.fedVerifier != nil && p.IsAdmin))
 		for _, id := range op.Tenants {
 			if t, err := s.store.GetTenant(r.Context(), id); err == nil {
 				p.Tenants = append(p.Tenants, t)
@@ -440,8 +470,9 @@ func (s *Server) flash(w http.ResponseWriter, r *http.Request, msg, to string) {
 // flashTo is flash with an explicit session, for handlers outside the auth
 // middleware (the identity provider callback).
 func (s *Server) flashTo(w http.ResponseWriter, r *http.Request, sess *session, msg, to string) {
+	to = localReturn(to, "/agents")
 	if sess == nil {
-		http.Redirect(w, r, to, http.StatusSeeOther)
+		http.Redirect(w, r, to, http.StatusSeeOther) // #nosec G710 -- local path (localReturn)
 		return
 	}
 	sess.data.Flash = msg
@@ -449,7 +480,7 @@ func (s *Server) flashTo(w http.ResponseWriter, r *http.Request, sess *session, 
 		s.fail(w, r, err)
 		return
 	}
-	http.Redirect(w, r, to, http.StatusSeeOther)
+	http.Redirect(w, r, to, http.StatusSeeOther) // #nosec G710 -- local path (localReturn)
 }
 
 // logonTypes names the Windows logon types.

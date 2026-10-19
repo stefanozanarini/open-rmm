@@ -19,3 +19,4 @@ deploy/keys/
 *.ormm
 deploy/secrets/
 deploy/console-tls/
+/.claude/worktrees/

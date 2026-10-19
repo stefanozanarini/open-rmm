@@ -121,6 +121,15 @@ services:
       OPENRMM_MFA_CLAIM: ${OPENRMM_MFA_CLAIM:-amr}
       OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:?set OPENRMM_TENANT_MAP in .env}
       OPENRMM_SIGNER_SOCKET: /run/openrmm-signer/signer.sock
+      # Central console: link listener for customer consoles (see .env.example).
+      OPENRMM_FEDERATION_LISTEN: ${OPENRMM_FEDERATION_LISTEN:-}
+      OPENRMM_FEDERATION_PUBLIC_ADDR: ${OPENRMM_FEDERATION_PUBLIC_ADDR:-}
+      # Customer console: the central console's directory, if linked.
+      OPENRMM_FEDERATION_ISSUER: ${OPENRMM_FEDERATION_ISSUER:-}
+      OPENRMM_FEDERATION_CLIENT_ID: ${OPENRMM_FEDERATION_CLIENT_ID:-}
+      OPENRMM_FEDERATION_MFA_CLAIM: ${OPENRMM_FEDERATION_MFA_CLAIM:-amr}
+      OPENRMM_FEDERATION_TENANT_MAP: ${OPENRMM_FEDERATION_TENANT_MAP:-}
+      OPENRMM_FEDERATION_MAX_ROLE: ${OPENRMM_FEDERATION_MAX_ROLE:-}
     volumes:
       - ./secrets/server:/run/openrmm/secrets:ro
       - ./console-tls:/run/openrmm/tls:ro
@@ -128,6 +137,7 @@ services:
       - packages:/var/lib/openrmm/packages
     ports:
       - "${OPENRMM_CONSOLE_BIND:-127.0.0.1:8080}:8080"
+      - "${OPENRMM_FEDERATION_BIND:-127.0.0.1:8445}:8445"
     networks: [internal, public]
     read_only: true
     cap_drop: [ALL]
@@ -155,6 +165,12 @@ services:
       OPENRMM_OIDC_CLIENT_ID: ${OPENRMM_OIDC_CLIENT_ID:?set OPENRMM_OIDC_CLIENT_ID in .env}
       OPENRMM_MFA_CLAIM: ${OPENRMM_MFA_CLAIM:-amr}
       OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:?set OPENRMM_TENANT_MAP in .env}
+      # Commands approved by a central console's operators (federation).
+      OPENRMM_FEDERATION_ISSUER: ${OPENRMM_FEDERATION_ISSUER:-}
+      OPENRMM_FEDERATION_CLIENT_ID: ${OPENRMM_FEDERATION_CLIENT_ID:-}
+      OPENRMM_FEDERATION_MFA_CLAIM: ${OPENRMM_FEDERATION_MFA_CLAIM:-amr}
+      OPENRMM_FEDERATION_TENANT_MAP: ${OPENRMM_FEDERATION_TENANT_MAP:-}
+      OPENRMM_FEDERATION_MAX_ROLE: ${OPENRMM_FEDERATION_MAX_ROLE:-}
     volumes:
       - ./secrets/signer:/run/openrmm/secrets:ro
       - signer-socket:/run/openrmm-signer

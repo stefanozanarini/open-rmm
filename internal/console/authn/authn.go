@@ -8,6 +8,8 @@ package authn
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -43,6 +45,9 @@ type Config struct {
 	// MaxAuthAge bounds how old an authentication may be when it approves a
 	// job (step-up).
 	MaxAuthAge time.Duration
+	// MaxRole, when set, caps the roles taken from tokens: a customer
+	// console may delegate less than Admin to a central console's operators.
+	MaxRole string
 }
 
 // FromEnv reads the shared configuration:
@@ -69,6 +74,78 @@ func FromEnv() (Config, error) {
 	return c, c.Validate()
 }
 
+// FederationFromEnv reads the identity provider of a central console whose
+// operators may manage this console through a federation link. ok is false
+// when it is not configured. The tenant map names the local tenant(s) the
+// central directory may manage; MaxRole defaults to Admin.
+//
+//	OPENRMM_FEDERATION_ISSUER, OPENRMM_FEDERATION_CLIENT_ID
+//	OPENRMM_FEDERATION_MFA_CLAIM    as OPENRMM_MFA_CLAIM, default "amr"
+//	OPENRMM_FEDERATION_TENANT_MAP   <central entra tid>=<local tenant>
+//	OPENRMM_FEDERATION_MAX_ROLE     OpenRMM.Admin | OpenRMM.Operator | OpenRMM.Reader
+func FederationFromEnv() (c Config, ok bool, err error) {
+	c = Config{
+		Issuer:     os.Getenv("OPENRMM_FEDERATION_ISSUER"),
+		ClientID:   os.Getenv("OPENRMM_FEDERATION_CLIENT_ID"),
+		MFAClaim:   os.Getenv("OPENRMM_FEDERATION_MFA_CLAIM"),
+		MaxRole:    os.Getenv("OPENRMM_FEDERATION_MAX_ROLE"),
+		MaxAuthAge: 10 * time.Minute,
+	}
+	if c.Issuer == "" {
+		return c, false, nil
+	}
+	if c.MFAClaim == "" {
+		c.MFAClaim = "amr"
+	}
+	if c.MaxRole == "" {
+		c.MaxRole = RoleAdmin
+	}
+	if c.TenantMap, err = ParseTenantMap(os.Getenv("OPENRMM_FEDERATION_TENANT_MAP")); err != nil {
+		return c, false, fmt.Errorf("federation: %w", err)
+	}
+	if err := c.Validate(); err != nil {
+		return c, false, fmt.Errorf("federation: %w", err)
+	}
+	return c, true, nil
+}
+
+// roleRank orders the roles.
+var roleRank = map[string]int{RoleReader: 1, RoleOperator: 2, RoleAdmin: 3}
+
+// capRoles lowers roles above max to max.
+func capRoles(roles []string, max string) []string {
+	var out []string
+	for _, r := range roles {
+		if roleRank[r] > roleRank[max] {
+			r = max
+		}
+		if !slices.Contains(out, r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// IssuerOf returns the unverified iss claim of a JWT, to pick the verifier
+// that will verify it.
+func IssuerOf(rawIDToken string) string {
+	parts := strings.Split(rawIDToken, ".")
+	if len(parts) != 3 {
+		return ""
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var c struct {
+		Issuer string `json:"iss"`
+	}
+	if json.Unmarshal(payload, &c) != nil {
+		return ""
+	}
+	return c.Issuer
+}
+
 // ParseTenantMap parses "tid=t1|t2,tid2=t3".
 func ParseTenantMap(s string) (map[string][]string, error) {
 	out := map[string][]string{}
@@ -79,11 +156,11 @@ func ParseTenantMap(s string) (map[string][]string, error) {
 		}
 		tid, tenants, ok := strings.Cut(entry, "=")
 		if !ok || !ids.IsUUID(tid) {
-			return nil, fmt.Errorf("OPENRMM_TENANT_MAP: invalid entry %q", entry)
+			return nil, fmt.Errorf("tenant map: invalid entry %q", entry)
 		}
 		for _, t := range strings.Split(tenants, "|") {
 			if !ids.IsUUID(t) {
-				return nil, fmt.Errorf("OPENRMM_TENANT_MAP: invalid tenant %q", t)
+				return nil, fmt.Errorf("tenant map: invalid tenant %q", t)
 			}
 			out[tid] = append(out[tid], t)
 		}
@@ -103,6 +180,9 @@ func (c Config) Validate() error {
 	}
 	if len(c.TenantMap) == 0 {
 		return errors.New("OPENRMM_TENANT_MAP is required")
+	}
+	if _, ok := roleRank[c.MaxRole]; c.MaxRole != "" && !ok {
+		return fmt.Errorf("invalid maximum role %q", c.MaxRole)
 	}
 	return nil
 }
@@ -188,6 +268,9 @@ func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*Claims, erro
 	if _, ok := v.cfg.TenantMap[c.TenantID]; !ok {
 		return nil, ErrNoTenant
 	}
+	if v.cfg.MaxRole != "" {
+		c.Roles = capRoles(c.Roles, v.cfg.MaxRole)
+	}
 	if !c.HasRole(RoleAdmin, RoleOperator, RoleReader) {
 		return nil, ErrNoRole
 	}
@@ -236,3 +319,27 @@ func (v *Verifier) MayManage(c *Claims, tenantID string) bool {
 
 // Config returns the configuration.
 func (v *Verifier) Config() Config { return v.cfg }
+
+// Set picks, among several verifiers, the one for a token's issuer: the
+// console's own directory and, with federation, the central console's.
+type Set []*Verifier
+
+// For returns the verifier of the token's issuer, or nil.
+func (s Set) For(rawIDToken string) *Verifier {
+	iss := IssuerOf(rawIDToken)
+	for _, v := range s {
+		if v != nil && iss != "" && v.cfg.Issuer == iss {
+			return v
+		}
+	}
+	return nil
+}
+
+// CapRoles applies the configured maximum role to roles asserted by a
+// central console (the same cap Verify applies to tokens).
+func (v *Verifier) CapRoles(roles []string) []string {
+	if v.cfg.MaxRole == "" {
+		return roles
+	}
+	return capRoles(roles, v.cfg.MaxRole)
+}

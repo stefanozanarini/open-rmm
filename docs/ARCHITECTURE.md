@@ -432,17 +432,16 @@ Modules never reboot by themselves; they report a pending reboot and the `reboot
 
 `tenant_id` in every table, API and job; isolation enforced by PostgreSQL row-level security; the console refuses to run as a superuser or `BYPASSRLS` role.
 
-### 9.2 Federation 📋
+### 9.2 Federation ✅
 
-A console can manage **local tenants** (its own agents) and **federated tenants** (customer consoles linked to it). Requirement R19: **every operation available on a customer console is available from the central console** — agents, approvals, commands and scripts, policies, software distribution, updates and release targets, tokens, inventory, dashboards and audit.
+A console can manage **local tenants** (its own agents) and **linked customer consoles**. Requirement R19: **every operation available on a customer console is available from the central console**. Guide: [FEDERATION.md](FEDERATION.md).
 
-- **Same software, two roles.** The central console is an open-rmm console; federation is a link, not a different product.
-- **The customer console opens the link** (outbound mTLS to the central console), enrolled with a federation token. No inbound port at the customer.
-- **One API, two backends.** The web console works against a tenant backend interface: local tenants read the local database, federated tenants call the customer console through the link. Pages and features are the same.
-- **Commands stay signed where the agents are.** Agents trust only their own console's job key. A command from the central console is signed by the **customer's signer**, which accepts id_tokens of the central operators' directory (configured trust: issuer, client id, roles) with the same rules — fresh, MFA, bound to the exact command, single use. The central console never holds customer signing keys.
-- **Local control and audit.** Every federated action is in the customer's audit log with the central operator's identity; the customer can suspend the link at any time (kill switch). Read-only or partial delegation remain possible settings, but full delegation is the default.
-- **Data:** summaries synchronized for central dashboards; details fetched live through the link. The customer console stays fully autonomous if the link is down.
-- Two levels at most (central → customer consoles). Versioned federation API.
+- **Same software, two roles.** The central console is an open-rmm console; federation is a link, not a different product. Two levels at most.
+- **The customer console opens the link**: TLS 1.3 to the central console's link listener (`OPENRMM_FEDERATION_LISTEN`), outbound only, a few tunnels kept open. Both sides are self-signed and **pinned**: the central console's fingerprint is in the one-time link token (24 hours), the customer console's certificate is registered when it presents the token once.
+- **One console, served over the link.** On the tunnels the roles are reversed: the central console is the HTTP client, the customer console serves its own web console. When an operator opens a linked console, the central console forwards each request with the operator's identity (object id, directory, roles, a per-session key); the customer console checks the directory against its trust settings, **caps the roles** to its maximum, keeps a separate session (and CSRF token) per central session, and renders its own pages with its own checks. Only redirects inside the console and a few response headers are relayed; the security headers are the central console's.
+- **Commands stay signed where the agents are.** A step-up started on a linked console comes back to the central console, which signs the operator in again with MFA against its own directory, with the customer's nonce (the hash of the exact request), and hands the id_token over the link. The customer console verifies it and passes it to its signer, which accepts it only if the customer configured the central directory on the signer too (`OPENRMM_FEDERATION_*`, deployment configuration, not the web console). The central console never holds customer signing keys and cannot create commands or policies by itself.
+- **Local control and audit.** Every action is in the customer's audit log as "operator … via central console" (sessions included). The customer chooses the highest role (Admin, Operator or Reader), and can suspend (tunnels closed at once), resume or remove the link; these settings are not reachable over the link. The central console can revoke a link.
+- **Data:** only a summary is synchronized every 5 minutes for the central dashboard (agents, online, pending, open and critical alerts, missing security updates, pending reboots); pages are fetched live. The customer console stays fully autonomous when the link is down.
 
 ---
 
@@ -536,7 +535,7 @@ The console matches computers and agents by host name and shows:
 | 5 | `winupdate`, `winget`, update dashboard, `reboot`, maintenance windows | ✅ (console-side catalog and user helper 📋) |
 | 6 | Package library, winget catalog on the console, `software` (install/uninstall), multi-agent approval | ✅ |
 | 7 | Console layout (site and OU tree, tabs, bottom panel, bulk actions, notes, themes); setup checklist, Authenticode signing, optional Active Directory | ✅ |
-| 8 | Federation with full central operations | 🔜 |
+| 8 | Federation with full central operations | ✅ |
 | Later | Firmware, further plugins (§8.10), Linux agent packages, interactive shell | 📋 |
 
 ---

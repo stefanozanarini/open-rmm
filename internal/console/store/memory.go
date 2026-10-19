@@ -35,6 +35,7 @@ type Memory struct {
 	sites       map[string]Site
 	notes       []Note
 	adDomains   map[string]ADDomain
+	federation  *memFederation
 }
 
 func NewMemory() *Memory {

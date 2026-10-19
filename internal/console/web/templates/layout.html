@@ -25,6 +25,7 @@
     <a href="/audit">{{t "Attività"}}</a>
     <a href="/updates">{{t "Versioni agente"}}</a>
     {{if .IsAdmin}}<a href="/settings">{{t "Impostazioni"}}</a> <a href="/setup">{{t "Configurazione"}}</a>{{end}}
+    {{if or .ShowLinks .Federated}}<a href="/federation">{{t "Console collegate"}}</a>{{end}}
   </nav>
   <div class="who">
     {{if gt (len .Tenants) 1}}
@@ -53,6 +54,7 @@
   {{end}}
 </header>
 <main>
+{{if .Federated}}<p class="federated">{{tf "Stai operando sulla console di %s tramite la console centrale. Ogni azione è registrata qui a tuo nome." .Tenant.Name}} <a href="/federation">{{t "Console collegate"}}</a></p>{{end}}
 {{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
 <h1>{{.Title}}</h1>
 {{template "content" .}}

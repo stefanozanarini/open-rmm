@@ -647,3 +647,84 @@ func testADDomains(t *testing.T, s Store) {
 		t.Fatalf("domains = %+v, %v", got, err)
 	}
 }
+
+func TestFederation(t *testing.T) { testFederation(t, NewMemory()) }
+
+func testFederation(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "msp"}
+	other := Tenant{ID: ids.NewUUID(), Name: "other"}
+	s.CreateTenant(ctx, tenant)
+	s.CreateTenant(ctx, other)
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	exp := now.Add(time.Hour)
+	l := FederationLink{ID: ids.NewUUID(), TenantID: tenant.ID, Name: "Cliente A", TokenExpiresAt: &exp, CreatedBy: "op"}
+	tok := HashToken("secret")
+	if err := s.CreateLink(ctx, l, tok); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateLink(ctx, FederationLink{ID: ids.NewUUID(), TenantID: tenant.ID, Name: "Cliente A", TokenExpiresAt: &exp, CreatedBy: "op"}, HashToken("x")); err != ErrLinkExists {
+		t.Fatalf("duplicate name: %v", err)
+	}
+	if _, err := s.EnrollLink(ctx, tok, "fp1", exp.Add(time.Second)); err != ErrLinkToken {
+		t.Fatalf("expired token: %v", err)
+	}
+	got, err := s.EnrollLink(ctx, tok, "fp1", now)
+	if err != nil || got.Status != LinkActive || got.CertFingerprint != "fp1" || got.EnrolledAt == nil {
+		t.Fatalf("enroll = %+v, %v", got, err)
+	}
+	if _, err := s.EnrollLink(ctx, tok, "fp2", now); err != ErrLinkToken {
+		t.Fatalf("token reused: %v", err)
+	}
+	if byFP, err := s.LinkByFingerprint(ctx, "fp1"); err != nil || byFP.ID != l.ID {
+		t.Fatalf("by fingerprint = %+v, %v", byFP, err)
+	}
+	if _, err := s.GetLink(ctx, other.ID, l.ID); err != ErrNotFound {
+		t.Fatalf("link visible to another tenant: %v", err)
+	}
+	if err := s.TouchLink(ctx, l.ID, now, []byte(`{"agents": 3}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.TouchLink(ctx, l.ID, now.Add(time.Minute), nil); err != nil {
+		t.Fatal(err)
+	}
+	links, _ := s.ListLinks(ctx, tenant.ID)
+	if len(links) != 1 || string(links[0].Summary) != `{"agents": 3}` || !links[0].LastSeenAt.Equal(now.Add(time.Minute)) || !links[0].SummaryAt.Equal(now) {
+		t.Fatalf("links = %+v", links)
+	}
+	if err := s.RevokeLink(ctx, other.ID, l.ID); err != ErrNotFound {
+		t.Fatalf("revoked from another tenant: %v", err)
+	}
+	if err := s.RevokeLink(ctx, tenant.ID, l.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetLink(ctx, tenant.ID, l.ID); got.Status != LinkRevoked {
+		t.Fatalf("status = %s", got.Status)
+	}
+
+	if _, err := s.GetUplink(ctx); err != ErrNotFound {
+		t.Fatalf("uplink: %v", err)
+	}
+	u := Uplink{LinkID: ids.NewUUID(), CentralAddr: "central:8444", CentralFingerprint: "cfp", CertPEM: "c", KeyPEM: "k", CreatedBy: "op"}
+	if err := s.PutUplink(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetUplinkSuspended(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.GetUplink(ctx); err != nil || !got.Suspended || got.CentralAddr != "central:8444" {
+		t.Fatalf("uplink = %+v, %v", got, err)
+	}
+	s.DeleteUplink(ctx)
+	if err := s.SetUplinkSuspended(ctx, false); err != ErrNotFound {
+		t.Fatalf("suspend without uplink: %v", err)
+	}
+
+	c, k, err := s.PutConsoleKey(ctx, "federation", "cert1", "key1")
+	if err != nil || c != "cert1" || k != "key1" {
+		t.Fatal(c, k, err)
+	}
+	if c, _, _ := s.PutConsoleKey(ctx, "federation", "cert2", "key2"); c != "cert1" {
+		t.Fatal("console key replaced")
+	}
+}

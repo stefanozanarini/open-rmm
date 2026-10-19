@@ -10,6 +10,10 @@
 //	OPENRMM_SIGNER_STATE     used-token register (default /var/lib/openrmm-signer/used-tokens.json)
 //	OPENRMM_OIDC_ISSUER, OPENRMM_OIDC_CLIENT_ID, OPENRMM_MFA_CLAIM, OPENRMM_TENANT_MAP
 //	                         as for the console (see internal/console/authn)
+//	OPENRMM_FEDERATION_*     optional: also accept operators of a central console's
+//	                         directory (authn.FederationFromEnv). Configured here on
+//	                         purpose: commands from a central console need the
+//	                         customer to trust its directory on the signer itself.
 package main
 
 import (
@@ -78,22 +82,25 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	// Discovery may fail while the network comes up: retry for a while.
-	var v *authn.Verifier
-	for attempt := 0; ; attempt++ {
-		v, err = authn.NewVerifier(ctx, cfg)
-		if err == nil {
-			break
-		}
-		if attempt >= 30 || ctx.Err() != nil {
-			return err
-		}
-		log.Warn("identity provider not reachable yet", "err", err)
-		time.Sleep(5 * time.Second)
+	v, err := discover(ctx, log, cfg)
+	if err != nil {
+		return err
 	}
 	srv, err := signer.New(sg, v, env("OPENRMM_SIGNER_STATE", "/var/lib/openrmm-signer/used-tokens.json"), log)
 	if err != nil {
 		return err
+	}
+	fed, ok, err := authn.FederationFromEnv()
+	if err != nil {
+		return err
+	}
+	if ok {
+		fv, err := discover(ctx, log, fed)
+		if err != nil {
+			return err
+		}
+		srv.Trust(fv)
+		log.Info("central console directory trusted", "issuer", fed.Issuer, "max_role", fed.MaxRole)
 	}
 
 	sock := env("OPENRMM_SIGNER_SOCKET", "/run/openrmm-signer/signer.sock")
@@ -114,4 +121,20 @@ func run(log *slog.Logger) error {
 	log.Info("signer listening", "socket", sock, "key_id", sg.KeyID(), "issuer", cfg.Issuer, "mfa_claim", cfg.MFAClaim)
 	go func() { <-ctx.Done(); gs.GracefulStop() }()
 	return gs.Serve(lis)
+}
+
+// discover builds a verifier; discovery may fail while the network comes up,
+// so it is retried for a while.
+func discover(ctx context.Context, log *slog.Logger, cfg authn.Config) (*authn.Verifier, error) {
+	for attempt := 0; ; attempt++ {
+		v, err := authn.NewVerifier(ctx, cfg)
+		if err == nil {
+			return v, nil
+		}
+		if attempt >= 30 || ctx.Err() != nil {
+			return nil, err
+		}
+		log.Warn("identity provider not reachable yet", "issuer", cfg.Issuer, "err", err)
+		time.Sleep(5 * time.Second)
+	}
 }

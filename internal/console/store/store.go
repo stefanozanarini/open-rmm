@@ -116,6 +116,7 @@ type Store interface {
 	CatalogStore
 	SiteStore
 	ADStore
+	FederationStore
 }
 
 // HashToken returns the value stored in place of an enrollment token.

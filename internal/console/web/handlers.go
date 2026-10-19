@@ -35,7 +35,7 @@ func (s *Server) handleSelectTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, s.T(r, "tenant non autorizzato"), http.StatusForbidden)
 		return
 	}
-	sess.data.Tenant = t
+	sess.data.Tenant, sess.data.Link = t, ""
 	if err := s.save(r.Context(), w, sess); err != nil {
 		s.fail(w, r, err)
 		return

@@ -65,8 +65,7 @@ func (s *Server) startStepUp(w http.ResponseWriter, r *http.Request, sess *sessi
 		s.fail(w, r, err)
 		return
 	}
-	opts := append(s.authOptions(p, true), oauth2.SetAuthURLParam("login_hint", sess.data.Operator.Username))
-	http.Redirect(w, r, s.oauth.AuthCodeURL(p.State, opts...), http.StatusSeeOther)
+	s.redirectStepUp(w, r, sess, p)
 }
 
 func (s *Server) exchange(ctx context.Context, code, verifier string) (string, error) {
@@ -87,6 +86,10 @@ func (s *Server) exchange(ctx context.Context, code, verifier string) (string, e
 func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	sess := s.loadSession(r)
 	lang := langOf(r, sess)
+	if sess != nil && sess.data.FedStepUp != nil && r.URL.Query().Get("state") == sess.data.FedStepUp.State {
+		s.completeFedStepUp(w, r, sess)
+		return
+	}
 	if sess == nil || sess.data.Pending == nil {
 		http.Error(w, tr(lang, "accesso non avviato o scaduto: riprova"), http.StatusBadRequest)
 		return
@@ -233,7 +236,11 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) audit(ctx context.Context, tenantID string, op *Operator, action, target string, details map[string]any) {
-	if _, err := s.store.AppendAudit(ctx, audit.Event{TenantID: tenantID, Actor: "operator:" + op.Username + " (" + op.ObjectID + ")",
+	actor := "operator:" + op.Username + " (" + op.ObjectID + ")"
+	if op.Federated {
+		actor += " via central console"
+	}
+	if _, err := s.store.AppendAudit(ctx, audit.Event{TenantID: tenantID, Actor: actor,
 		Action: action, Target: target, OccurredAt: s.now(), Details: details}); err != nil {
 		s.log.Error("audit append failed", "action", action, "err", err)
 	}
