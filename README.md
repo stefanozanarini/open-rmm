@@ -1,49 +1,52 @@
 # open-rmm
 
-Software RMM (Remote Monitoring and Management) open source, progettato con la sicurezza come requisito primario.
+Open-source Remote Monitoring and Management, designed with security as a primary requirement.
 
-- **Agente** per Windows (client e server) e Linux, installabile via GPO, modulare: le nuove funzionalità arrivano come moduli firmati, senza aggiornare l'agente.
-- **Console** centralizzata, ospitabile presso il cliente, multi-tenant e federabile.
-- **Comunicazioni solo in uscita** dagli endpoint, con mTLS e CA privata in pinning.
+- **Agent** for Windows (clients and servers) and Linux, deployable through Group Policy, modular: new features arrive as signed plugins, without updating the agent.
+- **Console** that can be hosted at the customer, multi-tenant, and federable under a central console.
+- **Outbound-only connections** from the endpoints, mTLS with a pinned private CA, every command approved with a fresh MFA sign-in.
 
-Il progetto è nelle prime fasi. L'architettura completa è in [docs/ARCHITETTURA.md](docs/ARCHITETTURA.md).
+The project is at an early stage. The full design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Stato
+## Status
 
-Fase 0 (fondamenta), in corso:
+Phase 0 (foundations):
 
-- [x] Protocollo agente ↔ console (gRPC, [proto/openrmm/v1/agent.proto](proto/openrmm/v1/agent.proto))
-- [x] PKI: root CA offline, CA degli agenti, certificati per agente con identità tenant/agente
-- [x] Enrollment con token monouso (salvato solo come hash, limitato per IP)
-- [x] Gateway mTLS: senza certificato valido si raggiunge solo l'enrollment
-- [x] Agente: chiave generata in locale, connessione persistente, heartbeat, riconnessione con backoff
-- [x] Agente come servizio Windows con ripartenza automatica; unit systemd per Linux
-- [x] Configurazione da file, registro (MSI) e GPO (`HKLM\SOFTWARE\Policies\open-rmm`)
-- [x] Verifica dei job firmati (Ed25519, scadenza, destinatario, anti-replay persistente)
-- [x] PostgreSQL con isolamento per tenant (row-level security) e audit log a catena di hash non modificabile
-- [x] Approvazione dei nuovi agenti, con approvazione automatica attivabile per singolo token
-- [x] Rinnovo automatico del certificato dell'agente, con rotazione della chiave
-- [x] Server in container Linux (Docker Compose), gateway non privilegiato e in sola lettura
-- [x] Esecuzione dei moduli firmati, con SDK PowerShell e sh; moduli `sysinfo` e `script`
-- [x] Coda dei job con consegna immediata e risultati che sopravvivono alle disconnessioni
-- [x] Watchdog, task schedulato di controllo, aggiornamento automatico A/B con rollback, rollout per anelli
-- [x] Servizio di firma dei job (`openrmm-signer`): firma solo comandi approvati con una nuova autenticazione MFA, verificata in modo indipendente
-- [x] Console web con login Entra ID e MFA: agenti, approvazioni, comandi e script, job, moduli, token, registro attività
-- [x] Pacchetto MSI per GPO (costruito su Linux con wixl) e modelli ADMX in italiano e inglese
+- [x] Agent ↔ console protocol (gRPC, [proto/openrmm/v1](proto/openrmm/v1))
+- [x] PKI: offline root CA, agents CA, per-agent certificates carrying tenant and agent identity
+- [x] Enrollment with tenant-bound, expiring, use-limited tokens (stored as hashes, rate-limited per IP)
+- [x] mTLS gateway: without a valid certificate only enrollment is reachable
+- [x] Agent: locally generated key, persistent connection, heartbeat, reconnection with backoff
+- [x] Windows services with automatic restart; systemd units for Linux
+- [x] Configuration from file, registry (MSI) and Group Policy (`HKLM\SOFTWARE\Policies\open-rmm`)
+- [x] Signed jobs (Ed25519, validity window, addressee, persistent anti-replay)
+- [x] PostgreSQL with per-tenant row-level security and an immutable hash-chained audit log
+- [x] Approval of new agents, with optional automatic approval per token
+- [x] Automatic agent certificate renewal with key rotation
+- [x] Console in Linux containers (Docker Compose), unprivileged and read-only
+- [x] Signed modules with PowerShell and sh SDKs; `sysinfo` and `script` modules
+- [x] Job queue with immediate delivery and results that survive disconnections
+- [x] Watchdog, scheduled health check, A/B automatic updates with rollback, rollout rings
+- [x] Job signing service (`openrmm-signer`): signs only commands approved with a fresh MFA sign-in, verified independently
+- [x] Web console with Entra ID sign-in and MFA: agents, approvals, commands and scripts, jobs, modules, tokens, updates, audit log
+- [x] MSI for Group Policy (built on Linux with wixl) and ADMX templates (English, Italian)
+- [ ] Validation on real Windows
 
-## Installazione e sviluppo
+Next: DMZ relay / internal core split, policies with conditional plugins, inventory, security plugins (Trend Micro, logon monitoring), Windows and third-party updates with dashboards, software distribution, setup wizard, federation. See the [roadmap](docs/ARCHITECTURE.md#13-roadmap).
 
-- Installazione del server: [docs/INSTALLAZIONE.md](docs/INSTALLAZIONE.md)
-- Configurazione di Microsoft Entra ID: [docs/ENTRA.md](docs/ENTRA.md)
-- Installazione dell'agente su Windows (MSI, GPO): [docs/INSTALLAZIONE-AGENTE.md](docs/INSTALLAZIONE-AGENTE.md)
-- Scrivere e pubblicare moduli: [docs/MODULI.md](docs/MODULI.md)
-- Aggiornamento dell'agente: [docs/AGGIORNAMENTI.md](docs/AGGIORNAMENTI.md)
-- Sviluppo: [docs/SVILUPPO.md](docs/SVILUPPO.md)
+## Documentation
+
+- Server installation: [docs/INSTALL.md](docs/INSTALL.md)
+- Microsoft Entra ID setup: [docs/ENTRA.md](docs/ENTRA.md)
+- Agent installation on Windows (MSI, Group Policy): [docs/AGENT-INSTALL.md](docs/AGENT-INSTALL.md)
+- Writing and publishing modules: [docs/MODULES.md](docs/MODULES.md)
+- Agent updates: [docs/UPDATES.md](docs/UPDATES.md)
+- Development: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
 ```bash
 make test
 ```
 
-## Licenza
+## Licence
 
-open-rmm è distribuito con licenza [GNU Affero General Public License v3.0](LICENSE). Chi modifica open-rmm e lo offre come servizio in rete deve rendere disponibile il codice sorgente delle proprie modifiche.
+open-rmm is distributed under the [GNU Affero General Public License v3.0](LICENSE). Anyone who modifies open-rmm and offers it as a network service must make the source code of their modifications available.

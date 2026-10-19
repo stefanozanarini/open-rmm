@@ -1,89 +1,89 @@
-# Configurazione di Microsoft Entra ID
+# Microsoft Entra ID setup
 
-La console usa Entra ID (Microsoft 365) per il login degli operatori e per approvare ogni singolo comando. Tutto si configura nel [centro di amministrazione Entra](https://entra.microsoft.com) del cliente, con un account Amministratore applicazioni o superiore.
+The console uses Entra ID (Microsoft 365) for operator sign-in and to approve every single command. Everything is configured in the customer's [Entra admin center](https://entra.microsoft.com), with an Application Administrator account or higher.
 
-> **Da verificare sul tenant reale.** Il flusso è stato provato con un identity provider OIDC di test e la discovery con i server Microsoft funziona, ma non è ancora stato provato un login vero su un tenant Entra. Al primo login controlla i log del server (`docker compose logs server`): se l'accesso viene rifiutato per l'MFA, il messaggio riporta i valori ricevuti di `amr` e `acrs`.
+> **To verify on the real tenant.** The flow has been tested with a test OIDC provider, and discovery against Microsoft's servers works, but a real sign-in on an Entra tenant has not been tried yet. At the first sign-in check the server logs (`docker compose logs server`): if access is refused for MFA, the message shows the `amr` and `acrs` values received.
 
-## 1. Registrazione dell'applicazione
+## 1. App registration
 
-**Identità → Applicazioni → Registrazioni app → Nuova registrazione**
+**Identity → Applications → App registrations → New registration**
 
-| Campo | Valore |
+| Field | Value |
 |---|---|
-| Nome | `open-rmm console` |
-| Tipi di account supportati | Solo gli account in questa directory organizzativa |
-| URI di reindirizzamento | Piattaforma **Web**: `https://console.cliente.it/auth/callback` (lo stesso host di `OPENRMM_PUBLIC_URL`) |
+| Name | `open-rmm console` |
+| Supported account types | Accounts in this organizational directory only |
+| Redirect URI | **Web** platform: `https://console.example.com/auth/callback` (same host as `OPENRMM_PUBLIC_URL`) |
 
-Annota **ID applicazione (client)** e **ID directory (tenant)** dalla pagina Panoramica.
+Note the **Application (client) ID** and **Directory (tenant) ID** from the Overview page.
 
-## 2. Segreto client
+## 2. Client secret
 
-**Certificati e segreti → Nuovo segreto client**, con scadenza di 12 mesi. Copia subito il **valore** in un file e usalo con `setup-secrets.sh`, che lo installa per il container. Prima della scadenza crea un nuovo segreto e ripeti l'operazione.
+**Certificates & secrets → New client secret**, 12-month expiry. Copy the **value** into a file at once and use it with `setup-secrets.sh`, which installs it for the container. Before it expires, create a new secret and repeat.
 
-## 3. Ruoli dell'applicazione
+## 3. App roles
 
-**Ruoli app → Crea ruolo app**, tre volte (tipi di membri consentiti: *Utenti/Gruppi*):
+**App roles → Create app role**, three times (allowed member types: *Users/Groups*):
 
-| Nome visualizzato | Valore | Cosa permette |
+| Display name | Value | Allows |
 |---|---|---|
-| open-rmm Amministratore | `OpenRMM.Admin` | Tutto: approvare e revocare agenti, creare token, eseguire comandi |
-| open-rmm Operatore | `OpenRMM.Operator` | Vedere tutto ed eseguire comandi |
-| open-rmm Lettura | `OpenRMM.Reader` | Solo consultazione |
+| open-rmm Administrator | `OpenRMM.Admin` | Everything: approve and revoke agents, create tokens, run commands |
+| open-rmm Operator | `OpenRMM.Operator` | View everything and run commands |
+| open-rmm Reader | `OpenRMM.Reader` | Read only |
 
-## 4. Chi può accedere
+## 4. Who can sign in
 
-**Applicazioni aziendali → open-rmm console**:
+**Enterprise applications → open-rmm console**:
 
-- **Proprietà → Assegnazione utenti obbligatoria: Sì.** Senza questa impostazione qualunque utente della directory potrebbe tentare l'accesso (verrebbe comunque rifiutato dalla console se privo di ruolo).
-- **Utenti e gruppi → Aggiungi assegnazione**: assegna i ruoli. Meglio assegnarli a gruppi dedicati (es. `open-rmm-admin`).
+- **Properties → Assignment required: Yes.** Otherwise any user of the directory could attempt to sign in (the console would still refuse users without a role).
+- **Users and groups → Add assignment**: assign the roles, preferably to dedicated groups (e.g. `open-rmm-admin`).
 
 ## 5. MFA
 
-La console accetta il login e ogni comando solo se il token attesta l'MFA. Ci sono due modi.
+The console accepts sign-ins and commands only when the token proves MFA. Two ways:
 
-### Con Entra ID P1 (consigliato)
+### With Entra ID P1 (recommended)
 
-Entra ID P1 è incluso in Microsoft 365 Business Premium, E3 ed E5. Con P1 l'MFA viene richiesta **a ogni comando**:
+Entra ID P1 is included in Microsoft 365 Business Premium, E3 and E5. With P1, MFA is required **at every command**:
 
-1. **Protezione → Accesso condizionale → Contesto di autenticazione → Nuovo**: nome `open-rmm comando`, ID `c1`, pubblicato nelle app.
-2. **Nuovo criterio** "open-rmm: MFA per i comandi":
-   - Utenti: gli operatori (o tutti).
-   - Risorse di destinazione: **Contesto di autenticazione → `c1`**.
-   - Concedi: **Richiedi livello di autenticazione** → *MFA resistente al phishing* (FIDO2, Windows Hello for Business, passkey), oppure almeno *Autenticazione a più fattori*.
-   - Sessione: **Frequenza di accesso → Ogni volta**.
-3. **Nuovo criterio** "open-rmm: accesso alla console": risorsa l'app *open-rmm console*, concedi *Richiedi autenticazione a più fattori*.
-4. Nel file `.env`: `OPENRMM_MFA_CLAIM=acrs:c1`.
+1. **Protection → Conditional Access → Authentication context → New**: name `open-rmm command`, ID `c1`, published to apps.
+2. **New policy** "open-rmm: MFA for commands":
+   - Users: the operators (or everyone).
+   - Target resources: **Authentication context → `c1`**.
+   - Grant: **Require authentication strength** → *Phishing-resistant MFA* (FIDO2, Windows Hello for Business, passkeys), or at least *Multifactor authentication*.
+   - Session: **Sign-in frequency → Every time**.
+3. **New policy** "open-rmm: console access": resource the *open-rmm console* app, grant *Require multifactor authentication*.
+4. In `.env`: `OPENRMM_MFA_CLAIM=acrs:c1`.
 
-La console richiede il contesto `c1` sia al login sia per ogni comando, ed Entra lo riporta nel claim `acrs` del token solo se il criterio è stato soddisfatto.
+The console requests context `c1` both at sign-in and for every command, and Entra puts it in the `acrs` claim of the token only when the policy has been satisfied.
 
-### Senza P1
+### Without P1
 
-Con le *impostazioni predefinite per la sicurezza* di Entra l'MFA è obbligatoria, ma non si può imporre che venga richiesta di nuovo a ogni comando: Entra potrebbe considerare valida un'MFA fatta poco prima. La console chiede comunque una nuova autenticazione (`prompt=login`) per ogni comando.
+With Entra *security defaults* MFA is mandatory, but it cannot be forced again at every command: Entra may consider a recent MFA still valid. The console still requires a new sign-in (`prompt=login`) for every command.
 
-Nel file `.env`: `OPENRMM_MFA_CLAIM=amr`. La console controlla che il claim `amr` contenga `mfa`. Questa modalità va verificata al primo login: se Entra non include `amr` nel token, il login viene rifiutato e il log lo indica.
+In `.env`: `OPENRMM_MFA_CLAIM=amr`. The console checks that the `amr` claim contains `mfa`. Verify this mode at the first sign-in: if Entra does not include `amr` in the token, sign-in is refused and the log says so.
 
-## 6. Valori per il file .env
+## 6. Values for .env
 
 ```bash
-OPENRMM_OIDC_ISSUER=https://login.microsoftonline.com/<ID directory>/v2.0
-OPENRMM_OIDC_CLIENT_ID=<ID applicazione>
-OPENRMM_MFA_CLAIM=acrs:c1          # oppure amr
-OPENRMM_TENANT_MAP=<ID directory>=<ID tenant open-rmm>
+OPENRMM_OIDC_ISSUER=https://login.microsoftonline.com/<Directory ID>/v2.0
+OPENRMM_OIDC_CLIENT_ID=<Application ID>
+OPENRMM_MFA_CLAIM=acrs:c1          # or amr
+OPENRMM_TENANT_MAP=<Directory ID>=<open-rmm tenant ID>
 ```
 
-L'ID del tenant open-rmm è quello restituito da `openrmm-admin tenant create`. Con più tenant open-rmm gestiti dagli stessi operatori: `<ID directory>=<tenant1>|<tenant2>`.
+The open-rmm tenant ID is the one returned by `openrmm-admin tenant create`. With several open-rmm tenants managed by the same operators: `<Directory ID>=<tenant1>|<tenant2>`.
 
-## Cosa verifica il servizio di firma
+## What the signing service checks
 
-Per ogni comando `openrmm-signer` controlla da solo, senza fidarsi della console:
+For every command, `openrmm-signer` checks on its own, without trusting the console:
 
-- la firma del token, con le chiavi pubbliche scaricate da Microsoft;
-- emittente, destinatario (l'ID applicazione) e scadenza;
-- l'MFA, secondo `OPENRMM_MFA_CLAIM`;
-- che l'autenticazione abbia al massimo 10 minuti;
-- il ruolo `OpenRMM.Operator` o `OpenRMM.Admin`;
-- che la directory dell'operatore possa gestire quel tenant;
-- che il `nonce` del token sia l'impronta esatta del comando: agente, modulo, versione, azione, parametri, validità;
-- che quel token non sia già stato usato.
+- the token signature, with the public keys downloaded from Microsoft;
+- issuer, audience (the application ID) and expiry;
+- MFA, according to `OPENRMM_MFA_CLAIM`;
+- that the authentication is at most 10 minutes old;
+- the `OpenRMM.Operator` or `OpenRMM.Admin` role;
+- that the operator's directory may manage that tenant;
+- that the token `nonce` is the exact fingerprint of the command: agent, module, version, action, parameters, validity;
+- that the token has not been used before.
 
-Ogni comando firmato viene registrato anche nel log del signer, indipendente da quello della console.
+Every signed command is also recorded in the signer's own log, independent from the console's.
