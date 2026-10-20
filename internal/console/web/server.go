@@ -63,6 +63,10 @@ type Config struct {
 	// AgentInstall (nil: not available).
 	Builder      openrmmv1.BuilderServiceClient
 	AgentInstall AgentInstall
+	// AgentBundle and ModuleBundle: the agent and the modules shipped with
+	// the console.
+	AgentBundle  AgentBundle
+	ModuleBundle ModuleBundle
 	// ConsoleAdminDirs are the Entra directories (tid) whose Admins manage
 	// console-wide settings; empty: the only directory of the tenant map.
 	ConsoleAdminDirs []string
@@ -91,6 +95,8 @@ type Server struct {
 	shell        openrmmv1.ShellBrokerServiceClient
 	builder      openrmmv1.BuilderServiceClient
 	agentInstall AgentInstall
+	bundle       AgentBundle
+	modules      ModuleBundle
 	// consoleAdminDirs: see Config.ConsoleAdminDirs.
 	consoleAdminDirs []string
 }
@@ -112,7 +118,7 @@ func New(cfg Config) (*Server, error) {
 		store: cfg.Store, verifier: cfg.Verifier, signer: cfg.Signer, log: cfg.Logger,
 		packages: cfg.Packages, winget: cfg.Winget,
 		hub: cfg.Hub, linkAddr: cfg.LinkAddr, fedVerifier: cfg.FedVerifier, uplink: cfg.Uplink, shell: cfg.Shell,
-		builder: cfg.Builder, agentInstall: cfg.AgentInstall, consoleAdminDirs: cfg.ConsoleAdminDirs,
+		builder: cfg.Builder, agentInstall: cfg.AgentInstall, bundle: cfg.AgentBundle, modules: cfg.ModuleBundle, consoleAdminDirs: cfg.ConsoleAdminDirs,
 		origin: u.Scheme + "://" + u.Host, idpHost: authURL.Scheme + "://" + authURL.Host,
 		now: cfg.Now, client: cfg.HTTPClient,
 		oauth: oauth2.Config{
@@ -328,6 +334,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agent-installer/signing/keys", s.console(s.handleCreateReleaseKeys))
 	mux.Handle("POST /modules/publish", s.console(s.startPublish(modulesKind)))
 	mux.Handle("POST "+publishModulePath, s.console(s.handlePublishModule))
+	mux.Handle("POST /modules/publish/bundled", s.console(s.handlePublishBundledModules))
 	mux.Handle("POST /updates/publish", s.console(s.startPublish(releasesKind)))
 	mux.Handle("POST "+publishReleasePath, s.console(s.handlePublishRelease))
 	mux.Handle("GET /federation", s.auth(s.handleFederation))

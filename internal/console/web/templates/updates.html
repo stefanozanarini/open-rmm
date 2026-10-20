@@ -6,6 +6,17 @@
 {{if not .BuilderUp}}<p><span class="badge chk-failing">{{t "non raggiungibile"}}</span> {{t "Il servizio di firma non risponde: controlla il container builder."}}</p>
 {{else if not .KeysReady}}<p>{{th "Crea prima le chiavi di moduli e release nella pagina <a href=\"/agent-installer#release-keys\">Installer</a>."}}</p>
 {{else if .Approved}}
+{{with .Bundled}}
+<form method="post" action="/updates/publish/upload" enctype="multipart/form-data" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <input type="hidden" name="bundled" value="1">
+  <p>{{tf "Versione %s per windows/amd64, inclusa nella console." .}}</p>
+  <label>{{t "Passphrase delle chiavi di firma"}} <input type="password" name="passphrase" required autocomplete="current-password" autofocus></label>
+  <button class="primary">{{t "Firma e pubblica"}}</button>
+</form>
+{{end}}
+<details{{if not .Bundled}} open{{end}}>
+<summary>{{t "Carica altri eseguibili"}}</summary>
 <form method="post" action="/updates/publish/upload" enctype="multipart/form-data" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <div class="grid2">
@@ -19,7 +30,9 @@
   <p class="muted">{{tf "Firmata con la chiave %s. La versione deve essere quella compilata negli eseguibili." .KeyID}}</p>
   <button class="primary">{{t "Firma e pubblica"}}</button>
 </form>
+</details>
 {{else}}
+{{with .Bundled}}<p>{{tf "La versione %s dell'agente è inclusa nella console e non è ancora pubblicata." .}}</p>{{end}}
 <form method="post" action="/updates/publish" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <p class="muted">{{t "Ti verrà chiesto di autenticarti di nuovo con MFA, poi di caricare i file con la passphrase delle chiavi di firma."}}</p>

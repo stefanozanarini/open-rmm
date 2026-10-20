@@ -16,6 +16,8 @@
 //	OPENRMM_BUILDER_SOCKET             openrmm-builder socket, for signed agent installers
 //	                                   (default /run/openrmm-builder/builder.sock; "off" disables)
 //	OPENRMM_AGENT_SERVER               gateway address preset in installers (agent.example.com:443)
+//	OPENRMM_AGENT_BUNDLE               agent shipped with the console (default /usr/share/openrmm/agent)
+//	OPENRMM_MODULE_BUNDLE              modules shipped with the console (default /usr/share/openrmm/modules)
 //	OPENRMM_AGENT_ROOT_CA              root certificate file (default /run/openrmm/agent/root-ca.crt)
 //	OPENRMM_AGENT_JOB_KEYS, OPENRMM_MODULE_KEYS, OPENRMM_RELEASE_KEYS
 //	                                   public keys preset in installers ("ed25519:...")
@@ -181,7 +183,8 @@ func run(log *slog.Logger) error {
 		PublicURL: publicURL, ClientSecret: strings.TrimSpace(string(secret)),
 		Packages: pkgfiles.Dir{Path: env("OPENRMM_PACKAGES_DIR", "/var/lib/openrmm/packages")},
 		Hub:      fed.hub, LinkAddr: fed.linkAddr, FedVerifier: fed.verifier, Uplink: fed.uplink, Shell: shell,
-		Builder: bld, AgentInstall: agentInstall(log), ConsoleAdminDirs: consoleAdmins(),
+		Builder: bld, AgentInstall: agentInstall(log), AgentBundle: web.AgentBundle{Dir: env("OPENRMM_AGENT_BUNDLE", "/usr/share/openrmm/agent")},
+		ModuleBundle: web.ModuleBundle{Dir: env("OPENRMM_MODULE_BUNDLE", "/usr/share/openrmm/modules")}, ConsoleAdminDirs: consoleAdmins(),
 	})
 	if err != nil {
 		return err

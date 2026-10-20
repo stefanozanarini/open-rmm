@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -92,7 +94,7 @@ func TestConsolePublishWithBuilderKeys(t *testing.T) {
 		t.Fatal("publishing offered without keys")
 	}
 	_, body := get(t, c, e.console.URL+"/agent-installer")
-	if !strings.Contains(body, `action="/agent-installer/signing/keys"`) || !strings.Contains(body, "OPENRMM_MODULE_KEYS") {
+	if !strings.Contains(body, `action="/agent-installer/signing/keys"`) || !strings.Contains(body, "Crea prima le") || strings.Contains(body, "OPENRMM_MODULE_KEYS") {
 		t.Fatalf("installer page: %s", body)
 	}
 	// One passphrase for every key: the code-signing key exists first.
@@ -103,7 +105,7 @@ func TestConsolePublishWithBuilderKeys(t *testing.T) {
 		t.Fatalf("keys with another passphrase: %s", body)
 	}
 	_, body, _ = post(t, c, e.console.URL+"/agent-installer/signing/keys", url.Values{"csrf": {csrf}, "passphrase": {installerPass}})
-	if !strings.Contains(body, "Chiavi di moduli e release create") || strings.Contains(body, "OPENRMM_MODULE_KEYS") {
+	if !strings.Contains(body, "Chiavi di moduli e release create") || strings.Contains(body, "Crea prima le") {
 		t.Fatalf("create keys: %s", body)
 	}
 	st, _ := b.Status(ctx, nil)
@@ -213,5 +215,90 @@ func TestConsolePublishWithBuilderKeys(t *testing.T) {
 	}
 	if _, body := get(t, oc, e.console.URL+"/modules"); strings.Contains(body, `action="/modules/publish"`) {
 		t.Fatal("publish form shown to an operator")
+	}
+}
+
+// The agent shipped with the console: the first installer for its version
+// publishes it, with the same MFA approval and passphrase.
+func TestConsoleInstallerFromBundledAgent(t *testing.T) {
+	var b *testBuilder
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "windows-amd64"), 0o755)
+	os.WriteFile(filepath.Join(dir, "VERSION"), []byte("2.0.0\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "windows-amd64", "openrmm-agent.exe"), []byte("MZ bundled agent"), 0o644)
+	os.WriteFile(filepath.Join(dir, "windows-amd64", "openrmm-watchdog.exe"), []byte("MZ bundled watchdog"), 0o644)
+	e := startConsole(t, withBuilder(t, &b), func(cfg *web.Config, _ *signer.Server, _ string) {
+		cfg.AgentInstall.ModuleKeys, cfg.AgentInstall.ReleaseKeys = "", ""
+		cfg.AgentBundle = web.AgentBundle{Dir: dir}
+	})
+	ctx := context.Background()
+	c, csrf := e.login(t, admin)
+	if _, body := get(t, c, e.console.URL+"/agent-installer"); strings.Contains(body, "<option>2.0.0</option>") {
+		t.Fatal("bundled version offered without release keys")
+	}
+	if _, err := b.CreateCA(ctx, &openrmmv1.CreateCARequest{Subject: &openrmmv1.CertSubject{Organization: "MSP"}, Passphrase: installerPass}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.CreateReleaseKeys(ctx, &openrmmv1.CreateReleaseKeysRequest{Passphrase: installerPass}); err != nil {
+		t.Fatal(err)
+	}
+	if _, body := get(t, c, e.console.URL+"/agent-installer"); !strings.Contains(body, "<option>2.0.0</option>") {
+		t.Fatalf("bundled version not offered: %s", body)
+	}
+	if code, _, _ := post(t, c, e.console.URL+"/agent-installer/build", url.Values{"csrf": {csrf}, "version": {"2.0.0"}}); code != 200 {
+		t.Fatalf("approval: %d", code)
+	}
+	_, body, _ := post(t, c, e.console.URL+"/agent-installer/confirm", url.Values{"csrf": {csrf}, "passphrase": {installerPass}})
+	if !strings.Contains(body, "Installer 2.0.0 creato e firmato") {
+		t.Fatalf("build: %s", body)
+	}
+	b.mu.Lock()
+	agent := string(b.last.GetAgentExe())
+	b.mu.Unlock()
+	if agent != "MZ bundled agent" {
+		t.Fatalf("installer agent = %q", agent)
+	}
+	rel, err := e.store.GetRelease(ctx, "2.0.0", "windows/amd64")
+	if err != nil || rel.PublishedBy != "operator:"+admin.Username {
+		t.Fatalf("bundled release: %+v, %v", rel.PublishedBy, err)
+	}
+	// Published: no longer offered as bundled.
+	if _, body := get(t, c, e.console.URL+"/updates"); strings.Contains(body, `name="bundled"`) || strings.Contains(html.UnescapeString(body), "non è ancora pubblicata") {
+		t.Fatal("published bundle still offered")
+	}
+}
+
+// Modules shipped with the console: published with one approval and the
+// passphrase, nothing uploaded. The repository's own modules are used.
+func TestConsolePublishBundledModules(t *testing.T) {
+	var b *testBuilder
+	e := startConsole(t, withBuilder(t, &b), func(cfg *web.Config, _ *signer.Server, _ string) {
+		cfg.AgentInstall.ModuleKeys, cfg.AgentInstall.ReleaseKeys = "", ""
+		cfg.ModuleBundle = web.ModuleBundle{Dir: filepath.Join("..", "..", "modules")}
+	})
+	ctx := context.Background()
+	if _, err := b.CreateReleaseKeys(ctx, &openrmmv1.CreateReleaseKeysRequest{Passphrase: installerPass}); err != nil {
+		t.Fatal(err)
+	}
+	c, csrf := e.login(t, admin)
+	if _, body := get(t, c, e.console.URL+"/modules"); !strings.Contains(body, "moduli inclusi nella console non sono ancora pubblicati") {
+		t.Fatalf("bundled modules not offered: %s", body)
+	}
+	approvePublish(t, e, c, csrf, "/modules/publish", "module")
+	_, body, _ := post(t, c, e.console.URL+"/modules/publish/bundled", url.Values{"csrf": {csrf}, "passphrase": {installerPass},
+		"module": {"inventory@1.0.0", "winupdate@1.0.0"}})
+	if !strings.Contains(body, "Moduli firmati e pubblicati: inventory 1.0.0, winupdate 1.0.0") {
+		t.Fatalf("publish: %s", body)
+	}
+	for _, id := range []string{"inventory", "winupdate"} {
+		if _, err := e.store.GetModule(ctx, id, "1.0.0"); err != nil {
+			t.Fatalf("%s: %v", id, err)
+		}
+	}
+	if _, err := e.store.GetModule(ctx, "winget", "1.0.0"); err == nil {
+		t.Fatal("unselected module published")
+	}
+	if _, body := get(t, c, e.console.URL+"/modules"); strings.Contains(body, `value="inventory@1.0.0"`) {
+		t.Fatal("published module still offered")
 	}
 }

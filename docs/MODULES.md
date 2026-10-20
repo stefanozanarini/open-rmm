@@ -117,8 +117,10 @@ SDK functions: `Invoke-RmmModule`, `Send-RmmProgress`, `Send-RmmLog`, `Send-RmmR
 
 **From the console** (recommended). Once, a console administrator creates the module and release keys on the **Installer** page (*Module and release keys*), with the passphrase of the code-signing key: installers include the public keys from then on. Then, to publish:
 
-1. zip the module folder (the one with `manifest.json`; the SDK is added automatically);
-2. **Moduli → Pubblica un modulo**: sign in again with MFA, upload the zip, enter the passphrase.
+1. **Moduli → Pubblica un modulo**, sign in again with MFA;
+2. the modules shipped with the console (the repository's `modules/`, in the image) that are not published yet are listed, all selected: untick the ones you do not want, enter the passphrase.
+
+A module of your own is published the same way from a zip of its folder (the one with `manifest.json`; the SDK is added automatically).
 
 The console packs the module, the builder signs the manifest, and the console verifies the signature with the keys the agents trust before publishing it. Each version is published once: raise `version` in the manifest for a new one.
 

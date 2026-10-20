@@ -91,6 +91,11 @@ type installersData struct {
 	ConsoleAdmin bool
 	// Module and agent release keys: the builder's, with their key ids.
 	ModuleKey, ModuleKeyID, ReleaseKey, ReleaseKeyID string
+	// Bundled: the agent version shipped with the console, published
+	// together with its first installer.
+	Bundled string
+	// NeedKeys: the module and release keys are still to be created.
+	NeedKeys bool
 }
 
 func grpcMessage(err error) string { return status.Convert(err).Message() }
@@ -122,6 +127,21 @@ func (s *Server) handleInstallers(w http.ResponseWriter, r *http.Request) {
 		if rel.Platform == installerPlatform {
 			d.Versions = append(d.Versions, rel.Version)
 		}
+	}
+	// With the builder, missing release keys are created on this page, not
+	// configured in .env.
+	if d.BuilderUp && d.ReleaseKey == "" && (s.agentInstall.ModuleKeys == "" || s.agentInstall.ReleaseKeys == "") {
+		d.NeedKeys = true
+		var rest []string
+		for _, m := range d.Missing {
+			if m != "OPENRMM_MODULE_KEYS" && m != "OPENRMM_RELEASE_KEYS" {
+				rest = append(rest, m)
+			}
+		}
+		d.Missing = rest
+	}
+	if d.Bundled = s.unpublishedBundle(ctx, installerPlatform); d.Bundled != "" && d.ReleaseKey != "" {
+		d.Versions = append(d.Versions, d.Bundled)
 	}
 	sort.Slice(d.Versions, func(i, j int) bool { return compareVersions(d.Versions[i], d.Versions[j]) > 0 })
 	if a := sessionFrom(ctx).data.InstallerApproval; a != nil && s.now().Sub(a.At) < installerApprovalTTL {
@@ -358,7 +378,7 @@ func (s *Server) handleBuildInstaller(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, s.T(r, "La creazione degli installer non è configurata su questa console."), "/agent-installer")
 		return
 	}
-	if _, err := s.store.GetRelease(r.Context(), version, installerPlatform); err != nil {
+	if _, err := s.store.GetRelease(r.Context(), version, installerPlatform); err != nil && version != s.unpublishedBundle(r.Context(), installerPlatform) {
 		s.flash(w, r, s.T(r, "Versione non disponibile."), "/agent-installer")
 		return
 	}
@@ -408,6 +428,24 @@ func (s *Server) handleConfirmInstaller(w http.ResponseWriter, r *http.Request) 
 	extendDeadlines(w, 10*time.Minute)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
+	// The agent shipped with the console is published with its first
+	// installer, signed with the same passphrase.
+	if a.Version == s.unpublishedBundle(ctx, installerPlatform) {
+		data, err := s.bundle.Files(installerPlatform)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		msg, err := s.publishRelease(r, op, a.Version, installerPlatform, "bundled with the console", data, r.PostFormValue("passphrase"))
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if msg != "" {
+			s.flash(w, r, msg, "/agent-installer")
+			return
+		}
+	}
 	files := map[string][]byte{}
 	for _, name := range []string{release.AgentFile("windows"), release.WatchdogFile("windows")} {
 		b, err := s.store.GetReleaseFile(ctx, a.Version, installerPlatform, name)

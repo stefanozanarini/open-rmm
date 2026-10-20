@@ -2,17 +2,25 @@
 #
 # open-rmm console image: openrmm-gateway (default entrypoint),
 # openrmm-server, openrmm-signer and openrmm-admin. Static binaries on a
-# distroless base, running as non-root.
+# distroless base, running as non-root. It also carries the Windows agent
+# and watchdog of the same version and the modules of the repository, which
+# the console signs (with the builder's keys) and publishes.
 
 FROM golang:1.26-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 COPY . .
-ARG VERSION=0.0.0-dev
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+# Default: the VERSION file (x.y.z). Raise it for every agent release.
+ARG VERSION=
+RUN v="${VERSION:-$(cat VERSION)}" \
+ && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$v" \
       -o /out/ ./console/cmd/openrmm-gateway ./console/cmd/openrmm-core ./console/cmd/openrmm-server \
-               ./console/cmd/openrmm-signer ./console/cmd/openrmm-admin ./console/cmd/openrmm-builder
+               ./console/cmd/openrmm-signer ./console/cmd/openrmm-admin ./console/cmd/openrmm-builder \
+ && mkdir -p /agent/windows-amd64 \
+ && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$v" \
+      -o /agent/windows-amd64/ ./agent/cmd/openrmm-agent ./agent/cmd/openrmm-watchdog \
+ && echo "$v" > /agent/VERSION
 
 # Mount points of the signer's and the package library's volumes, owned by
 # the runtime user: Docker copies ownership into a named volume the first
@@ -40,6 +48,8 @@ ENTRYPOINT ["/usr/local/bin/openrmm-builder"]
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/ /usr/local/bin/
+COPY --from=build /agent/ /usr/share/openrmm/agent/
+COPY modules/ /usr/share/openrmm/modules/
 COPY --from=build --chown=65532:65532 /rootfs/ /
 USER nonroot:nonroot
 EXPOSE 8443

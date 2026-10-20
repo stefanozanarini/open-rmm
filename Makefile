@@ -1,7 +1,7 @@
 # Without a local Go toolchain, prefix commands with scripts/go-docker.sh,
 # e.g. `make GO="scripts/go-docker.sh go" test`.
 GO ?= go
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
+VERSION ?= $(shell cat VERSION)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 BUF_VERSION := v1.74.0

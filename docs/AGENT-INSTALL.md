@@ -8,9 +8,7 @@ Once, as a console administrator:
 
 1. **Installer** page: set up the signing certificate (dedicated CA with your organization's details, a request for the enterprise CA, or a PFX), with a passphrase of at least 16 characters.
 2. Same page, **Module and release keys**: create them with the same passphrase.
-3. **Versioni dell'agente → Pubblica una release**: upload `openrmm-agent.exe` and `openrmm-watchdog.exe` (`make build-windows VERSION=x.y.z`) for `windows/amd64`.
-
-Then, for each installer, **Installer → Build the installer** for an agent version: you approve with MFA and enter the passphrase. The resulting MSI is signed and already contains the gateway address, the root certificate, the public keys and an enrollment token:
+Then, for each installer, **Installer → Build the installer** for an agent version: you approve with MFA and enter the passphrase. The console image ships the Windows agent and watchdog of its own version (the `VERSION` file): the first installer for that version also signs and publishes it as a release, so there is nothing to upload. The resulting MSI is signed and already contains the gateway address, the root certificate, the public keys and an enrollment token:
 
 - **double click** on a PC (or `msiexec /i openrmm-agent-x.y.z.msi /qn`): nothing to enter;
 - **Group Policy**: assign the same MSI; the ADMX settings are optional and take precedence;

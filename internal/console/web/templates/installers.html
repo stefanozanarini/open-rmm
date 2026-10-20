@@ -108,7 +108,8 @@
 <h2 id="build">{{t "Installer dell'agente"}}</h2>
 <p>{{t "Un MSI firmato, già configurato con l'indirizzo della console, il certificato radice, le chiavi pubbliche e un token di registrazione: si installa con un doppio clic o via GPO, senza inserire nulla. I PC compaiono in attesa di approvazione."}}</p>
 {{with .Missing}}<p><span class="badge chk-warning">{{t "da configurare"}}</span> {{t "Mancano nella configurazione della console:"}} {{range $i, $m := .}}{{if $i}}, {{end}}<code>{{$m}}</code>{{end}}.</p>{{end}}
-{{if and $.IsAdmin .Builder .BuilderUp .Chain (not .Missing)}}
+{{if .NeedKeys}}<p><span class="badge chk-warning">{{t "da configurare"}}</span> {{th "Crea prima le <a href=\"#release-keys\">chiavi di moduli e release</a>."}}</p>{{end}}
+{{if and $.IsAdmin .Builder .BuilderUp .Chain (not .Missing) (not .NeedKeys)}}
 {{if .Approved}}
 <form method="post" action="/agent-installer/confirm" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
@@ -121,6 +122,7 @@
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <label>{{t "Versione dell'agente"}} <select name="version">{{range .Versions}}<option>{{.}}</option>{{end}}</select></label>
   <p class="muted">{{t "Ti verrà chiesto di autenticarti di nuovo con MFA, poi la passphrase della chiave di firma."}}</p>
+  {{with .Bundled}}<p class="muted">{{tf "La versione %s è inclusa nella console: viene firmata e pubblicata insieme al primo installer." .}}</p>{{end}}
   <button class="primary">{{t "Crea l'installer"}}</button>
 </form>
 {{else}}<p class="muted">{{t "Nessuna release dell'agente per Windows pubblicata."}}</p>{{end}}

@@ -35,7 +35,7 @@ Configure the public key on the agents as `ReleaseSigningKeys` (REG_MULTI_SZ, or
 
 The version must be the one built into the executables (`make build-windows VERSION=1.2.0`): the watchdog considers the update successful only when the agent reports exactly that version.
 
-**From the console**: **Versioni dell'agente → Pubblica una release**, sign in again with MFA, then upload agent and watchdog with version, platform and the passphrase.
+**From the console**: the console image ships the Windows agent and watchdog built at its own version (the `VERSION` file in the repository: raise it for every agent release, then rebuild the image). **Versioni dell'agente → Pubblica una release**, sign in again with MFA, enter the passphrase: the shipped version is signed and published (building an installer for it does the same). Other executables, or other platforms, can be uploaded on the same page.
 
 **Offline**:
 
