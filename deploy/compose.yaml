@@ -120,7 +120,7 @@ services:
       OPENRMM_OIDC_CLIENT_ID: ${OPENRMM_OIDC_CLIENT_ID:?set OPENRMM_OIDC_CLIENT_ID in .env}
       OPENRMM_OIDC_CLIENT_SECRET_FILE: /run/openrmm/secrets/oidc-client-secret
       OPENRMM_MFA_CLAIM: ${OPENRMM_MFA_CLAIM:-amr}
-      OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:?set OPENRMM_TENANT_MAP in .env}
+      OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:-}
       OPENRMM_SIGNER_SOCKET: /run/openrmm-signer/signer.sock
       # Agent installers built by the builder service (see .env.example).
       OPENRMM_AGENT_SERVER: ${OPENRMM_AGENT_SERVER:-}
@@ -175,7 +175,7 @@ services:
       OPENRMM_OIDC_ISSUER: ${OPENRMM_OIDC_ISSUER:?set OPENRMM_OIDC_ISSUER in .env}
       OPENRMM_OIDC_CLIENT_ID: ${OPENRMM_OIDC_CLIENT_ID:?set OPENRMM_OIDC_CLIENT_ID in .env}
       OPENRMM_MFA_CLAIM: ${OPENRMM_MFA_CLAIM:-amr}
-      OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:?set OPENRMM_TENANT_MAP in .env}
+      OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:-}
       # Commands approved by a central console's operators (federation).
       OPENRMM_FEDERATION_ISSUER: ${OPENRMM_FEDERATION_ISSUER:-}
       OPENRMM_FEDERATION_CLIENT_ID: ${OPENRMM_FEDERATION_CLIENT_ID:-}

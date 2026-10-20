@@ -18,7 +18,8 @@ cd "$HERE"
 mkdir -p secrets/server secrets/signer secrets/core console-tls
 chmod 700 secrets
 if [ ! -e secrets/signer/job-signing.key ]; then
-  docker compose run --rm -q --no-deps --user "$(id -u):$(id -g)" -v "$HERE/secrets/signer:/out" admin \
+  docker run --rm --network none --read-only --user "$(id -u):$(id -g)" -v "$HERE/secrets/signer:/out" \
+    --entrypoint /usr/local/bin/openrmm-admin "${OPENRMM_IMAGE:-open-rmm:dev}" \
     signing keygen -out /out/job-signing.key
 else
   echo "secrets/signer/job-signing.key exists: keeping it"

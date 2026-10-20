@@ -21,7 +21,8 @@ if [ -e pki/ca ]; then
 fi
 mkdir -p pki
 chmod 700 pki
-docker compose run --rm --no-deps --user "$(id -u):$(id -g)" admin \
+docker run --rm --network none --read-only --user "$(id -u):$(id -g)" -v "$HERE/pki:/pki" \
+  --entrypoint /usr/local/bin/openrmm-admin "${OPENRMM_IMAGE:-open-rmm:dev}" \
   pki init -dir /pki/ca -gateway-dns "$DNS"
 docker run --rm --network none -v "$HERE/pki:/pki" --entrypoint sh postgres:16-alpine -c '
   set -e
@@ -35,6 +36,9 @@ docker run --rm --network none -v "$HERE/pki:/pki" --entrypoint sh postgres:16-a
   # Core (internal): agents CA with its key, tunnel certificate, root CA.
   copy core agents-ca.crt agents-ca.key core.crt core.key root-ca.crt
 '
+
+# Public: mounted into the server, which reads it for the agent installers.
+chmod 0644 pki/ca/root-ca.crt
 
 cat <<MSG
 

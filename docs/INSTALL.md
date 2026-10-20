@@ -35,9 +35,12 @@ Set two different, URL-safe passwords in `.env` (e.g. `openssl rand -hex 24`): `
 ## 2. PKI
 
 ```bash
-docker compose build
+docker build -t open-rmm:dev ..
+docker build --target builder -t open-rmm-builder:dev ..
 ./setup-pki.sh agent.example.com
 ```
+
+`docker compose build` works too, but only once every required variable in `.env` is set (Entra included, step 3); the commands above and the setup scripts do not read `.env`.
 
 The script creates:
 
@@ -78,19 +81,29 @@ The console must be served over HTTPS, either:
 
 Fill in `.env`: `OPENRMM_AGENT_SERVER` (the gateway name of step 2 with its public port), `OPENRMM_AGENT_JOB_KEYS` (the key printed by `setup-secrets.sh`), `OPENRMM_MODULE_KEYS` and `OPENRMM_RELEASE_KEYS` (public keys of the offline release keys). The root certificate is read from `pki/ca/root-ca.crt`. The `builder` container then builds signed MSIs from the console (**Installer** page): see [AGENT-INSTALL.md](AGENT-INSTALL.md). Back up its volume (`builder-state`): it holds the encrypted signing key.
 
-## 4. Start
+## 4. Tenant and start
+
+Create the open-rmm tenant first: its ID goes into `OPENRMM_TENANT_MAP`, which the console and the signer need to start.
 
 ```bash
-docker compose up -d
+docker compose up -d db
+docker compose run --rm admin db migrate
+docker compose run --rm admin tenant create -name "Customer"     # prints <TENANT>
+```
+
+Set `OPENRMM_TENANT_MAP=<Directory ID>=<TENANT>` in `.env`, then start everything:
+
+```bash
+docker compose up -d                                        # gateway on this host
+docker compose up -d db core server signer builder          # gateway on a DMZ host
 docker compose ps
 ```
 
-Database migrations are applied automatically at startup. `docker compose logs core` should show `tunnel to gateway open`.
+Migrations are also applied by `core` and `server` at every start. `docker compose logs core` should show `tunnel open`. Then open `OPENRMM_PUBLIC_URL` and sign in ([ENTRA.md](ENTRA.md), *First sign-in*).
 
-## 5. Tenant and enrollment tokens
+## 5. Enrollment tokens
 
 ```bash
-docker compose run --rm admin tenant create -name "Customer"
 docker compose run --rm admin token create -tenant <TENANT> -max-uses 250 -ttl 720h -description "GPO main site"
 ```
 

@@ -46,3 +46,32 @@ func TestFederationFromEnv(t *testing.T) {
 		t.Fatal("invalid role accepted")
 	}
 }
+
+func TestCheckMFA(t *testing.T) {
+	cases := []struct {
+		mode string
+		c    Claims
+		ok   bool
+	}{
+		{"amr", Claims{AMR: []string{"pwd", "mfa"}}, true},
+		{"amr", Claims{}, false},
+		{"acrs:c1", Claims{ACRS: []string{"c1"}}, true},
+		{"acrs:c1", Claims{AMR: []string{"mfa"}}, false},
+		{"none", Claims{}, true},
+	}
+	for _, tc := range cases {
+		v := &Verifier{cfg: Config{MFAClaim: tc.mode}}
+		if err := v.checkMFA(&tc.c); (err == nil) != tc.ok {
+			t.Errorf("%s %+v: err = %v", tc.mode, tc.c, err)
+		}
+	}
+	base := Config{Issuer: "https://login.example.com/v2.0", ClientID: "app",
+		TenantMap: map[string][]string{"a": {"b"}}}
+	for mode, ok := range map[string]bool{"amr": true, "none": true, "acrs:c1": true, "off": false} {
+		c := base
+		c.MFAClaim = mode
+		if err := c.Validate(); (err == nil) != ok {
+			t.Errorf("Validate(%q) = %v", mode, err)
+		}
+	}
+}

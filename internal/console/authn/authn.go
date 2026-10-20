@@ -38,6 +38,8 @@ type Config struct {
 	//   "amr"         the amr claim must contain "mfa"
 	//   "acrs:<id>"   the acrs claim must contain the Conditional Access
 	//                 authentication context <id> (e.g. "acrs:c1")
+	//   "none"        no check: MFA is left to the directory's own policy
+	//                 (Entra v2.0 ID tokens omit amr unless requested)
 	MFAClaim string
 	// TenantMap maps the Entra tenant (tid claim) to the open-rmm tenants
 	// its operators may manage.
@@ -54,7 +56,7 @@ type Config struct {
 //
 //	OPENRMM_OIDC_ISSUER     https://login.microsoftonline.com/<tid>/v2.0
 //	OPENRMM_OIDC_CLIENT_ID  application (client) ID
-//	OPENRMM_MFA_CLAIM       "amr" (default) or "acrs:<context id>"
+//	OPENRMM_MFA_CLAIM       "amr" (default), "acrs:<context id>" or "none"
 //	OPENRMM_TENANT_MAP      <entra tid>=<open-rmm tenant>[|<tenant>...][,...]
 func FromEnv() (Config, error) {
 	c := Config{
@@ -175,8 +177,8 @@ func (c Config) Validate() error {
 	if c.ClientID == "" {
 		return errors.New("OPENRMM_OIDC_CLIENT_ID is required")
 	}
-	if c.MFAClaim != "amr" && !strings.HasPrefix(c.MFAClaim, "acrs:") {
-		return errors.New(`OPENRMM_MFA_CLAIM must be "amr" or "acrs:<context id>"`)
+	if c.MFAClaim != "amr" && c.MFAClaim != "none" && !strings.HasPrefix(c.MFAClaim, "acrs:") {
+		return errors.New(`OPENRMM_MFA_CLAIM must be "amr", "acrs:<context id>" or "none"`)
 	}
 	if len(c.TenantMap) == 0 {
 		return errors.New("OPENRMM_TENANT_MAP is required")
@@ -281,6 +283,9 @@ func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*Claims, erro
 }
 
 func (v *Verifier) checkMFA(c *Claims) error {
+	if v.cfg.MFAClaim == "none" {
+		return nil
+	}
 	// The claims seen are included in the error: when setting up a new
 	// directory they show at once which claim the provider actually sends.
 	if ctxID, ok := strings.CutPrefix(v.cfg.MFAClaim, "acrs:"); ok {
