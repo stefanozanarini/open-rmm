@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/netip"
+	"sort"
 	"sync"
 	"time"
 
@@ -79,6 +80,17 @@ func (m *Memory) GetTenant(_ context.Context, id string) (Tenant, error) {
 		return Tenant{}, ErrNotFound
 	}
 	return t, nil
+}
+
+func (m *Memory) ListTenants(context.Context) ([]Tenant, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []Tenant
+	for _, t := range m.tenants {
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
 }
 
 func (m *Memory) CreateEnrollmentToken(_ context.Context, t EnrollmentToken, tokenHash []byte) error {

@@ -523,6 +523,8 @@ Once Entra ID sign-in works, the **Configurazione** page (Admin role) is a check
 
 **Alternative without the builder**: keys created by `openrmm-admin codesign ca|csr` on a build machine, `make msi SIGN_CERT=… SIGN_KEY=…`, and only the public certificate pasted in the console.
 
+**Console-wide, also with several tenants.** The signing key signs the installers of every tenant, so only **console administrators** manage it: Admins of the directories in `OPENRMM_CONSOLE_ADMIN_TENANT` (by default the only directory of the tenant map; with several directories, nobody until it is set), never operators coming through a federation link. Every tenant sees the same certificate, its Group Policy files and the expiry warning; changes are audited in every tenant. Installers stay **per tenant**: each carries its tenant's own enrollment token. The agents' PKI (root and agents CA) stays one per console: tenant isolation comes from the tenant id in each agent certificate and row-level security, not from separate CAs. For a console serving several customers a **publicly trusted** code-signing certificate avoids deploying a private root to each customer; a per-tenant certificate (customers signing with their own CA) is a possible extension.
+
 Either way the console offers `codesign.cer` (Trusted Publishers) and, for a dedicated CA, `codesign-ca.cer` (Trusted Root) for Group Policy, and warns 60 days before expiry.
 
 ### 12.2 Active Directory (optional)

@@ -82,6 +82,7 @@ type Agent struct {
 type Store interface {
 	CreateTenant(ctx context.Context, t Tenant) error
 	GetTenant(ctx context.Context, id string) (Tenant, error)
+	ListTenants(ctx context.Context) ([]Tenant, error)
 
 	CreateEnrollmentToken(ctx context.Context, t EnrollmentToken, tokenHash []byte) error
 	RevokeEnrollmentToken(ctx context.Context, id string) error

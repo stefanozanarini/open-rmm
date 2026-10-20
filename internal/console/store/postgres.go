@@ -124,6 +124,23 @@ func (p *Postgres) GetTenant(ctx context.Context, id string) (Tenant, error) {
 	return t, err
 }
 
+func (p *Postgres) ListTenants(ctx context.Context) ([]Tenant, error) {
+	rows, err := p.pool.Query(ctx, `SELECT id::text, name, created_at FROM tenants ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Tenant
+	for rows.Next() {
+		var t Tenant
+		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 func (p *Postgres) CreateEnrollmentToken(ctx context.Context, t EnrollmentToken, tokenHash []byte) error {
 	_, err := p.pool.Exec(ctx, `INSERT INTO enrollment_tokens
 		(id, tenant_id, token_hash, description, max_uses, expires_at, auto_approve)

@@ -108,9 +108,8 @@ func TestConsoleInstallerWithDedicatedCA(t *testing.T) {
 	if !strings.Contains(body, "CA dedicata e certificato di firma creati") || !strings.Contains(body, "L=Bologna") {
 		t.Fatalf("create CA: %s", body)
 	}
-	set, _ := e.store.GetSettings(ctx, e.tenant)
-	if ch, err := codesign.ParseChain([]byte(set.CodeSigningCert), e.now()); err != nil || ch.Root() == nil {
-		t.Fatalf("certificate not published for Group Policy: %v", err)
+	if code, cer := get(t, c, e.console.URL+"/setup/codesign-ca.cer"); code != 200 || len(cer) < 100 {
+		t.Fatalf("CA certificate not offered for Group Policy: %d", code)
 	}
 
 	// Build: MFA approval first, then the passphrase.
@@ -194,3 +193,36 @@ func TestConsoleSigningRequestFlow(t *testing.T) {
 func pemCerts(certs ...*x509.Certificate) []byte { return pki.EncodeCertPEM(certs...) }
 
 func (e *consoleEnv) now() time.Time { return time.Now() }
+
+// The signing key signs every tenant's installers: only Admins of the
+// console's own directory manage it, and every tenant sees it.
+func TestConsoleWideSigning(t *testing.T) {
+	var b *testBuilder
+	other := ids.NewUUID() // a customer's directory on the same console
+	otherTenant := ids.NewUUID()
+	e := startConsole(t, withBuilder(t, &b), func(cfg *web.Config, _ *signer.Server, _ string) {
+		cfg.ConsoleAdminDirs = []string{other}
+	})
+	e.store.CreateTenant(context.Background(), store.Tenant{ID: otherTenant, Name: "Altro"})
+	// The test directory's Admin is a tenant Admin, not a console Admin.
+	c, csrf := e.login(t, admin)
+	if code, _, _ := post(t, c, e.console.URL+"/agent-installer/signing/ca", url.Values{"csrf": {csrf}, "o": {"X"},
+		"passphrase": {installerPass}, "passphrase2": {installerPass}}); code != http.StatusForbidden {
+		t.Fatalf("tenant Admin changed the console signing key: %d", code)
+	}
+	if _, body := get(t, c, e.console.URL+"/agent-installer"); strings.Contains(body, `action="/agent-installer/signing/ca"`) ||
+		!strings.Contains(body, "lo gestiscono gli amministratori della console") {
+		t.Fatal("signing forms shown to a tenant Admin")
+	}
+	// Created by the console Admin (here directly on the builder), the
+	// certificate is visible from every tenant.
+	if _, err := b.CreateCA(context.Background(), &openrmmv1.CreateCARequest{Subject: &openrmmv1.CertSubject{Organization: "MSP Srl"}, Passphrase: installerPass}); err != nil {
+		t.Fatal(err)
+	}
+	if code, cer := get(t, c, e.console.URL+"/setup/codesign.cer"); code != 200 || len(cer) < 100 {
+		t.Fatalf("certificate download: %d", code)
+	}
+	if _, body := get(t, c, e.console.URL+"/setup"); !strings.Contains(body, "MSP Srl") {
+		t.Fatal("console certificate not shown on the setup page")
+	}
+}

@@ -87,6 +87,8 @@ type installersData struct {
 	List      []installerView
 	MinPass   int
 	BuilderUp bool
+	// ConsoleAdmin manages the console-wide signing key.
+	ConsoleAdmin bool
 }
 
 func grpcMessage(err error) string { return status.Convert(err).Message() }
@@ -98,7 +100,8 @@ func (s *Server) handleInstallers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	d := installersData{Builder: s.builder != nil, Missing: s.agentInstall.missing(), MinPass: codesign.MinPassphrase}
+	d := installersData{Builder: s.builder != nil, Missing: s.agentInstall.missing(), MinPass: codesign.MinPassphrase,
+		ConsoleAdmin: s.consoleAdmin(sessionFrom(ctx).data.Operator)}
 	if s.builder != nil {
 		cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		st, err := s.builder.Status(cctx, &openrmmv1.BuilderStatusRequest{})
@@ -183,25 +186,68 @@ func (s *Server) passphrase(w http.ResponseWriter, r *http.Request) (string, boo
 	return p, true
 }
 
-// signingDone records a change of the signing material: the public chain
-// goes to the settings (Group Policy downloads, expiry warning) and to the
-// audit log.
+// consoleAdmin tells whether op manages console-wide settings, such as the
+// signing key every tenant's installers are signed with: an Admin of one of
+// the console's own directories, never through a federation link.
+func (s *Server) consoleAdmin(op *Operator) bool {
+	if op == nil || op.Federated || !hasRole(op, authn.RoleAdmin) {
+		return false
+	}
+	dirs := s.consoleAdminDirs
+	if len(dirs) == 0 {
+		// One directory: it owns the console. Several: none until configured.
+		tm := s.verifier.Config().TenantMap
+		if len(tm) != 1 {
+			return false
+		}
+		for tid := range tm {
+			dirs = []string{tid}
+		}
+	}
+	for _, d := range dirs {
+		if d == op.TenantID {
+			return true
+		}
+	}
+	return false
+}
+
+// console requires a console administrator.
+func (s *Server) console(h ctxHandler) http.Handler {
+	return s.role(authn.RoleAdmin, func(w http.ResponseWriter, r *http.Request) {
+		op := sessionFrom(r.Context()).data.Operator
+		if !s.consoleAdmin(op) {
+			s.log.Warn("forbidden: console-wide setting", "operator", op.Username, "path", r.URL.Path)
+			http.Error(w, s.T(r, "permesso negato"), http.StatusForbidden)
+			return
+		}
+		h(w, r)
+	})
+}
+
+// signingDone audits a change of the console-wide signing material, in
+// every tenant: it signs all of their installers.
 func (s *Server) signingDone(w http.ResponseWriter, r *http.Request, action string, st *openrmmv1.BuilderStatus, msg string) {
-	t, _ := tenantOf(r)
 	op := sessionFrom(r.Context()).data.Operator
 	detail := map[string]any{}
 	if ch, err := codesign.ParseChain([]byte(st.GetChainPem()), s.now()); err == nil {
 		i := ch.LeafInfo()
 		detail["subject"], detail["thumbprint"], detail["not_after"] = i.Subject, i.Thumbprint, i.NotAfter
-		if set, err := s.store.GetSettings(r.Context(), t); err == nil {
-			set.CodeSigningCert = st.GetChainPem()
-			if err := s.store.PutSettings(r.Context(), t, set, "operator:"+op.Username); err != nil {
-				s.log.Error("save code-signing certificate", "err", err)
-			}
-		}
 	}
-	s.audit(r.Context(), t, op, action, "", detail)
+	s.auditAll(r.Context(), op, action, detail)
 	s.flash(w, r, msg, "/agent-installer#signing")
+}
+
+// auditAll records a console-wide action in the log of every tenant.
+func (s *Server) auditAll(ctx context.Context, op *Operator, action string, detail map[string]any) {
+	tenants, err := s.store.ListTenants(ctx)
+	if err != nil {
+		s.log.Error("list tenants for audit", "err", err)
+		return
+	}
+	for _, t := range tenants {
+		s.audit(ctx, t.ID, op, action, "", detail)
+	}
 }
 
 func (s *Server) builderCall(w http.ResponseWriter, r *http.Request, call func(context.Context) (*openrmmv1.BuilderStatus, error)) (*openrmmv1.BuilderStatus, bool) {
@@ -241,8 +287,7 @@ func (s *Server) handleCreateSigningRequest(w http.ResponseWriter, r *http.Reque
 		return s.builder.CreateRequest(ctx, &openrmmv1.CreateRequestRequest{Subject: subjectFrom(r), Passphrase: pass})
 	})
 	if ok {
-		t, _ := tenantOf(r)
-		s.audit(r.Context(), t, sessionFrom(r.Context()).data.Operator, "codesign.request_created", "", nil)
+		s.auditAll(r.Context(), sessionFrom(r.Context()).data.Operator, "codesign.request_created", nil)
 		s.flash(w, r, s.T(r, "Richiesta creata: scaricala e falla firmare dalla CA."), "/agent-installer#signing")
 		_ = st
 	}

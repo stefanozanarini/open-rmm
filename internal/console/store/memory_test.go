@@ -755,3 +755,20 @@ func testInstallers(t *testing.T, s Store) {
 		t.Fatalf("list = %+v", list)
 	}
 }
+
+func TestListTenants(t *testing.T) { testListTenants(t, NewMemory()) }
+
+func testListTenants(t *testing.T, s Store) {
+	ctx := context.Background()
+	a, b := Tenant{ID: ids.NewUUID(), Name: "zz-" + ids.NewUUID()}, Tenant{ID: ids.NewUUID(), Name: "aa-" + ids.NewUUID()}
+	s.CreateTenant(ctx, a)
+	s.CreateTenant(ctx, b)
+	list, err := s.ListTenants(ctx)
+	seen := map[string]bool{}
+	for _, x := range list {
+		seen[x.ID] = true
+	}
+	if err != nil || !seen[a.ID] || !seen[b.ID] {
+		t.Fatalf("tenants = %+v, %v", list, err)
+	}
+}

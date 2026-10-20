@@ -20,6 +20,9 @@
 //	OPENRMM_AGENT_JOB_KEYS, OPENRMM_MODULE_KEYS, OPENRMM_RELEASE_KEYS
 //	                                   public keys preset in installers ("ed25519:...")
 //	OPENRMM_SIGN_TIMESTAMP             RFC 3161 server (default http://timestamp.digicert.com; "none")
+//	OPENRMM_CONSOLE_ADMIN_TENANT       Entra directories (tid, comma-separated) whose Admins manage
+//	                                   console-wide settings such as the signing key (default: the
+//	                                   only directory of OPENRMM_TENANT_MAP)
 //	OPENRMM_OIDC_ISSUER, OPENRMM_OIDC_CLIENT_ID, OPENRMM_MFA_CLAIM, OPENRMM_TENANT_MAP
 //	                                   see internal/console/authn
 //
@@ -178,7 +181,7 @@ func run(log *slog.Logger) error {
 		PublicURL: publicURL, ClientSecret: strings.TrimSpace(string(secret)),
 		Packages: pkgfiles.Dir{Path: env("OPENRMM_PACKAGES_DIR", "/var/lib/openrmm/packages")},
 		Hub:      fed.hub, LinkAddr: fed.linkAddr, FedVerifier: fed.verifier, Uplink: fed.uplink, Shell: shell,
-		Builder: bld, AgentInstall: agentInstall(log),
+		Builder: bld, AgentInstall: agentInstall(log), ConsoleAdminDirs: consoleAdmins(),
 	})
 	if err != nil {
 		return err
@@ -316,4 +319,14 @@ func agentInstall(log *slog.Logger) web.AgentInstall {
 		}
 	}
 	return a
+}
+
+func consoleAdmins() []string {
+	var out []string
+	for _, d := range strings.Split(os.Getenv("OPENRMM_CONSOLE_ADMIN_TENANT"), ",") {
+		if d = strings.TrimSpace(d); d != "" {
+			out = append(out, d)
+		}
+	}
+	return out
 }

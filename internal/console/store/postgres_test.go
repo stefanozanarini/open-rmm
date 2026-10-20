@@ -51,6 +51,7 @@ func TestPostgresSitesAndNotes(t *testing.T)         { testSitesAndNotes(t, open
 func TestPostgresADDomains(t *testing.T)             { testADDomains(t, openTestDB(t)) }
 func TestPostgresFederation(t *testing.T)            { testFederation(t, openTestDB(t)) }
 func TestPostgresInstallers(t *testing.T)            { testInstallers(t, openTestDB(t)) }
+func TestPostgresListTenants(t *testing.T)           { testListTenants(t, openTestDB(t)) }
 
 func TestPostgresTenantIsolation(t *testing.T) {
 	db := openTestDB(t)

@@ -30,7 +30,7 @@
   <dt>{{t "Identificazione personale"}}</dt><dd><code>{{$.Data.Info.Thumbprint}}</code></dd>
   <dt>{{t "Per la GPO"}}</dt><dd><a href="/setup/codesign.cer">codesign.cer</a>{{if .Root}} · <a href="/setup/codesign-ca.cer">codesign-ca.cer</a>{{end}}</dd>
 </dl>
-{{if and $.IsAdmin $.Data.Signing.DedicatedCa}}
+{{if and $.Data.ConsoleAdmin $.Data.Signing.DedicatedCa}}
 <form method="post" action="/agent-installer/signing/renew" class="inline">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <label>{{t "Passphrase"}} <input type="password" name="passphrase" required autocomplete="current-password"></label>
@@ -39,22 +39,21 @@
 {{end}}
 {{else}}<p><span class="badge chk-warning">{{t "da configurare"}}</span> {{t "Nessun certificato di firma: crea una CA dedicata, oppure una richiesta per la CA aziendale."}}</p>{{end}}
 
-{{with .Signing.RequestPem}}
+{{if not .ConsoleAdmin}}<p class="muted">{{t "Il certificato di firma vale per tutta la console: lo gestiscono gli amministratori della console."}}</p>{{end}}
+{{with .Signing.RequestPem}}{{if $.Data.ConsoleAdmin}}
 <h3>{{t "Richiesta in attesa del certificato"}}</h3>
 <p>{{th "Falla firmare dalla CA aziendale con il modello <em>Firma codice</em> (<code>certreq -submit -attrib \"CertificateTemplate:CodeSigning\" codesign.csr codesign.cer</code>) o inviala all'autorità, poi incolla qui il certificato ricevuto, seguito dai certificati delle CA."}}
  <a href="/agent-installer/signing/request.csr">codesign.csr</a></p>
 <textarea readonly rows="6" spellcheck="false" aria-label="CSR">{{.}}</textarea>
-{{if $.IsAdmin}}
 <form method="post" action="/agent-installer/signing/certificate" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <label>{{t "Certificato (PEM: prima il certificato di firma, poi le CA)"}}
     <textarea name="certificate" rows="8" spellcheck="false" required placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
   <button class="primary">{{t "Importa il certificato"}}</button>
 </form>
-{{end}}
-{{end}}
+{{end}}{{end}}
 
-{{if $.IsAdmin}}
+{{if .ConsoleAdmin}}
 <details{{if not .Chain}} open{{end}}>
 <summary>{{if .Chain}}{{t "Sostituisci il certificato di firma"}}{{else}}{{t "Configura il certificato di firma"}}{{end}}</summary>
 <form method="post" action="/agent-installer/signing/ca" class="stack">

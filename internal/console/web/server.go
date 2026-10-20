@@ -63,6 +63,9 @@ type Config struct {
 	// AgentInstall (nil: not available).
 	Builder      openrmmv1.BuilderServiceClient
 	AgentInstall AgentInstall
+	// ConsoleAdminDirs are the Entra directories (tid) whose Admins manage
+	// console-wide settings; empty: the only directory of the tenant map.
+	ConsoleAdminDirs []string
 }
 
 // Server serves the console.
@@ -88,6 +91,8 @@ type Server struct {
 	shell        openrmmv1.ShellBrokerServiceClient
 	builder      openrmmv1.BuilderServiceClient
 	agentInstall AgentInstall
+	// consoleAdminDirs: see Config.ConsoleAdminDirs.
+	consoleAdminDirs []string
 }
 
 // New returns a Server.
@@ -107,7 +112,7 @@ func New(cfg Config) (*Server, error) {
 		store: cfg.Store, verifier: cfg.Verifier, signer: cfg.Signer, log: cfg.Logger,
 		packages: cfg.Packages, winget: cfg.Winget,
 		hub: cfg.Hub, linkAddr: cfg.LinkAddr, fedVerifier: cfg.FedVerifier, uplink: cfg.Uplink, shell: cfg.Shell,
-		builder: cfg.Builder, agentInstall: cfg.AgentInstall,
+		builder: cfg.Builder, agentInstall: cfg.AgentInstall, consoleAdminDirs: cfg.ConsoleAdminDirs,
 		origin: u.Scheme + "://" + u.Host, idpHost: authURL.Scheme + "://" + authURL.Host,
 		now: cfg.Now, client: cfg.HTTPClient,
 		oauth: oauth2.Config{
@@ -312,12 +317,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agent-installer/build", s.role(authn.RoleAdmin, s.handleBuildInstaller))
 	mux.Handle("POST /agent-installer/confirm", s.role(authn.RoleAdmin, s.handleConfirmInstaller))
 	mux.Handle("GET /agent-installer/{id}/msi", s.role(authn.RoleOperator, s.handleDownloadInstaller))
-	mux.Handle("POST /agent-installer/signing/ca", s.role(authn.RoleAdmin, s.handleCreateSigningCA))
-	mux.Handle("POST /agent-installer/signing/request", s.role(authn.RoleAdmin, s.handleCreateSigningRequest))
-	mux.Handle("GET /agent-installer/signing/request.csr", s.role(authn.RoleAdmin, s.handleSigningRequestFile))
-	mux.Handle("POST /agent-installer/signing/certificate", s.role(authn.RoleAdmin, s.handleImportSigningCert))
-	mux.Handle("POST /agent-installer/signing/pfx", s.role(authn.RoleAdmin, s.handleImportSigningPFX))
-	mux.Handle("POST /agent-installer/signing/renew", s.role(authn.RoleAdmin, s.handleRenewSigning))
+	mux.Handle("POST /agent-installer/signing/ca", s.console(s.handleCreateSigningCA))
+	mux.Handle("POST /agent-installer/signing/request", s.console(s.handleCreateSigningRequest))
+	mux.Handle("GET /agent-installer/signing/request.csr", s.console(s.handleSigningRequestFile))
+	mux.Handle("POST /agent-installer/signing/certificate", s.console(s.handleImportSigningCert))
+	mux.Handle("POST /agent-installer/signing/pfx", s.console(s.handleImportSigningPFX))
+	mux.Handle("POST /agent-installer/signing/renew", s.console(s.handleRenewSigning))
 	mux.Handle("GET /federation", s.auth(s.handleFederation))
 	mux.Handle("POST /federation/links", s.role(authn.RoleAdmin, s.handleCreateLink))
 	mux.Handle("POST /federation/links/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevokeLink))

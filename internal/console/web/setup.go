@@ -1,11 +1,14 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
+	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/accesslog"
 	"github.com/stefanozanarini/open-rmm/internal/adinv"
 	"github.com/stefanozanarini/open-rmm/internal/codesign"
@@ -212,8 +215,8 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	if d.Builder {
 		it.Link = "/agent-installer#signing"
 	}
-	if set.CodeSigningCert != "" {
-		ch, err := codesign.ParseChain([]byte(set.CodeSigningCert), now)
+	if chain := s.signingChain(ctx, set); chain != "" {
+		ch, err := codesign.ParseChain([]byte(chain), now)
 		if err != nil {
 			it.Status, it.Detail = setupTodo, s.Tf(r, "Il certificato registrato non è più valido: %v", err)
 		} else {
@@ -313,7 +316,7 @@ func (s *Server) handleCodeSigningCert(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	ch, err := codesign.ParseChain([]byte(set.CodeSigningCert), s.now())
+	ch, err := codesign.ParseChain([]byte(s.signingChain(r.Context(), set)), s.now())
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -337,4 +340,21 @@ func (s *Server) handleCodeSigningCert(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write(der); err != nil {
 		s.log.Debug("send certificate", "err", err)
 	}
+}
+
+// signingChain is the code-signing certificate with its CAs: the
+// console-wide one held by the builder, or, without a builder, the one
+// registered for the tenant.
+func (s *Server) signingChain(ctx context.Context, set store.Settings) string {
+	if s.builder == nil {
+		return set.CodeSigningCert
+	}
+	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	st, err := s.builder.Status(cctx, &openrmmv1.BuilderStatusRequest{})
+	if err != nil {
+		s.log.Warn("builder unreachable", "err", err)
+		return ""
+	}
+	return st.GetChainPem()
 }

@@ -903,4 +903,5 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"da configurare":                               "to set up",
 	"non raggiungibile":                            "unreachable",
 	"valido fino al %s":                            "valid until %s",
+	"Il certificato di firma vale per tutta la console: lo gestiscono gli amministratori della console.": "The signing certificate applies to the whole console: the console administrators manage it.",
 }
