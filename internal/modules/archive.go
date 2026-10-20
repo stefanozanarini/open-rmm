@@ -25,9 +25,6 @@ const (
 // are refused. extra adds files from outside dir (e.g. the SDK), keyed by
 // their path in the archive.
 func Pack(m *Manifest, dir string, extra map[string][]byte) ([]byte, error) {
-	if err := m.Validate(false); err != nil {
-		return nil, err
-	}
 	// Files are read through an os.Root, so a path swapped for a symlink
 	// during the walk cannot make Pack read outside dir.
 	root, err := os.OpenRoot(dir)
@@ -35,8 +32,19 @@ func Pack(m *Manifest, dir string, extra map[string][]byte) ([]byte, error) {
 		return nil, err
 	}
 	defer root.Close()
+	return PackFS(m, root.FS(), extra)
+}
+
+// PackFS is Pack reading the module files from fsys, e.g. an uploaded zip.
+// Sizes are checked before reading, so an archive that inflates beyond the
+// limits is refused.
+func PackFS(m *Manifest, fsys fs.FS, extra map[string][]byte) ([]byte, error) {
+	if err := m.Validate(false); err != nil {
+		return nil, err
+	}
 	files := map[string][]byte{}
-	err = fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
+	var total int64
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -49,9 +57,19 @@ func Pack(m *Manifest, dir string, extra map[string][]byte) ([]byte, error) {
 		if p == "manifest.json" {
 			return nil
 		}
-		data, err := root.ReadFile(p)
+		info, err := d.Info()
 		if err != nil {
 			return err
+		}
+		if total += info.Size(); info.Size() > maxFileSize || total > maxTotalSize || len(files) >= maxFiles {
+			return errors.New("module too large")
+		}
+		data, err := fs.ReadFile(fsys, p)
+		if err != nil {
+			return err
+		}
+		if int64(len(data)) != info.Size() {
+			return fmt.Errorf("%s: size changed while reading", p)
 		}
 		files[p] = data
 		return nil

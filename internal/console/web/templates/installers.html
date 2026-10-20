@@ -82,6 +82,27 @@
 </form>
 </details>
 {{end}}
+
+<h3 id="release-keys">{{t "Chiavi di moduli e release"}}</h3>
+{{if .ModuleKey}}
+<p>{{t "Firmano i moduli e gli aggiornamenti dell'agente pubblicati da questa console. Sono custodite dal servizio builder, cifrate con la stessa passphrase; gli installer includono le chiavi pubbliche."}}</p>
+<dl class="facts">
+  <dt>{{t "Chiave dei moduli"}}</dt><dd><code class="small">{{.ModuleKey}}</code><br><span class="muted">{{.ModuleKeyID}}</span></dd>
+  <dt>{{t "Chiave delle release"}}</dt><dd><code class="small">{{.ReleaseKey}}</code><br><span class="muted">{{.ReleaseKeyID}}</span></dd>
+</dl>
+{{else if .ConsoleAdmin}}
+<p>{{t "Crea le chiavi che firmano i moduli e gli aggiornamenti dell'agente: servono per gli installer e per pubblicare moduli e release da questa console. Si creano una volta sola."}}</p>
+<form method="post" action="/agent-installer/signing/keys" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{if or .Chain .Signing.RequestPem}}
+  <label>{{t "Passphrase della chiave di firma"}} <input type="password" name="passphrase" required autocomplete="current-password"></label>
+  <p class="muted">{{t "Le chiavi sono cifrate con la stessa passphrase della chiave di firma del codice."}}</p>
+  {{else}}
+  {{template "passphrase-fields" .MinPass}}
+  {{end}}
+  <button class="primary">{{t "Crea le chiavi"}}</button>
+</form>
+{{else}}<p class="muted">{{t "Le chiavi non sono ancora state create: le crea un amministratore della console."}}</p>{{end}}
 {{end}}
 
 <h2 id="build">{{t "Installer dell'agente"}}</h2>

@@ -12,7 +12,7 @@
     {{with .Missing}}<span class="badge chk-failing" title="{{t "aggiornamenti di sicurezza mancanti"}}">{{tf "%d patch" .}}</span>{{end}}
     {{if .Reboot}}<span class="badge chk-warning" title="{{t "riavvio in sospeso"}}">{{t "riavvio"}}</span>{{end}}
     {{with .ThirdParty}}<span class="badge chk-warning" title="{{t "applicazioni da aggiornare"}}">{{tf "%d app" .}}</span>{{end}}</td>
-  <td>{{.Site}}</td>
+  <td>{{.Site}}{{if .SiteManual}} <span class="muted" title="{{t "assegnata a mano"}}">✎</span>{{end}}</td>
   <td>{{.Inv.LoggedOnUser}}</td>
   <td>{{.Inv.Manufacturer}} {{.Inv.Model}}</td>
   <td>{{.Host.OSVersion}}</td>

@@ -1,7 +1,6 @@
 package modules
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -20,7 +19,7 @@ type Bundle struct {
 
 // SignBundle signs the manifest and assembles the bundle.
 func SignBundle(s *signing.Signer, m *Manifest, archive []byte) (*Bundle, error) {
-	raw, err := json.MarshalIndent(m, "", "  ")
+	raw, err := SigningManifest(m)
 	if err != nil {
 		return nil, err
 	}

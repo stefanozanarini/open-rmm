@@ -26,14 +26,17 @@ const (
 	BuilderService_ImportPFX_FullMethodName         = "/openrmm.v1.BuilderService/ImportPFX"
 	BuilderService_Renew_FullMethodName             = "/openrmm.v1.BuilderService/Renew"
 	BuilderService_Build_FullMethodName             = "/openrmm.v1.BuilderService/Build"
+	BuilderService_CreateReleaseKeys_FullMethodName = "/openrmm.v1.BuilderService/CreateReleaseKeys"
+	BuilderService_SignManifest_FullMethodName      = "/openrmm.v1.BuilderService/SignManifest"
 )
 
 // BuilderServiceClient is the client API for BuilderService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// BuilderService holds the Authenticode signing key, encrypted with a
-// passphrase the console never stores, and builds signed agent installers.
+// BuilderService holds the console's signing keys, all encrypted with one
+// passphrase the console never stores: the Authenticode key that signs agent
+// installers, and the ed25519 keys that sign modules and agent releases.
 // It listens on a Unix socket shared only with the web console.
 type BuilderServiceClient interface {
 	Status(ctx context.Context, in *BuilderStatusRequest, opts ...grpc.CallOption) (*BuilderStatus, error)
@@ -49,6 +52,10 @@ type BuilderServiceClient interface {
 	Renew(ctx context.Context, in *RenewRequest, opts ...grpc.CallOption) (*BuilderStatus, error)
 	// Build builds and signs an agent installer; the MSI comes in chunks.
 	Build(ctx context.Context, in *BuildRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[BuildChunk], error)
+	// CreateReleaseKeys creates the module and agent release keys.
+	CreateReleaseKeys(ctx context.Context, in *CreateReleaseKeysRequest, opts ...grpc.CallOption) (*BuilderStatus, error)
+	// SignManifest signs a module or agent release manifest.
+	SignManifest(ctx context.Context, in *SignManifestRequest, opts ...grpc.CallOption) (*SignManifestResponse, error)
 }
 
 type builderServiceClient struct {
@@ -138,12 +145,33 @@ func (c *builderServiceClient) Build(ctx context.Context, in *BuildRequest, opts
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BuilderService_BuildClient = grpc.ServerStreamingClient[BuildChunk]
 
+func (c *builderServiceClient) CreateReleaseKeys(ctx context.Context, in *CreateReleaseKeysRequest, opts ...grpc.CallOption) (*BuilderStatus, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuilderStatus)
+	err := c.cc.Invoke(ctx, BuilderService_CreateReleaseKeys_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *builderServiceClient) SignManifest(ctx context.Context, in *SignManifestRequest, opts ...grpc.CallOption) (*SignManifestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignManifestResponse)
+	err := c.cc.Invoke(ctx, BuilderService_SignManifest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BuilderServiceServer is the server API for BuilderService service.
 // All implementations must embed UnimplementedBuilderServiceServer
 // for forward compatibility.
 //
-// BuilderService holds the Authenticode signing key, encrypted with a
-// passphrase the console never stores, and builds signed agent installers.
+// BuilderService holds the console's signing keys, all encrypted with one
+// passphrase the console never stores: the Authenticode key that signs agent
+// installers, and the ed25519 keys that sign modules and agent releases.
 // It listens on a Unix socket shared only with the web console.
 type BuilderServiceServer interface {
 	Status(context.Context, *BuilderStatusRequest) (*BuilderStatus, error)
@@ -159,6 +187,10 @@ type BuilderServiceServer interface {
 	Renew(context.Context, *RenewRequest) (*BuilderStatus, error)
 	// Build builds and signs an agent installer; the MSI comes in chunks.
 	Build(*BuildRequest, grpc.ServerStreamingServer[BuildChunk]) error
+	// CreateReleaseKeys creates the module and agent release keys.
+	CreateReleaseKeys(context.Context, *CreateReleaseKeysRequest) (*BuilderStatus, error)
+	// SignManifest signs a module or agent release manifest.
+	SignManifest(context.Context, *SignManifestRequest) (*SignManifestResponse, error)
 	mustEmbedUnimplementedBuilderServiceServer()
 }
 
@@ -189,6 +221,12 @@ func (UnimplementedBuilderServiceServer) Renew(context.Context, *RenewRequest) (
 }
 func (UnimplementedBuilderServiceServer) Build(*BuildRequest, grpc.ServerStreamingServer[BuildChunk]) error {
 	return status.Error(codes.Unimplemented, "method Build not implemented")
+}
+func (UnimplementedBuilderServiceServer) CreateReleaseKeys(context.Context, *CreateReleaseKeysRequest) (*BuilderStatus, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateReleaseKeys not implemented")
+}
+func (UnimplementedBuilderServiceServer) SignManifest(context.Context, *SignManifestRequest) (*SignManifestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignManifest not implemented")
 }
 func (UnimplementedBuilderServiceServer) mustEmbedUnimplementedBuilderServiceServer() {}
 func (UnimplementedBuilderServiceServer) testEmbeddedByValue()                        {}
@@ -330,6 +368,42 @@ func _BuilderService_Build_Handler(srv interface{}, stream grpc.ServerStream) er
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type BuilderService_BuildServer = grpc.ServerStreamingServer[BuildChunk]
 
+func _BuilderService_CreateReleaseKeys_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateReleaseKeysRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BuilderServiceServer).CreateReleaseKeys(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BuilderService_CreateReleaseKeys_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BuilderServiceServer).CreateReleaseKeys(ctx, req.(*CreateReleaseKeysRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BuilderService_SignManifest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignManifestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BuilderServiceServer).SignManifest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BuilderService_SignManifest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BuilderServiceServer).SignManifest(ctx, req.(*SignManifestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BuilderService_ServiceDesc is the grpc.ServiceDesc for BuilderService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -360,6 +434,14 @@ var BuilderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Renew",
 			Handler:    _BuilderService_Renew_Handler,
+		},
+		{
+			MethodName: "CreateReleaseKeys",
+			Handler:    _BuilderService_CreateReleaseKeys_Handler,
+		},
+		{
+			MethodName: "SignManifest",
+			Handler:    _BuilderService_SignManifest_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

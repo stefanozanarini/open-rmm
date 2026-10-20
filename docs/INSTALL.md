@@ -79,7 +79,7 @@ The console must be served over HTTPS, either:
 
 ## 3b. Agent installers (optional, recommended)
 
-Fill in `.env`: `OPENRMM_AGENT_SERVER` (the gateway name of step 2 with its public port), `OPENRMM_AGENT_JOB_KEYS` (the key printed by `setup-secrets.sh`), `OPENRMM_MODULE_KEYS` and `OPENRMM_RELEASE_KEYS` (public keys of the offline release keys). The root certificate is read from `pki/ca/root-ca.crt`. The `builder` container then builds signed MSIs from the console (**Installer** page): see [AGENT-INSTALL.md](AGENT-INSTALL.md). Back up its volume (`builder-state`): it holds the encrypted signing key.
+Fill in `.env`: `OPENRMM_AGENT_SERVER` (the gateway name of step 2 with its public port) and `OPENRMM_AGENT_JOB_KEYS` (the key printed by `setup-secrets.sh`). The root certificate is read from `pki/ca/root-ca.crt`. The module and agent release keys are created on the console (**Installer** page) and held by the `builder` container; `OPENRMM_MODULE_KEYS` and `OPENRMM_RELEASE_KEYS` are needed only for keys kept offline. The `builder` container then builds signed MSIs from the console: see [AGENT-INSTALL.md](AGENT-INSTALL.md). **Back up its volume (`builder-state`)**: it holds the encrypted signing keys, and without the module and release keys the agents installed with them can no longer receive new modules or updates.
 
 ## 4. Tenant and start
 
@@ -159,11 +159,14 @@ and restart `core`. Its log shows `vision one synchronized` every 15 minutes wit
 
 | Key | Use | Where the private part lives |
 |---|---|---|
-| Module release | Signs modules | Offline, on the machine where modules are signed |
-| Agent release | Signs agent releases | Offline |
+| Code signing (Authenticode) | Signs the agent executables and MSI | `builder` container, encrypted with the signing passphrase |
+| Module release | Signs modules | `builder` container, same passphrase (**Installer** page); or offline |
+| Agent release | Signs agent releases | `builder` container, same passphrase; or offline |
 | Job signing | Signs the commands sent to agents | Only in the `signer` container (created by `setup-secrets.sh`) |
 
-Offline keys are generated on the offline machine:
+The passphrase is never stored: it is asked at every installer build and every publication, after an MFA approval. Module and release keys are created once and never replaced from the console: agents trust them, so losing them (or the passphrase) means reinstalling the agents with new keys.
+
+To keep the module or release key offline instead, generate it on the offline machine:
 
 ```bash
 openrmm-admin signing keygen -out module-release.key

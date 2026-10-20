@@ -1,6 +1,32 @@
 {{define "content"}}
 {{with .Data}}
-<p class="muted">{{th "Le release dell'agente sono firmate con la chiave di rilascio offline. Pubblicazione e versioni obiettivo si gestiscono da riga di comando (<code>openrmm-admin release</code>)."}}</p>
+<p class="muted">{{th "Le release dell'agente sono firmate con la chiave delle release della console, oppure offline e pubblicate da riga di comando. Le versioni obiettivo si impostano da riga di comando (<code>openrmm-admin release target</code>)."}}</p>
+{{with .Publish}}{{if .ConsoleAdmin}}
+<h2 id="publish">{{t "Pubblica una release"}}</h2>
+{{if not .BuilderUp}}<p><span class="badge chk-failing">{{t "non raggiungibile"}}</span> {{t "Il servizio di firma non risponde: controlla il container builder."}}</p>
+{{else if not .KeysReady}}<p>{{th "Crea prima le chiavi di moduli e release nella pagina <a href=\"/agent-installer#release-keys\">Installer</a>."}}</p>
+{{else if .Approved}}
+<form method="post" action="/updates/publish/upload" enctype="multipart/form-data" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <div class="grid2">
+    <label>{{t "Versione"}} <input name="version" required pattern="[0-9]+\.[0-9]+\.[0-9]+" placeholder="1.0.0"></label>
+    <label>{{t "Piattaforma"}} <select name="platform">{{range .Platforms}}<option>{{.}}</option>{{end}}</select></label>
+  </div>
+  <label>{{t "Agente (openrmm-agent)"}} <input type="file" name="agent" required></label>
+  <label>{{t "Watchdog (openrmm-watchdog)"}} <input type="file" name="watchdog" required></label>
+  <label>{{t "Note"}} <input name="notes" maxlength="500"></label>
+  <label>{{t "Passphrase delle chiavi di firma"}} <input type="password" name="passphrase" required autocomplete="current-password"></label>
+  <p class="muted">{{tf "Firmata con la chiave %s. La versione deve essere quella compilata negli eseguibili." .KeyID}}</p>
+  <button class="primary">{{t "Firma e pubblica"}}</button>
+</form>
+{{else}}
+<form method="post" action="/updates/publish" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <p class="muted">{{t "Ti verrà chiesto di autenticarti di nuovo con MFA, poi di caricare i file con la passphrase delle chiavi di firma."}}</p>
+  <button class="primary">{{t "Pubblica una release"}}</button>
+</form>
+{{end}}
+{{end}}{{end}}
 <h2>{{t "Versioni obiettivo"}}</h2>
 {{if .Targets}}
 <table>

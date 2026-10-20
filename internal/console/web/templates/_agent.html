@@ -6,6 +6,7 @@
   <dt>{{t "Versione agente"}}</dt><dd>{{.Agent.Host.AgentVersion}}</dd>
   <dt>{{t "Ultimo contatto"}}</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} {{tf "da %v" .}}{{end}}</dd>
   {{with .AD}}<dt>Active Directory</dt><dd>{{.Domain}}{{with .OU}} · <a href="/agents{{qs "ou" $.Data.AD.Key}}">{{.}}</a>{{end}}{{if not .Enabled}} <span class="badge chk-failing">{{t "account disabilitato"}}</span>{{end}}{{with .LastLogon}} · {{tf "ultimo accesso al dominio %s" (fmtTime .)}}{{end}}</dd>{{end}}
+  <dt>{{t "Sede"}}</dt><dd>{{if .Site.Name}}{{.Site.Name}}{{else}}<span class="muted">{{t "senza sede"}}</span>{{end}}{{if .Site.Manual}} <span class="badge">{{t "assegnata a mano"}}</span>{{end}}</dd>
   <dt>{{t "Registrato"}}</dt><dd>{{fmtTime .Agent.EnrolledAt}}</dd>
   <dt>{{t "Approvato"}}</dt><dd>{{fmtTime .Agent.ApprovedAt}} {{.Agent.ApprovedBy}}</dd>
   <dt>{{t "Anello aggiornamenti"}}</dt><dd>{{.Agent.UpdateRing}}</dd>
@@ -16,6 +17,18 @@
 </dl>
 {{end}}
 
+{{if and .CanRun .Data.Site.Sites}}
+<form method="post" action="/agents/{{.Data.Agent.ID}}/site" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="return" value="{{.Data.Return}}">
+  <label>{{t "Sposta nella sede"}}
+    <select name="site">
+      <option value="">{{if .Data.Site.Auto}}{{tf "Automatica (per subnet: %s)" .Data.Site.Auto}}{{else}}{{t "Automatica (per subnet: nessuna)"}}{{end}}</option>
+      {{range .Data.Site.Sites}}<option value="{{.ID}}"{{if and $.Data.Site.Manual (eq .ID $.Data.Site.ID)}} selected{{end}}>{{.Name}}</option>{{end}}
+    </select></label>
+  <button>{{t "Sposta"}}</button>
+</form>
+{{end}}
 {{if .IsAdmin}}
 <div class="actions">
 {{if eq .Data.Agent.Status "pending"}}

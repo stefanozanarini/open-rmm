@@ -106,6 +106,12 @@ func Verify(keys *signing.Keyring, keyID string, raw, sig []byte) (*Manifest, er
 	if err := keys.Verify(signing.DomainAgentRelease, keyID, raw, sig); err != nil {
 		return nil, fmt.Errorf("release manifest: %w", err)
 	}
+	return ParseManifest(raw)
+}
+
+// ParseManifest parses and validates a manifest, without checking any
+// signature.
+func ParseManifest(raw []byte) (*Manifest, error) {
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
 	m := &Manifest{}

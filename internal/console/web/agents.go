@@ -22,6 +22,7 @@ type agentRow struct {
 	Online     bool
 	Checks     string // worst check status
 	Site       string
+	SiteManual bool   // assigned by hand, not by subnet
 	OU         string // Active Directory container
 	Alerts     int
 	Reboot     bool
@@ -70,14 +71,16 @@ func (r agentRow) matches(q string) bool {
 	return false
 }
 
-// siteMatcher assigns agents to sites by their adapter or source address.
+// siteMatcher assigns agents to sites: by hand when an operator moved them,
+// otherwise by their adapter or source address.
 type siteMatcher struct {
 	sites    []store.Site
 	prefixes [][]netip.Prefix
+	manual   map[string]string // agent → site
 }
 
-func newSiteMatcher(sites []store.Site) siteMatcher {
-	m := siteMatcher{sites: sites}
+func newSiteMatcher(sites []store.Site, manual map[string]string) siteMatcher {
+	m := siteMatcher{sites: sites, manual: manual}
 	for _, st := range sites {
 		p, _ := accesslog.ParseSubnets(st.Subnets)
 		m.prefixes = append(m.prefixes, p)
@@ -85,8 +88,20 @@ func newSiteMatcher(sites []store.Site) siteMatcher {
 	return m
 }
 
-func (m siteMatcher) match(a store.Agent, inv store.InventorySummary) (id, name string) {
-	addrs := append([]string(nil), inv.IPv4...)
+func (m siteMatcher) match(a store.Agent, inv store.InventorySummary) (id, name string, manual bool) {
+	if want, ok := m.manual[a.ID]; ok {
+		for _, st := range m.sites {
+			if st.ID == want {
+				return st.ID, st.Name, true
+			}
+		}
+	}
+	id, name = m.bySubnet(a, inv.IPv4)
+	return id, name, false
+}
+
+func (m siteMatcher) bySubnet(a store.Agent, ipv4 []string) (id, name string) {
+	addrs := append([]string(nil), ipv4...)
 	if a.LastSeenIP != nil {
 		addrs = append(addrs, a.LastSeenIP.String())
 	}
@@ -164,7 +179,12 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		checked[id] = true
 	}
 	all := q.Get("select") == "all"
-	matcher := newSiteMatcher(sites)
+	manual, err := s.store.AgentSites(r.Context(), t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	matcher := newSiteMatcher(sites, manual)
 	siteCount := map[string]int{}
 	var ouKeys []string
 	needle := strings.ToLower(d.Query)
@@ -172,7 +192,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a), Checks: worst[a.ID], Alerts: alerts[a.ID],
 			Current: a.ID == selected}
 		var siteID string
-		siteID, row.Site = matcher.match(a, row.Inv)
+		siteID, row.Site, row.SiteManual = matcher.match(a, row.Inv)
 		ouKey := ""
 		if pl, ok := places[adinv.HostKey(a.Host.Hostname)]; ok {
 			row.OU, ouKey = pl.OU(), pl.Key()
@@ -416,4 +436,88 @@ func (s *Server) handleTheme(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, safeReturn(r.PostFormValue("return"), "/agents"), http.StatusSeeOther)
+}
+
+// agentSite is the site of one agent, for its page.
+type agentSite struct {
+	Sites  []store.Site
+	ID     string
+	Name   string
+	Manual bool
+	// Auto is the site subnet matching would choose.
+	Auto string
+}
+
+func (s *Server) agentSite(r *http.Request, t string, a store.Agent, ipv4 []string) (agentSite, error) {
+	sites, err := s.store.ListSites(r.Context(), t)
+	if err != nil {
+		return agentSite{}, err
+	}
+	manual, err := s.store.AgentSites(r.Context(), t)
+	if err != nil {
+		return agentSite{}, err
+	}
+	m := newSiteMatcher(sites, manual)
+	v := agentSite{Sites: sites}
+	v.ID, v.Name, v.Manual = m.match(a, store.InventorySummary{IPv4: ipv4})
+	_, v.Auto = m.bySubnet(a, ipv4)
+	return v, nil
+}
+
+// moveAgents assigns agents to a site by hand ("" = back to automatic).
+func (s *Server) moveAgents(r *http.Request, t string, agentIDs []string, site string) (int, error) {
+	op := sessionFrom(r.Context()).data.Operator
+	n := 0
+	for _, id := range agentIDs {
+		if !ids.IsUUID(id) {
+			continue
+		}
+		if err := s.store.SetAgentSite(r.Context(), t, id, site, "operator:"+op.Username); err != nil {
+			return n, err
+		}
+		s.audit(r.Context(), t, op, "agent.site_set", id, map[string]any{"site": site})
+		n++
+	}
+	return n, nil
+}
+
+// handleMoveAgents moves the agents named in the "agent" values.
+func (s *Server) handleMoveAgents(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
+		return
+	}
+	_ = r.ParseForm()
+	agents := r.PostForm["agent"]
+	if id := r.PathValue("id"); id != "" {
+		agents = []string{id}
+	}
+	site := r.PostFormValue("site")
+	if site != "" && !ids.IsUUID(site) {
+		http.NotFound(w, r)
+		return
+	}
+	back := r.PostFormValue("return")
+	if !strings.HasPrefix(back, "/agents") {
+		back = "/agents"
+	}
+	if len(agents) == 0 || len(agents) > 1000 {
+		s.flash(w, r, s.T(r, "Seleziona almeno un agente."), back)
+		return
+	}
+	n, err := s.moveAgents(r, t, agents, site)
+	if errors.Is(err, store.ErrNotFound) {
+		s.flash(w, r, s.T(r, "Sede o agente non trovati."), back)
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if site == "" {
+		s.flash(w, r, s.Tf(r, "%d agenti tornati all'assegnazione automatica per subnet.", n), back)
+	} else {
+		s.flash(w, r, s.Tf(r, "%d agenti spostati.", n), back)
+	}
 }

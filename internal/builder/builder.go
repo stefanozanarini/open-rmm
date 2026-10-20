@@ -1,6 +1,7 @@
-// Package builder implements openrmm-builder: it holds the Authenticode
-// signing key, encrypted with a passphrase that is never stored, and builds
-// signed agent installers (MSI) preconfigured for this console.
+// Package builder implements openrmm-builder: it holds the console's signing
+// keys, encrypted with one passphrase that is never stored, builds signed
+// agent installers (MSI) preconfigured for this console, and signs module and
+// agent release manifests.
 //
 // The key is created here (dedicated CA, or a request for an enterprise
 // CA) or imported from a PFX, and is never written in clear: OpenSSL and
@@ -122,7 +123,8 @@ func (s *Service) archive() error {
 }
 
 func (s *Service) status() (*openrmmv1.BuilderStatus, error) {
-	st := &openrmmv1.BuilderStatus{State: "none", DedicatedCa: s.exists(fileCAKey)}
+	st := &openrmmv1.BuilderStatus{State: "none", DedicatedCa: s.exists(fileCAKey),
+		ModuleKey: s.publicKey(fileModuleKey), ReleaseKey: s.publicKey(fileReleaseKey)}
 	if chain, err := os.ReadFile(s.path(fileChain)); err == nil && s.exists(fileKey) {
 		st.State, st.ChainPem = "ready", string(chain)
 	}
@@ -154,8 +156,8 @@ func invalid(err error) error { return status.Error(codes.InvalidArgument, err.E
 func (s *Service) CreateCA(_ context.Context, req *openrmmv1.CreateCARequest) (*openrmmv1.BuilderStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(req.GetPassphrase()) < codesign.MinPassphrase {
-		return nil, invalid(errors.New("the passphrase must have at least 16 characters"))
+	if err := s.checkPassphrase(req.GetPassphrase()); err != nil {
+		return nil, err
 	}
 	now := s.now()
 	ca, err := codesign.NewCA(subjectOf(req.GetSubject()), now)
@@ -193,6 +195,9 @@ func (s *Service) CreateCA(_ context.Context, req *openrmmv1.CreateCARequest) (*
 func (s *Service) CreateRequest(_ context.Context, req *openrmmv1.CreateRequestRequest) (*openrmmv1.BuilderStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.checkPassphrase(req.GetPassphrase()); err != nil {
+		return nil, err
+	}
 	key, csr, err := codesign.NewRequest(subjectOf(req.GetSubject()))
 	if err != nil {
 		return nil, invalid(err)
@@ -310,8 +315,8 @@ func (s *Service) Renew(_ context.Context, req *openrmmv1.RenewRequest) (*openrm
 func (s *Service) ImportPFX(ctx context.Context, req *openrmmv1.ImportPFXRequest) (*openrmmv1.BuilderStatus, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(req.GetPassphrase()) < codesign.MinPassphrase {
-		return nil, invalid(errors.New("the passphrase must have at least 16 characters"))
+	if err := s.checkPassphrase(req.GetPassphrase()); err != nil {
+		return nil, err
 	}
 	if len(req.GetPfx()) == 0 || len(req.GetPfx()) > 1<<20 {
 		return nil, invalid(errors.New("invalid PFX"))

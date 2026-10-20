@@ -34,6 +34,7 @@ type Memory struct {
 	packages    map[string]Package
 	catalog     map[string]CatalogApp
 	sites       map[string]Site
+	agentSites  map[string]string // tenant/agent → site, manual assignments
 	notes       []Note
 	adDomains   map[string]ADDomain
 	federation  *memFederation

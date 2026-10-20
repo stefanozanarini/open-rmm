@@ -4,8 +4,9 @@ package openrmm.v1;
 
 option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
 
-// BuilderService holds the Authenticode signing key, encrypted with a
-// passphrase the console never stores, and builds signed agent installers.
+// BuilderService holds the console's signing keys, all encrypted with one
+// passphrase the console never stores: the Authenticode key that signs agent
+// installers, and the ed25519 keys that sign modules and agent releases.
 // It listens on a Unix socket shared only with the web console.
 service BuilderService {
   rpc Status(BuilderStatusRequest) returns (BuilderStatus);
@@ -21,6 +22,10 @@ service BuilderService {
   rpc Renew(RenewRequest) returns (BuilderStatus);
   // Build builds and signs an agent installer; the MSI comes in chunks.
   rpc Build(BuildRequest) returns (stream BuildChunk);
+  // CreateReleaseKeys creates the module and agent release keys.
+  rpc CreateReleaseKeys(CreateReleaseKeysRequest) returns (BuilderStatus);
+  // SignManifest signs a module or agent release manifest.
+  rpc SignManifest(SignManifestRequest) returns (SignManifestResponse);
 }
 
 message BuilderStatusRequest {}
@@ -39,6 +44,8 @@ message BuilderStatus {
   string chain_pem = 2;      // signing certificate, then its CAs
   bool dedicated_ca = 3;     // the CA key is held here too (renewal)
   string request_pem = 4;    // pending certificate request
+  string module_key = 5;     // public module release key, "ed25519:..."
+  string release_key = 6;    // public agent release key, "ed25519:..."
 }
 
 message CreateCARequest {
@@ -79,4 +86,19 @@ message BuildRequest {
 message BuildChunk {
   bytes data = 1;
   string sha256 = 2; // last chunk: hex SHA-256 of the MSI
+}
+
+message CreateReleaseKeysRequest {
+  string passphrase = 1;
+}
+
+message SignManifestRequest {
+  string kind = 1;      // module | release
+  bytes manifest = 2;   // the exact manifest bytes to sign
+  string passphrase = 3;
+}
+
+message SignManifestResponse {
+  string key_id = 1;
+  bytes signature = 2;
 }

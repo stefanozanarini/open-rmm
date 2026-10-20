@@ -5,7 +5,7 @@ Every open-rmm feature is a module (plugin): the agent only downloads, verifies 
 ## Chain of trust
 
 ```
-module release key (offline)
+module release key (console builder, or offline)
   └── signs the manifest
         ├── SHA-256 of the archive
         └── SHA-256 and size of every file
@@ -23,7 +23,7 @@ Before every run the agent checks:
 5. the hashes of the cached files again, right before starting;
 6. local policy: for example a module with the `adhoc_script` capability is refused when `AllowAdHocScripts` is 0.
 
-The console cannot sign modules: at most it distributes modules that are already signed.
+The module key is held by the console's `builder` service, encrypted with the signing passphrase, or kept offline. Either way the web console and the gateway never hold it in clear: a module is signed only after an administrator's MFA approval and the passphrase, and the agents verify the signature themselves.
 
 ## Module layout
 
@@ -115,7 +115,14 @@ SDK functions: `Invoke-RmmModule`, `Send-RmmProgress`, `Send-RmmLog`, `Send-RmmR
 
 ## Signing and publishing
 
-Sign on the offline machine that holds the module release key:
+**From the console** (recommended). Once, a console administrator creates the module and release keys on the **Installer** page (*Module and release keys*), with the passphrase of the code-signing key: installers include the public keys from then on. Then, to publish:
+
+1. zip the module folder (the one with `manifest.json`; the SDK is added automatically);
+2. **Moduli → Pubblica un modulo**: sign in again with MFA, upload the zip, enter the passphrase.
+
+The console packs the module, the builder signs the manifest, and the console verifies the signature with the keys the agents trust before publishing it. Each version is published once: raise `version` in the manifest for a new one.
+
+**Offline** (key kept on a separate machine). Sign on the offline machine that holds the module release key:
 
 ```bash
 # once: the module release key (keep it offline)

@@ -70,7 +70,8 @@ type agentData struct {
 	Outdated map[string]string
 	Notes    []store.Note
 	AD       *adPlace // computer object in Active Directory
-	Shell    bool     // an interactive shell can be opened
+	Site     agentSite
+	Shell    bool // an interactive shell can be opened
 	// Return is where forms on this agent go back to; Panel is set when the
 	// agent is shown in the bottom panel of the agent list.
 	Return string
@@ -135,6 +136,13 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 		return nil, err
 	}
 	if d.Notes, err = s.store.ListNotes(r.Context(), t, id, 100); err != nil {
+		return nil, err
+	}
+	var ipv4 []string
+	if d.Inv != nil {
+		ipv4 = d.Inv.IPv4()
+	}
+	if d.Site, err = s.agentSite(r, t, a, ipv4); err != nil {
 		return nil, err
 	}
 	snaps, err := s.adSnapshots(r.Context(), t)
@@ -388,7 +396,10 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "job", "Job "+j.ID[:8], d)
 }
 
-type modulesData struct{ Modules []moduleView }
+type modulesData struct {
+	Modules []moduleView
+	Publish publishView
+}
 
 type moduleView struct {
 	store.Module
@@ -403,7 +414,7 @@ func (s *Server) handleModules(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var d modulesData
+	d := modulesData{Publish: s.publishData(r, modulesKind)}
 	for _, m := range mods {
 		v := moduleView{Module: m}
 		if man, err := modules.ParseManifest(m.Manifest); err == nil {
@@ -525,6 +536,7 @@ type updatesData struct {
 	Targets  []targetView
 	Releases []store.Release
 	Problems []store.Agent
+	Publish  publishView
 }
 
 func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
@@ -548,7 +560,7 @@ func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	d := updatesData{Releases: rels}
+	d := updatesData{Releases: rels, Publish: s.publishData(r, releasesKind)}
 	for _, tg := range targets {
 		v := targetView{ReleaseTarget: tg}
 		for _, a := range agents {

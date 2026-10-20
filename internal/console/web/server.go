@@ -295,6 +295,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /catalog/{id}/import", s.role(authn.RoleAdmin, s.handleImportCatalog))
 	mux.Handle("POST /agents/{id}/uninstall", s.role(authn.RoleOperator, s.handleUninstall))
 	mux.Handle("POST /agents/{id}/notes", s.role(authn.RoleOperator, s.handleAddNote))
+	mux.Handle("POST /agents/{id}/site", s.role(authn.RoleOperator, s.handleMoveAgents))
+	mux.Handle("POST /agents/site", s.role(authn.RoleOperator, s.handleMoveAgents))
 	mux.Handle("GET /agents/bulk", s.role(authn.RoleOperator, s.handleBulkForm))
 	mux.Handle("POST /agents/bulk", s.role(authn.RoleOperator, s.handleBulkJobs))
 	mux.Handle("GET /sites", s.auth(s.handleSites))
@@ -323,6 +325,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agent-installer/signing/certificate", s.console(s.handleImportSigningCert))
 	mux.Handle("POST /agent-installer/signing/pfx", s.console(s.handleImportSigningPFX))
 	mux.Handle("POST /agent-installer/signing/renew", s.console(s.handleRenewSigning))
+	mux.Handle("POST /agent-installer/signing/keys", s.console(s.handleCreateReleaseKeys))
+	mux.Handle("POST /modules/publish", s.console(s.startPublish(modulesKind)))
+	mux.Handle("POST "+publishModulePath, s.console(s.handlePublishModule))
+	mux.Handle("POST /updates/publish", s.console(s.startPublish(releasesKind)))
+	mux.Handle("POST "+publishReleasePath, s.console(s.handlePublishRelease))
 	mux.Handle("GET /federation", s.auth(s.handleFederation))
 	mux.Handle("POST /federation/links", s.role(authn.RoleAdmin, s.handleCreateLink))
 	mux.Handle("POST /federation/links/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevokeLink))
@@ -352,10 +359,10 @@ func (s *Server) secure(next http.Handler) http.Handler {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		// Bound request bodies: forms are small, scripts at most 1 MB;
-		// package uploads are bounded by their handler.
+		// uploads are bounded by their handler.
 		limit := int64(2 << 20)
-		if r.URL.Path == uploadPath {
-			limit = maxPackageSize + 1<<20
+		if l, ok := streamedUploads[r.URL.Path]; ok {
+			limit = l
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, limit)
 		// A panic becomes a clean 500 instead of a dropped connection (which

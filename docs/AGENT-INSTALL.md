@@ -4,7 +4,13 @@ The agent is installed with an MSI package, suitable for Group Policy (GPO) depl
 
 ## Simplest: the installer built by the console
 
-On the console, **Installer** page (Admin): set up the signing certificate once (dedicated CA with your organization's details, or a request for the enterprise CA), then **Build the installer** for an agent version: you approve with MFA and enter the passphrase of the signing key. The resulting MSI is signed and already contains the gateway address, the root certificate, the public keys and an enrollment token:
+Once, as a console administrator:
+
+1. **Installer** page: set up the signing certificate (dedicated CA with your organization's details, a request for the enterprise CA, or a PFX), with a passphrase of at least 16 characters.
+2. Same page, **Module and release keys**: create them with the same passphrase.
+3. **Versioni dell'agente → Pubblica una release**: upload `openrmm-agent.exe` and `openrmm-watchdog.exe` (`make build-windows VERSION=x.y.z`) for `windows/amd64`.
+
+Then, for each installer, **Installer → Build the installer** for an agent version: you approve with MFA and enter the passphrase. The resulting MSI is signed and already contains the gateway address, the root certificate, the public keys and an enrollment token:
 
 - **double click** on a PC (or `msiexec /i openrmm-agent-x.y.z.msi /qn`): nothing to enter;
 - **Group Policy**: assign the same MSI; the ADMX settings are optional and take precedence;
@@ -22,8 +28,8 @@ The rest of this page describes the manual way: generic MSI and configuration by
 | Root certificate | `openrmm-admin pki root-b64 -in pki/ca/root-ca.crt` (one base64 line) |
 | Enrollment token | web console → **Token**, or `openrmm-admin token create` |
 | Command key | printed by `setup-secrets.sh` (`ed25519:…`) |
-| Module key | public module release key (offline machine) |
-| Release key | public agent release key (offline machine) |
+| Module key | public module release key: **Installer** page, *Module and release keys* (or the offline machine) |
+| Release key | public agent release key: same place |
 
 ## Building the package
 

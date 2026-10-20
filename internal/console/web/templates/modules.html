@@ -1,5 +1,26 @@
 {{define "content"}}
-<p class="muted">{{th "I moduli sono firmati con la chiave di rilascio offline e vengono pubblicati da riga di comando (<code>openrmm-admin module publish</code>)."}}</p>
+<p class="muted">{{th "I moduli sono firmati con la chiave dei moduli della console, oppure offline e pubblicati da riga di comando (<code>openrmm-admin module publish</code>)."}}</p>
+{{with .Data.Publish}}{{if .ConsoleAdmin}}
+<h2 id="publish">{{t "Pubblica un modulo"}}</h2>
+{{if not .BuilderUp}}<p><span class="badge chk-failing">{{t "non raggiungibile"}}</span> {{t "Il servizio di firma non risponde: controlla il container builder."}}</p>
+{{else if not .KeysReady}}<p>{{th "Crea prima le chiavi di moduli e release nella pagina <a href=\"/agent-installer#release-keys\">Installer</a>."}}</p>
+{{else if .Approved}}
+<form method="post" action="/modules/publish/upload" enctype="multipart/form-data" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label>{{t "Modulo (zip della cartella con manifest.json)"}} <input type="file" name="module" accept=".zip" required></label>
+  <label>{{t "Passphrase delle chiavi di firma"}} <input type="password" name="passphrase" required autocomplete="current-password"></label>
+  <p class="muted">{{tf "Firmato con la chiave %s; l'SDK viene aggiunto automaticamente. La versione nel manifest deve essere nuova." .KeyID}}</p>
+  <button class="primary">{{t "Firma e pubblica"}}</button>
+</form>
+{{else}}
+<form method="post" action="/modules/publish" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <p class="muted">{{t "Ti verrà chiesto di autenticarti di nuovo con MFA, poi di caricare i file con la passphrase delle chiavi di firma."}}</p>
+  <button class="primary">{{t "Pubblica un modulo"}}</button>
+</form>
+{{end}}
+<h2>{{t "Moduli pubblicati"}}</h2>
+{{end}}{{end}}
 <table>
 <thead><tr><th>{{t "Modulo"}}</th><th>{{t "Versione"}}</th><th>{{t "Piattaforme"}}</th><th>{{t "Azioni"}}</th><th>{{t "Chiave"}}</th><th>{{t "Pubblicato"}}</th></tr></thead>
 <tbody>

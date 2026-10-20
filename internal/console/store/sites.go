@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -37,6 +38,11 @@ type SiteStore interface {
 	PutSite(ctx context.Context, s Site) error // insert or update by id
 	DeleteSite(ctx context.Context, tenantID, id string) error
 	ListSites(ctx context.Context, tenantID string) ([]Site, error)
+	// SetAgentSite assigns an agent to a site by hand, overriding subnet
+	// matching; siteID "" puts it back on automatic assignment.
+	SetAgentSite(ctx context.Context, tenantID, agentID, siteID, by string) error
+	// AgentSites returns the manual assignments, by agent id.
+	AgentSites(ctx context.Context, tenantID string) (map[string]string, error)
 
 	AddNote(ctx context.Context, n Note) error
 	ListNotes(ctx context.Context, tenantID, agentID string, limit int) ([]Note, error)
@@ -71,7 +77,44 @@ func (m *Memory) DeleteSite(_ context.Context, tenantID, id string) error {
 		return ErrNotFound
 	}
 	delete(m.sites, tenantID+"/"+id)
+	for k, site := range m.agentSites {
+		if site == id && strings.HasPrefix(k, tenantID+"/") {
+			delete(m.agentSites, k)
+		}
+	}
 	return nil
+}
+
+func (m *Memory) SetAgentSite(_ context.Context, tenantID, agentID, siteID, _ string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.agents[agentKey(tenantID, agentID)]; !ok {
+		return ErrNotFound
+	}
+	if m.agentSites == nil {
+		m.agentSites = map[string]string{}
+	}
+	if siteID == "" {
+		delete(m.agentSites, tenantID+"/"+agentID)
+		return nil
+	}
+	if _, ok := m.sites[tenantID+"/"+siteID]; !ok {
+		return ErrNotFound
+	}
+	m.agentSites[tenantID+"/"+agentID] = siteID
+	return nil
+}
+
+func (m *Memory) AgentSites(_ context.Context, tenantID string) (map[string]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]string{}
+	for k, site := range m.agentSites {
+		if a, ok := strings.CutPrefix(k, tenantID+"/"); ok {
+			out[a] = site
+		}
+	}
+	return out, nil
 }
 
 func (m *Memory) ListSites(_ context.Context, tenantID string) ([]Site, error) {
@@ -152,6 +195,40 @@ func (p *Postgres) ListSites(ctx context.Context, tenantID string) ([]Site, erro
 				return err
 			}
 			out = append(out, s)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func (p *Postgres) SetAgentSite(ctx context.Context, tenantID, agentID, siteID, by string) error {
+	err := p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if siteID == "" {
+			_, err := tx.Exec(ctx, `DELETE FROM agent_sites WHERE agent_id = $1`, agentID)
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO agent_sites (tenant_id, agent_id, site_id, assigned_by) VALUES ($1,$2,$3,$4)
+			ON CONFLICT (tenant_id, agent_id) DO UPDATE SET site_id = EXCLUDED.site_id,
+				assigned_by = EXCLUDED.assigned_by, assigned_at = now()`, tenantID, agentID, siteID, by)
+		return err
+	})
+	return fkNotFound(err)
+}
+
+func (p *Postgres) AgentSites(ctx context.Context, tenantID string) (map[string]string, error) {
+	out := map[string]string{}
+	err := p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT agent_id::text, site_id::text FROM agent_sites`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var a, site string
+			if err := rows.Scan(&a, &site); err != nil {
+				return err
+			}
+			out[a] = site
 		}
 		return rows.Err()
 	})

@@ -15,6 +15,7 @@ import (
 
 type bulkData struct {
 	Agents   []store.Agent
+	Sites    []store.Site
 	Commands []runnable
 	Scripts  []runnable
 	Packages []store.Package
@@ -52,7 +53,12 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, msg, "/agents")
 		return
 	}
-	d := bulkData{Agents: agents}
+	sites, err := s.store.ListSites(r.Context(), t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d := bulkData{Agents: agents, Sites: sites}
 	// Actions available on every selected agent's platform.
 	count := map[string]int{}
 	byKey := map[string]runnable{}
@@ -86,7 +92,6 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 	}
 	sortRunnables(d.Commands)
 	sortRunnables(d.Scripts)
-	var err error
 	if d.Packages, err = s.store.ListPackages(r.Context(), t); err != nil {
 		s.fail(w, r, err)
 		return

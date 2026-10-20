@@ -4,7 +4,7 @@ The agent updates itself, version by version and ring by ring, with automatic ro
 
 ## How it works
 
-1. On the offline machine a **release** is signed: agent and watchdog for one platform, described by a manifest signed with the **agent release key** (separate from the module and job keys).
+1. A **release** is signed: agent and watchdog for one platform, described by a manifest signed with the **agent release key** (separate from the module and job keys). The key is held by the console's `builder` service or kept offline.
 2. The release is published on the console, which verifies the signature before accepting it.
 3. A **target version** is set for a ring (`pilot` or `broad`) and a platform.
 4. The gateway offers the release to the agents of that ring running an older version. The agent:
@@ -21,17 +21,23 @@ Outcomes (downloading, staged, installed, rejected, rolled back) appear in the c
 
 ## Agent release key
 
-Generate it on the offline machine, like the module key:
+**On the console** (recommended): created with the module key on the **Installer** page (*Module and release keys*); installers built by the console trust it.
+
+**Offline**: generate it on the offline machine, like the module key:
 
 ```bash
 openrmm-admin signing keygen -out agent-release.key
 ```
 
-Configure the public key on the agents as `ReleaseSigningKeys` (REG_MULTI_SZ, or `release_signing_keys` in the configuration file) and on the console in `OPENRMM_RELEASE_KEYS`, used to verify releases at publication.
+Configure the public key on the agents as `ReleaseSigningKeys` (REG_MULTI_SZ, or `release_signing_keys` in the configuration file) and on the console in `OPENRMM_RELEASE_KEYS`, used to verify releases at publication and added to the installers. The two can coexist, for instance during a move from one key to the other.
 
 ## Publishing a version
 
 The version must be the one built into the executables (`make build-windows VERSION=1.2.0`): the watchdog considers the update successful only when the agent reports exactly that version.
+
+**From the console**: **Versioni dell'agente → Pubblica una release**, sign in again with MFA, then upload agent and watchdog with version, platform and the passphrase.
+
+**Offline**:
 
 ```bash
 # offline machine

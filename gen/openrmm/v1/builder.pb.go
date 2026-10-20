@@ -147,6 +147,8 @@ type BuilderStatus struct {
 	ChainPem      string                 `protobuf:"bytes,2,opt,name=chain_pem,json=chainPem,proto3" json:"chain_pem,omitempty"`           // signing certificate, then its CAs
 	DedicatedCa   bool                   `protobuf:"varint,3,opt,name=dedicated_ca,json=dedicatedCa,proto3" json:"dedicated_ca,omitempty"` // the CA key is held here too (renewal)
 	RequestPem    string                 `protobuf:"bytes,4,opt,name=request_pem,json=requestPem,proto3" json:"request_pem,omitempty"`     // pending certificate request
+	ModuleKey     string                 `protobuf:"bytes,5,opt,name=module_key,json=moduleKey,proto3" json:"module_key,omitempty"`        // public module release key, "ed25519:..."
+	ReleaseKey    string                 `protobuf:"bytes,6,opt,name=release_key,json=releaseKey,proto3" json:"release_key,omitempty"`     // public agent release key, "ed25519:..."
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -205,6 +207,20 @@ func (x *BuilderStatus) GetDedicatedCa() bool {
 func (x *BuilderStatus) GetRequestPem() string {
 	if x != nil {
 		return x.RequestPem
+	}
+	return ""
+}
+
+func (x *BuilderStatus) GetModuleKey() string {
+	if x != nil {
+		return x.ModuleKey
+	}
+	return ""
+}
+
+func (x *BuilderStatus) GetReleaseKey() string {
+	if x != nil {
+		return x.ReleaseKey
 	}
 	return ""
 }
@@ -599,6 +615,162 @@ func (x *BuildChunk) GetSha256() string {
 	return ""
 }
 
+type CreateReleaseKeysRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Passphrase    string                 `protobuf:"bytes,1,opt,name=passphrase,proto3" json:"passphrase,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateReleaseKeysRequest) Reset() {
+	*x = CreateReleaseKeysRequest{}
+	mi := &file_openrmm_v1_builder_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateReleaseKeysRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateReleaseKeysRequest) ProtoMessage() {}
+
+func (x *CreateReleaseKeysRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_openrmm_v1_builder_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateReleaseKeysRequest.ProtoReflect.Descriptor instead.
+func (*CreateReleaseKeysRequest) Descriptor() ([]byte, []int) {
+	return file_openrmm_v1_builder_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CreateReleaseKeysRequest) GetPassphrase() string {
+	if x != nil {
+		return x.Passphrase
+	}
+	return ""
+}
+
+type SignManifestRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`         // module | release
+	Manifest      []byte                 `protobuf:"bytes,2,opt,name=manifest,proto3" json:"manifest,omitempty"` // the exact manifest bytes to sign
+	Passphrase    string                 `protobuf:"bytes,3,opt,name=passphrase,proto3" json:"passphrase,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignManifestRequest) Reset() {
+	*x = SignManifestRequest{}
+	mi := &file_openrmm_v1_builder_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignManifestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignManifestRequest) ProtoMessage() {}
+
+func (x *SignManifestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_openrmm_v1_builder_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignManifestRequest.ProtoReflect.Descriptor instead.
+func (*SignManifestRequest) Descriptor() ([]byte, []int) {
+	return file_openrmm_v1_builder_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SignManifestRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SignManifestRequest) GetManifest() []byte {
+	if x != nil {
+		return x.Manifest
+	}
+	return nil
+}
+
+func (x *SignManifestRequest) GetPassphrase() string {
+	if x != nil {
+		return x.Passphrase
+	}
+	return ""
+}
+
+type SignManifestResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	KeyId         string                 `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
+	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SignManifestResponse) Reset() {
+	*x = SignManifestResponse{}
+	mi := &file_openrmm_v1_builder_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignManifestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignManifestResponse) ProtoMessage() {}
+
+func (x *SignManifestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_openrmm_v1_builder_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignManifestResponse.ProtoReflect.Descriptor instead.
+func (*SignManifestResponse) Descriptor() ([]byte, []int) {
+	return file_openrmm_v1_builder_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SignManifestResponse) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
+}
+
+func (x *SignManifestResponse) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
 var File_openrmm_v1_builder_proto protoreflect.FileDescriptor
 
 const file_openrmm_v1_builder_proto_rawDesc = "" +
@@ -613,13 +785,17 @@ const file_openrmm_v1_builder_proto_rawDesc = "" +
 	"\x13organizational_unit\x18\x03 \x01(\tR\x12organizationalUnit\x12\x1a\n" +
 	"\blocality\x18\x04 \x01(\tR\blocality\x12\x1a\n" +
 	"\bprovince\x18\x05 \x01(\tR\bprovince\x12\x18\n" +
-	"\acountry\x18\x06 \x01(\tR\acountry\"\x86\x01\n" +
+	"\acountry\x18\x06 \x01(\tR\acountry\"\xc6\x01\n" +
 	"\rBuilderStatus\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x1b\n" +
 	"\tchain_pem\x18\x02 \x01(\tR\bchainPem\x12!\n" +
 	"\fdedicated_ca\x18\x03 \x01(\bR\vdedicatedCa\x12\x1f\n" +
 	"\vrequest_pem\x18\x04 \x01(\tR\n" +
-	"requestPem\"d\n" +
+	"requestPem\x12\x1d\n" +
+	"\n" +
+	"module_key\x18\x05 \x01(\tR\tmoduleKey\x12\x1f\n" +
+	"\vrelease_key\x18\x06 \x01(\tR\n" +
+	"releaseKey\"d\n" +
 	"\x0fCreateCARequest\x121\n" +
 	"\asubject\x18\x01 \x01(\v2\x17.openrmm.v1.CertSubjectR\asubject\x12\x1e\n" +
 	"\n" +
@@ -659,7 +835,20 @@ const file_openrmm_v1_builder_proto_rawDesc = "" +
 	"\n" +
 	"BuildChunk\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\x12\x16\n" +
-	"\x06sha256\x18\x02 \x01(\tR\x06sha2562\x80\x04\n" +
+	"\x06sha256\x18\x02 \x01(\tR\x06sha256\":\n" +
+	"\x18CreateReleaseKeysRequest\x12\x1e\n" +
+	"\n" +
+	"passphrase\x18\x01 \x01(\tR\n" +
+	"passphrase\"e\n" +
+	"\x13SignManifestRequest\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1a\n" +
+	"\bmanifest\x18\x02 \x01(\fR\bmanifest\x12\x1e\n" +
+	"\n" +
+	"passphrase\x18\x03 \x01(\tR\n" +
+	"passphrase\"K\n" +
+	"\x14SignManifestResponse\x12\x15\n" +
+	"\x06key_id\x18\x01 \x01(\tR\x05keyId\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature2\xa9\x05\n" +
 	"\x0eBuilderService\x12E\n" +
 	"\x06Status\x12 .openrmm.v1.BuilderStatusRequest\x1a\x19.openrmm.v1.BuilderStatus\x12B\n" +
 	"\bCreateCA\x12\x1b.openrmm.v1.CreateCARequest\x1a\x19.openrmm.v1.BuilderStatus\x12L\n" +
@@ -667,7 +856,9 @@ const file_openrmm_v1_builder_proto_rawDesc = "" +
 	"\x11ImportCertificate\x12$.openrmm.v1.ImportCertificateRequest\x1a\x19.openrmm.v1.BuilderStatus\x12D\n" +
 	"\tImportPFX\x12\x1c.openrmm.v1.ImportPFXRequest\x1a\x19.openrmm.v1.BuilderStatus\x12<\n" +
 	"\x05Renew\x12\x18.openrmm.v1.RenewRequest\x1a\x19.openrmm.v1.BuilderStatus\x12;\n" +
-	"\x05Build\x12\x18.openrmm.v1.BuildRequest\x1a\x16.openrmm.v1.BuildChunk0\x01B>Z<github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
+	"\x05Build\x12\x18.openrmm.v1.BuildRequest\x1a\x16.openrmm.v1.BuildChunk0\x01\x12T\n" +
+	"\x11CreateReleaseKeys\x12$.openrmm.v1.CreateReleaseKeysRequest\x1a\x19.openrmm.v1.BuilderStatus\x12Q\n" +
+	"\fSignManifest\x12\x1f.openrmm.v1.SignManifestRequest\x1a .openrmm.v1.SignManifestResponseB>Z<github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
 
 var (
 	file_openrmm_v1_builder_proto_rawDescOnce sync.Once
@@ -681,7 +872,7 @@ func file_openrmm_v1_builder_proto_rawDescGZIP() []byte {
 	return file_openrmm_v1_builder_proto_rawDescData
 }
 
-var file_openrmm_v1_builder_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_openrmm_v1_builder_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_openrmm_v1_builder_proto_goTypes = []any{
 	(*BuilderStatusRequest)(nil),     // 0: openrmm.v1.BuilderStatusRequest
 	(*CertSubject)(nil),              // 1: openrmm.v1.CertSubject
@@ -693,12 +884,15 @@ var file_openrmm_v1_builder_proto_goTypes = []any{
 	(*RenewRequest)(nil),             // 7: openrmm.v1.RenewRequest
 	(*BuildRequest)(nil),             // 8: openrmm.v1.BuildRequest
 	(*BuildChunk)(nil),               // 9: openrmm.v1.BuildChunk
-	nil,                              // 10: openrmm.v1.BuildRequest.PropertiesEntry
+	(*CreateReleaseKeysRequest)(nil), // 10: openrmm.v1.CreateReleaseKeysRequest
+	(*SignManifestRequest)(nil),      // 11: openrmm.v1.SignManifestRequest
+	(*SignManifestResponse)(nil),     // 12: openrmm.v1.SignManifestResponse
+	nil,                              // 13: openrmm.v1.BuildRequest.PropertiesEntry
 }
 var file_openrmm_v1_builder_proto_depIdxs = []int32{
 	1,  // 0: openrmm.v1.CreateCARequest.subject:type_name -> openrmm.v1.CertSubject
 	1,  // 1: openrmm.v1.CreateRequestRequest.subject:type_name -> openrmm.v1.CertSubject
-	10, // 2: openrmm.v1.BuildRequest.properties:type_name -> openrmm.v1.BuildRequest.PropertiesEntry
+	13, // 2: openrmm.v1.BuildRequest.properties:type_name -> openrmm.v1.BuildRequest.PropertiesEntry
 	0,  // 3: openrmm.v1.BuilderService.Status:input_type -> openrmm.v1.BuilderStatusRequest
 	3,  // 4: openrmm.v1.BuilderService.CreateCA:input_type -> openrmm.v1.CreateCARequest
 	4,  // 5: openrmm.v1.BuilderService.CreateRequest:input_type -> openrmm.v1.CreateRequestRequest
@@ -706,15 +900,19 @@ var file_openrmm_v1_builder_proto_depIdxs = []int32{
 	6,  // 7: openrmm.v1.BuilderService.ImportPFX:input_type -> openrmm.v1.ImportPFXRequest
 	7,  // 8: openrmm.v1.BuilderService.Renew:input_type -> openrmm.v1.RenewRequest
 	8,  // 9: openrmm.v1.BuilderService.Build:input_type -> openrmm.v1.BuildRequest
-	2,  // 10: openrmm.v1.BuilderService.Status:output_type -> openrmm.v1.BuilderStatus
-	2,  // 11: openrmm.v1.BuilderService.CreateCA:output_type -> openrmm.v1.BuilderStatus
-	2,  // 12: openrmm.v1.BuilderService.CreateRequest:output_type -> openrmm.v1.BuilderStatus
-	2,  // 13: openrmm.v1.BuilderService.ImportCertificate:output_type -> openrmm.v1.BuilderStatus
-	2,  // 14: openrmm.v1.BuilderService.ImportPFX:output_type -> openrmm.v1.BuilderStatus
-	2,  // 15: openrmm.v1.BuilderService.Renew:output_type -> openrmm.v1.BuilderStatus
-	9,  // 16: openrmm.v1.BuilderService.Build:output_type -> openrmm.v1.BuildChunk
-	10, // [10:17] is the sub-list for method output_type
-	3,  // [3:10] is the sub-list for method input_type
+	10, // 10: openrmm.v1.BuilderService.CreateReleaseKeys:input_type -> openrmm.v1.CreateReleaseKeysRequest
+	11, // 11: openrmm.v1.BuilderService.SignManifest:input_type -> openrmm.v1.SignManifestRequest
+	2,  // 12: openrmm.v1.BuilderService.Status:output_type -> openrmm.v1.BuilderStatus
+	2,  // 13: openrmm.v1.BuilderService.CreateCA:output_type -> openrmm.v1.BuilderStatus
+	2,  // 14: openrmm.v1.BuilderService.CreateRequest:output_type -> openrmm.v1.BuilderStatus
+	2,  // 15: openrmm.v1.BuilderService.ImportCertificate:output_type -> openrmm.v1.BuilderStatus
+	2,  // 16: openrmm.v1.BuilderService.ImportPFX:output_type -> openrmm.v1.BuilderStatus
+	2,  // 17: openrmm.v1.BuilderService.Renew:output_type -> openrmm.v1.BuilderStatus
+	9,  // 18: openrmm.v1.BuilderService.Build:output_type -> openrmm.v1.BuildChunk
+	2,  // 19: openrmm.v1.BuilderService.CreateReleaseKeys:output_type -> openrmm.v1.BuilderStatus
+	12, // 20: openrmm.v1.BuilderService.SignManifest:output_type -> openrmm.v1.SignManifestResponse
+	12, // [12:21] is the sub-list for method output_type
+	3,  // [3:12] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -731,7 +929,7 @@ func file_openrmm_v1_builder_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_openrmm_v1_builder_proto_rawDesc), len(file_openrmm_v1_builder_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

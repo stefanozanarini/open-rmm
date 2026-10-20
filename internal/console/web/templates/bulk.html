@@ -2,6 +2,18 @@
 {{with .Data}}
 <p>{{t "Agenti selezionati:"}} {{range $i, $a := .Agents}}{{if $i}}, {{end}}{{$a.Host.Hostname}}{{end}}.</p>
 <p class="muted">{{t "Una sola autenticazione con Microsoft approva l'azione su tutti gli agenti selezionati; ognuno riceve un proprio comando firmato."}}</p>
+{{if .Sites}}
+<h2>{{t "Sposta nella sede"}}</h2>
+<form method="post" action="/agents/site" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <select name="site" aria-label="{{t "Sede"}}">
+    <option value="">{{t "Automatica (per subnet)"}}</option>
+    {{range .Sites}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+  <button>{{t "Sposta"}}</button>
+</form>
+{{end}}
 {{if .Commands}}
 <h2>{{t "Esegui un comando"}}</h2>
 <form method="post" action="/agents/bulk" class="stack">

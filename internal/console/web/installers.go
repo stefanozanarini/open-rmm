@@ -89,6 +89,8 @@ type installersData struct {
 	BuilderUp bool
 	// ConsoleAdmin manages the console-wide signing key.
 	ConsoleAdmin bool
+	// Module and agent release keys: the builder's, with their key ids.
+	ModuleKey, ModuleKeyID, ReleaseKey, ReleaseKeyID string
 }
 
 func grpcMessage(err error) string { return status.Convert(err).Message() }
@@ -100,20 +102,16 @@ func (s *Server) handleInstallers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	d := installersData{Builder: s.builder != nil, Missing: s.agentInstall.missing(), MinPass: codesign.MinPassphrase,
+	st := s.builderStatus(ctx)
+	d := installersData{Builder: s.builder != nil, Missing: s.installSettings(st).missing(), MinPass: codesign.MinPassphrase,
 		ConsoleAdmin: s.consoleAdmin(sessionFrom(ctx).data.Operator)}
-	if s.builder != nil {
-		cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		st, err := s.builder.Status(cctx, &openrmmv1.BuilderStatusRequest{})
-		cancel()
-		if err == nil {
-			d.BuilderUp, d.Signing = true, st
-			if ch, err := codesign.ParseChain([]byte(st.GetChainPem()), s.now()); err == nil {
-				d.Chain, d.Info, d.Expiring = &ch, ch.LeafInfo(), ch.Expiring(s.now())
-			}
-		} else {
-			s.log.Warn("builder unreachable", "err", err)
+	if st != nil {
+		d.BuilderUp, d.Signing = true, st
+		if ch, err := codesign.ParseChain([]byte(st.GetChainPem()), s.now()); err == nil {
+			d.Chain, d.Info, d.Expiring = &ch, ch.LeafInfo(), ch.Expiring(s.now())
 		}
+		d.ModuleKey, d.ModuleKeyID = st.GetModuleKey(), keyIDOf(st.GetModuleKey())
+		d.ReleaseKey, d.ReleaseKeyID = st.GetReleaseKey(), keyIDOf(st.GetReleaseKey())
 	}
 	rels, err := s.store.ListReleases(ctx)
 	if err != nil {
@@ -356,7 +354,7 @@ func (s *Server) handleRenewSigning(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleBuildInstaller(w http.ResponseWriter, r *http.Request) {
 	t, _ := tenantOf(r)
 	version := r.PostFormValue("version")
-	if s.builder == nil || len(s.agentInstall.missing()) > 0 {
+	if s.builder == nil || len(s.installSettings(s.builderStatus(r.Context())).missing()) > 0 {
 		s.flash(w, r, s.T(r, "La creazione degli installer non è configurata su questa console."), "/agent-installer")
 		return
 	}
@@ -423,7 +421,7 @@ func (s *Server) handleConfirmInstaller(w http.ResponseWriter, r *http.Request) 
 	secret := ids.NewSecret(32)
 	tok := store.EnrollmentToken{ID: ids.NewUUID(), TenantID: t, Description: "MSI " + a.Version + " " + s.now().Format("2006-01-02"),
 		MaxUses: installerTokenUses, ExpiresAt: s.now().Add(installerTokenTTL)}
-	ai := s.agentInstall
+	ai := s.installSettings(s.builderStatus(ctx))
 	req := &openrmmv1.BuildRequest{Version: a.Version, AgentExe: files[release.AgentFile("windows")],
 		WatchdogExe: files[release.WatchdogFile("windows")], Passphrase: r.PostFormValue("passphrase"), TimestampUrl: ai.Timestamp,
 		Properties: map[string]string{"SERVER": ai.Server, "ROOTCA": ai.RootCA, "ENROLLTOKEN": secret,

@@ -36,7 +36,7 @@ type Operator struct {
 
 // Pending is an authentication round trip in progress.
 type Pending struct {
-	Purpose      string    `json:"purpose"` // "login", "job" or "policy"
+	Purpose      string    `json:"purpose"` // "login", "job", "policy", "installer" or "publish"
 	State        string    `json:"state"`
 	Nonce        string    `json:"nonce"`
 	CodeVerifier string    `json:"code_verifier"`
@@ -48,6 +48,8 @@ type Pending struct {
 	PolicyDoc []byte `json:"policy_doc,omitempty"`
 	// For "installer": the agent version of the installer to build.
 	Installer string `json:"installer,omitempty"`
+	// For "publish": what is being published, module or release.
+	Publish string `json:"publish,omitempty"`
 }
 
 // SessionData is stored server-side; the browser only holds a random id.
@@ -67,6 +69,8 @@ type SessionData struct {
 	FedStepUp *fedStepUp `json:"fed_step_up,omitempty"`
 	// InstallerApproval: an MFA approval waiting for the signing passphrase.
 	InstallerApproval *installerApproval `json:"installer_approval,omitempty"`
+	// PublishApproval: an MFA approval waiting for a module or release upload.
+	PublishApproval *publishApproval `json:"publish_approval,omitempty"`
 }
 
 type session struct {
@@ -153,7 +157,7 @@ func (s *Server) checkCSRF(r *http.Request, sess *session) error {
 	if o := r.Header.Get("Origin"); o != "" && o != s.origin {
 		return errCSRF
 	}
-	if r.URL.Path == uploadPath && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+	if _, streamed := streamedUploads[r.URL.Path]; streamed && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 		// The upload handler reads the token from the first part, before
 		// the file (parsing the form here would buffer the whole upload),
 		// and refuses the request without it.

@@ -138,7 +138,7 @@ Everything else is a module, including PowerShell execution.
 
 ### 3.3 Module manifest ✅
 
-Each module is a zip archive with a manifest signed with the offline **module release key** (Ed25519). The manifest declares the entrypoint per platform, actions and timeouts, capabilities, and the SHA-256 of the archive and of every file. A job pins the SHA-256 of the signed manifest, so the agent runs exactly the approved version. Format and checks: [MODULES.md](MODULES.md).
+Each module is a zip archive with a manifest signed with the **module release key** (Ed25519), held encrypted by the console's `builder` service or kept offline (§12.1). The manifest declares the entrypoint per platform, actions and timeouts, capabilities, and the SHA-256 of the archive and of every file. A job pins the SHA-256 of the signed manifest, so the agent runs exactly the approved version. Format and checks: [MODULES.md](MODULES.md).
 
 ### 3.4 Core ↔ module protocol ✅
 
@@ -147,8 +147,8 @@ The core starts the module in a temporary working directory with a minimal envir
 ### 3.5 Lifecycle of a new feature
 
 1. Write the module (PowerShell, Go or sh).
-2. Sign it with the module release key, offline.
-3. Publish it on the console; assign it through jobs or policies.
+2. Publish it from the console (MFA, then the signing passphrase: the builder signs it), or sign it offline and publish it with `openrmm-admin`.
+3. Assign it through jobs or policies.
 4. Agents download it when first needed, verify signature and hashes, cache it.
 
 The agent is updated only when the core↔module protocol changes or for core security fixes.
@@ -218,7 +218,7 @@ Recurring work (inventory every 24 h, Trend Micro status every 15 min, logon eve
 
 ### 5.2 Agent updates
 
-- Releases (agent + watchdog) are signed with the offline **agent release key**; the agent refuses any version not newer than itself.
+- Releases (agent + watchdog) are signed with the **agent release key** (builder or offline, like the module key); the agent refuses any version not newer than itself.
 - Side-by-side installation in `versions/<x.y.z>`; the watchdog switches the service executable (Windows `ImagePath`, systemd drop-in) and rolls back if the new version does not reconnect within 10 minutes; rolled-back versions are never retried.
 - The new agent then updates the watchdog the same way; the two never switch at the same time.
 - Rollout by ring (`pilot`, `broad`) per tenant and platform. 📋 automatic pause above a failure threshold.
@@ -233,7 +233,7 @@ Details: [UPDATES.md](UPDATES.md).
 
 | Threat | Mitigation |
 |---|---|
-| Compromised console used to run code everywhere | Jobs signed only by the signer after per-job MFA (§6.3); modules and releases signed offline; local policies the console cannot change (§6.4) |
+| Compromised console used to run code everywhere | Jobs signed only by the signer after per-job MFA (§6.3); module and release keys either offline or in the builder, encrypted with a passphrase the console never stores and used only after an MFA approval (§12.1); local policies the console cannot change (§6.4) |
 | Compromised DMZ host | The DMZ relay holds no database credentials and no CA key; the LAN side opens the connection; forwarded identities are re-verified by the core (§6.7) |
 | Rogue agent enrollment | Tenant-bound, expiring, use-limited tokens; new agents pending approval |
 | Man-in-the-middle | mTLS, pinned private root CA |
@@ -249,8 +249,8 @@ Details: [UPDATES.md](UPDATES.md).
 |---|---|---|
 | Root CA | Offline | Agents CA |
 | Agents CA | `openrmm-core` only (the gateway has the public certificate) | Agent, gateway and core certificates |
-| Module release | Offline | Module manifests |
-| Agent release | Offline | Agent releases |
+| Module release | `openrmm-builder`, encrypted with the signing passphrase; or offline | Module manifests |
+| Agent release | `openrmm-builder`, same passphrase; or offline | Agent releases |
 | Job signing | `openrmm-signer` only (📋 HSM) | Jobs and policies |
 | Code signing (Authenticode) | Enterprise CA, dedicated CA or public CA (§12) | Windows executables and MSI |
 
@@ -295,7 +295,7 @@ internet ──► [DMZ] openrmm-gateway  ◄──── mTLS, opened from the 
 - The gateway terminates the agents' mTLS, checks client certificates against the agents CA certificate (public part only) and relays an **allow-list** of methods (enrollment, agent stream, renewal, module and release downloads) as **opaque frames**: it never decodes payloads, so new RPCs need no gateway change, and internal services are unreachable from the internet.
 - The verified client chain and the agent's address travel as metadata built from scratch by the gateway (nothing sent by the agent is forwarded). The core honours that metadata **only on calls received through a tunnel** and **verifies the chain again** against the agents CA, then applies the usual checks (current certificate, not revoked).
 - Certificate issuance, agent authorization, database access and job dispatch live in the core. Enrollment is rate-limited both at the gateway and in the core.
-- A compromised gateway can delay or drop traffic and read what passes through it; it cannot forge jobs (signed), modules or releases (signed offline), issue certificates, reach the database, or claim an identity whose certificate it has never seen. 📋 Agent-signed messages and end-to-end encryption of results between agent and core would also close the impersonation-with-observed-certificate and read sides.
+- A compromised gateway can delay or drop traffic and read what passes through it; it cannot forge jobs (signed), modules or releases (signed by keys it never holds), issue certificates, reach the database, or claim an identity whose certificate it has never seen. 📋 Agent-signed messages and end-to-end encryption of results between agent and core would also close the impersonation-with-observed-certificate and read sides.
 - Single-host deployments: core and gateway in the same Compose stack. Separate DMZ host: `deploy/dmz/compose.yaml` ([INSTALL.md](INSTALL.md)).
 
 ---
@@ -498,7 +498,7 @@ Planned 📋:
 
 ## 12. First-time setup ✅
 
-The bootstrap stays on the command line (`deploy/setup-pki.sh`, `deploy/setup-secrets.sh`, `openrmm-admin`): it creates the agents PKI, the signing keys and the Entra ID configuration before the console can start. Offline keys (root CA, module and release keys) are created on the operator's machine and never reach the server.
+The bootstrap stays on the command line (`deploy/setup-pki.sh`, `deploy/setup-secrets.sh`, `openrmm-admin`): it creates the agents PKI, the signing keys and the Entra ID configuration before the console can start. The root CA key is created on the server and must then be moved offline. Module and release keys are created from the console in the builder (or offline, on the operator's machine).
 
 Once Entra ID sign-in works, the **Configurazione** page (Admin role) is a checklist computed from the console's state, each item with a link to where it is done:
 
@@ -520,6 +520,10 @@ Once Entra ID sign-in works, the **Configurazione** page (Admin role) is a check
 3. **Public certificate**: import of a PFX (OpenSSL output piped straight into the encrypted form).
 
 **Signed installers preconfigured for this console**: an Admin approves a build with a fresh MFA sign-in (bound to the version), then enters the passphrase (never kept in the session). The builder signs both executables of the published release, builds the MSI with the gateway address, the root certificate, the three public keys and a **dedicated enrollment token** as property defaults (one year, 10,000 uses, **never auto-approving**: PCs appear pending approval), signs the MSI with an RFC 3161 timestamp and streams it back; the console keeps it in the package store and offers it for download (Operator role). Everything is audited. A double click installs the agent with nothing to enter; Group Policy values still take precedence. If an installer leaks, revoking its token is enough.
+
+**Module and agent release keys** live in the builder too (§6.2), as two Ed25519 keys encrypted with **the same passphrase** as the Authenticode key: the builder refuses a different one, so one secret protects all the signing material. A console administrator creates them once (they are never replaced from the console, since agents trust them); installers built afterwards carry their public keys, together with any key in `OPENRMM_MODULE_KEYS` / `OPENRMM_RELEASE_KEYS` (offline keys, or the previous key during a rotation). To publish, a console administrator approves with MFA, then uploads a module (zip of its folder) or a release (agent and watchdog) with the passphrase: the console packs the module, the builder signs **only a manifest that parses as one of that kind**, each key in its own signature domain, and the console verifies the result with the keys agents trust before storing it. One approval, one publication; everything is audited in every tenant.
+
+The trade-off: with offline keys, a fully compromised console cannot publish code to the agents; with keys in the builder it can, but only by also obtaining the passphrase, which is entered per operation and never stored. The console already holds the job signing key (whose commands run anything, after MFA) and the Authenticode key, so the added exposure is limited; consoles that want the stricter model keep the keys offline.
 
 **Alternative without the builder**: keys created by `openrmm-admin codesign ca|csr` on a build machine, `make msi SIGN_CERT=… SIGN_KEY=…`, and only the public certificate pasted in the console.
 
@@ -607,3 +611,4 @@ The console matches computers and agents by host name and shows:
 | 2026-10-19 | Active Directory is read by the `adinventory` module with a domain member's computer account instead of an LDAPS service account on the console |
 | 2026-10-19 | Interactive shell approved with **MFA per session** (one agent, at most 60 minutes, every line audited, off unless the endpoint's local policy allows it) instead of per command; full terminal with xterm.js served by the console, scripts allowed on that page only |
 | 2026-10-20 | The Authenticode key may live on the console, in a separate **builder** container, **encrypted with a passphrase** asked at each use (with MFA for builds); the console builds **signed MSIs preconfigured** with gateway, root certificate, public keys and a non-auto-approving enrollment token. Internal PCs reach the gateway in the DMZ through split DNS |
+| 2026-10-20 | **Module and agent release keys in the builder**, encrypted with the same passphrase as the Authenticode key, created from the console; modules and releases published from the console after MFA and the passphrase. Offline keys remain supported. First installation: `OPENRMM_MFA_CLAIM=none` added for directories that enforce MFA themselves (Entra omits `amr` from v2.0 ID tokens unless requested) |

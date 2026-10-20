@@ -37,58 +37,30 @@ func loadSigner(path string) (*signing.Signer, error) {
 	return signing.NewSigner(key)
 }
 
-// sdkFiles returns the SDK files a module needs, by archive path. They come
-// from sdkDir when set, otherwise from the copy embedded in this binary.
-func sdkFiles(m *modules.Manifest, sdkDir string) (map[string][]byte, error) {
-	need := map[string]string{}
-	for _, ep := range m.Entrypoints {
-		switch ep.Type {
-		case modules.TypePowerShell:
-			need["_sdk/OpenRmm.psm1"] = "powershell/OpenRmm.psm1"
-		case modules.TypeShell:
-			need["_sdk/openrmm.sh"] = "sh/openrmm.sh"
-		}
-	}
-	var src fs.FS = sdk.FS
-	if sdkDir != "" {
-		src = os.DirFS(sdkDir)
-	}
-	out := map[string][]byte{}
-	for dst, p := range need {
-		b, err := fs.ReadFile(src, p)
-		if err != nil {
-			return nil, fmt.Errorf("SDK: %w", err)
-		}
-		out[dst] = b
-	}
-	return out, nil
-}
-
 // moduleSign packs and signs a module directory. It needs no database: it is
 // meant to run on the offline machine that holds the module release key.
 func moduleSign(args []string) error {
-	fs := flag.NewFlagSet("module sign", flag.ContinueOnError)
-	dir := fs.String("dir", "", "module source directory (contains manifest.json)")
-	keyPath := fs.String("key", "", "module release private key")
-	out := fs.String("out", "", "bundle output file (default <id>-<version>.ormm)")
-	sdkDir := fs.String("sdk", "", "SDK directory (default: the SDK embedded in openrmm-admin)")
-	if err := fs.Parse(args); err != nil {
+	flags := flag.NewFlagSet("module sign", flag.ContinueOnError)
+	dir := flags.String("dir", "", "module source directory (contains manifest.json)")
+	keyPath := flags.String("key", "", "module release private key")
+	out := flags.String("out", "", "bundle output file (default <id>-<version>.ormm)")
+	sdkDir := flags.String("sdk", "", "SDK directory (default: the SDK embedded in openrmm-admin)")
+	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if *dir == "" || *keyPath == "" {
 		return errors.New("-dir and -key are required")
 	}
-	raw, err := os.ReadFile(filepath.Join(*dir, "manifest.json"))
+	mp, err := modules.ReadSource(os.DirFS(*dir))
 	if err != nil {
 		return err
 	}
-	var m modules.Manifest
-	dec := json.NewDecoder(strings.NewReader(string(raw)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&m); err != nil {
-		return fmt.Errorf("manifest.json: %w", err)
+	m := *mp
+	var sdkFS fs.FS = sdk.FS
+	if *sdkDir != "" {
+		sdkFS = os.DirFS(*sdkDir)
 	}
-	extra, err := sdkFiles(&m, *sdkDir)
+	extra, err := modules.SDKFiles(&m, sdkFS)
 	if err != nil {
 		return err
 	}
