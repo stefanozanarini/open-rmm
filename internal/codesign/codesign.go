@@ -42,9 +42,12 @@ const (
 // Subject of the certificates: Windows shows the organization as the
 // publisher.
 type Subject struct {
-	Organization string
-	CommonName   string // defaults to Organization
-	Country      string // optional, two letters
+	Organization       string
+	CommonName         string // defaults to Organization
+	Country            string // optional, two letters
+	OrganizationalUnit string // optional
+	Locality           string // optional
+	Province           string // optional
 }
 
 func (s Subject) name(suffix string) (pkix.Name, error) {
@@ -60,6 +63,18 @@ func (s Subject) name(suffix string) (pkix.Name, error) {
 		return pkix.Name{}, errors.New("common name too long")
 	}
 	n := pkix.Name{CommonName: cn + suffix, Organization: []string{org}}
+	for _, f := range []struct {
+		v   string
+		dst *[]string
+	}{{s.OrganizationalUnit, &n.OrganizationalUnit}, {s.Locality, &n.Locality}, {s.Province, &n.Province}} {
+		v := strings.TrimSpace(f.v)
+		if len(v) > 64 {
+			return pkix.Name{}, errors.New("subject fields have at most 64 characters")
+		}
+		if v != "" {
+			*f.dst = []string{v}
+		}
+	}
 	if s.Country != "" {
 		if len(s.Country) != 2 {
 			return pkix.Name{}, errors.New("country must be a two-letter code")

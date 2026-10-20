@@ -142,6 +142,8 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		s.completeJob(w, r, sess, p, claims, raw)
 	case "policy":
 		s.completePolicy(w, r, sess, p, claims, raw)
+	case "installer":
+		s.completeInstaller(w, r, sess, p, claims, s.verifier)
 	default:
 		http.Error(w, tr(lang, "accesso non valido"), http.StatusBadRequest)
 	}

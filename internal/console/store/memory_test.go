@@ -728,3 +728,30 @@ func testFederation(t *testing.T, s Store) {
 		t.Fatal("console key replaced")
 	}
 }
+
+func TestInstallers(t *testing.T) { testInstallers(t, NewMemory()) }
+
+func testInstallers(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	tok := EnrollmentToken{ID: ids.NewUUID(), TenantID: tenant.ID, MaxUses: 10, ExpiresAt: time.Now().Add(time.Hour)}
+	if err := s.CreateEnrollmentToken(ctx, tok, HashToken(ids.NewSecret(32))); err != nil {
+		t.Fatal(err)
+	}
+	i := Installer{TenantID: tenant.ID, ID: ids.NewUUID(), Version: "1.2.3", SHA256: strings.Repeat("ab", 32), Size: 1234,
+		TokenID: tok.ID, Signer: "CN=Cliente Srl", CreatedBy: "operator:x"}
+	if err := s.AddInstaller(ctx, i); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetInstaller(ctx, tenant.ID, i.ID)
+	if err != nil || got.Version != "1.2.3" || got.TokenID != tok.ID {
+		t.Fatalf("installer = %+v, %v", got, err)
+	}
+	if _, err := s.GetInstaller(ctx, ids.NewUUID(), i.ID); err != ErrNotFound {
+		t.Fatalf("other tenant: %v", err)
+	}
+	if list, _ := s.ListInstallers(ctx, tenant.ID); len(list) != 1 {
+		t.Fatalf("list = %+v", list)
+	}
+}

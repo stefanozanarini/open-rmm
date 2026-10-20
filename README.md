@@ -39,6 +39,7 @@ Phase 0 (foundations):
 - [x] Console layout: site tree, Clients/Servers tabs, bottom panel per agent, bulk actions with one MFA approval, notes, light and dark themes, Italian and English (selector in the header)
 - [x] Setup checklist with a baseline policy; Authenticode signing of executables and MSI (enterprise CA, dedicated CA or public certificate); optional Active Directory comparison (computers without agent, stale objects, OU tree) without AD credentials on the console
 - [x] `firmware` module: BIOS, firmware and driver updates through Dell Command Update, Lenovo System Update and HP Image Assistant, in the Patch dashboard, installed with MFA approval (BIOS only on request, BitLocker suspended for one reboot)
+- [x] Signed agent installers built by the console: signing key in a separate builder container, encrypted with a passphrase asked at each use; dedicated CA (with organization details) or enterprise CA created from the console; MSI preconfigured with gateway, root certificate, keys and an enrollment token (PCs still pending approval)
 - [x] Interactive shell in the browser (xterm.js): one MFA approval per session, at most 60 minutes, only where the endpoint's Group Policy allows it, every line typed in the audit log; also from a central console
 - [x] Federation: a central console operates linked customer consoles over an outbound, pinned link; commands still signed by the customer's signer with the central operator's MFA; role cap, suspend and audit at the customer
 - [ ] Validation on real Windows

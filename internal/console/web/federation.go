@@ -523,6 +523,8 @@ func (s *Server) handleFedCallback(w http.ResponseWriter, r *http.Request, sess 
 		s.completeJob(w, r, sess, p, c, raw)
 	case "policy":
 		s.completePolicy(w, r, sess, p, c, raw)
+	case "installer":
+		s.completeInstaller(w, r, sess, p, c, s.fedVerifier)
 	default:
 		http.Error(w, tr(lang, "accesso non valido"), http.StatusBadRequest)
 	}

@@ -1,0 +1,121 @@
+{{define "subject-fields"}}
+<div class="grid2">
+  <label>{{t "Organizzazione"}} <input name="o" required maxlength="64" placeholder="Cliente Srl"></label>
+  <label>{{t "Nome comune (facoltativo)"}} <input name="cn" maxlength="64"></label>
+  <label>{{t "Unità organizzativa"}} <input name="ou" maxlength="64" placeholder="IT"></label>
+  <label>{{t "Località"}} <input name="l" maxlength="64" placeholder="Bologna"></label>
+  <label>{{t "Provincia"}} <input name="st" maxlength="64" placeholder="BO"></label>
+  <label>{{t "Paese (2 lettere)"}} <input name="c" maxlength="2" pattern="[A-Za-z]{2}" placeholder="IT"></label>
+</div>
+{{end}}
+{{define "passphrase-fields"}}
+<label>{{t "Passphrase della chiave"}} <input type="password" name="passphrase" required minlength="{{.}}" autocomplete="new-password"></label>
+<label>{{t "Ripeti la passphrase"}} <input type="password" name="passphrase2" required minlength="{{.}}" autocomplete="new-password"></label>
+<p class="muted">{{tf "Almeno %d caratteri. La console non la conserva: servirà a ogni creazione di un installer. Se la perdi, dovrai creare una nuova chiave." .}}</p>
+{{end}}
+{{define "content"}}
+{{with .Data}}
+<h2 id="signing">{{t "Firma del codice"}}</h2>
+{{if not .Builder}}
+<p class="muted">{{t "Il servizio di firma degli installer (container builder) non è configurato su questa console: firma l'MSI sulla macchina di build e registra il certificato nella pagina Configurazione."}}</p>
+{{else if not .BuilderUp}}
+<p><span class="badge chk-failing">{{t "non raggiungibile"}}</span> {{t "Il servizio di firma non risponde: controlla il container builder."}}</p>
+{{else}}
+<p>{{th "La chiave di firma è custodita dal servizio <code>builder</code>, cifrata con una passphrase che la console non conserva. Eseguibili e MSI dell'agente sono firmati con questa chiave."}}</p>
+{{with .Chain}}
+<dl class="facts">
+  <dt>{{t "Soggetto"}}</dt><dd>{{$.Data.Info.Subject}}</dd>
+  <dt>{{t "Emesso da"}}</dt><dd>{{$.Data.Info.Issuer}}{{if $.Data.Signing.DedicatedCa}} <span class="badge">{{t "CA dedicata"}}</span>{{end}}</dd>
+  <dt>{{t "Validità"}}</dt><dd>{{fmtTime $.Data.Info.NotBefore}} – {{fmtTime $.Data.Info.NotAfter}}{{if $.Data.Expiring}} <span class="badge chk-warning">{{t "in scadenza"}}</span>{{end}}</dd>
+  <dt>{{t "Identificazione personale"}}</dt><dd><code>{{$.Data.Info.Thumbprint}}</code></dd>
+  <dt>{{t "Per la GPO"}}</dt><dd><a href="/setup/codesign.cer">codesign.cer</a>{{if .Root}} · <a href="/setup/codesign-ca.cer">codesign-ca.cer</a>{{end}}</dd>
+</dl>
+{{if and $.IsAdmin $.Data.Signing.DedicatedCa}}
+<form method="post" action="/agent-installer/signing/renew" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label>{{t "Passphrase"}} <input type="password" name="passphrase" required autocomplete="current-password"></label>
+  <button>{{t "Rinnova il certificato"}}</button>
+</form>
+{{end}}
+{{else}}<p><span class="badge chk-warning">{{t "da configurare"}}</span> {{t "Nessun certificato di firma: crea una CA dedicata, oppure una richiesta per la CA aziendale."}}</p>{{end}}
+
+{{with .Signing.RequestPem}}
+<h3>{{t "Richiesta in attesa del certificato"}}</h3>
+<p>{{th "Falla firmare dalla CA aziendale con il modello <em>Firma codice</em> (<code>certreq -submit -attrib \"CertificateTemplate:CodeSigning\" codesign.csr codesign.cer</code>) o inviala all'autorità, poi incolla qui il certificato ricevuto, seguito dai certificati delle CA."}}
+ <a href="/agent-installer/signing/request.csr">codesign.csr</a></p>
+<textarea readonly rows="6" spellcheck="false" aria-label="CSR">{{.}}</textarea>
+{{if $.IsAdmin}}
+<form method="post" action="/agent-installer/signing/certificate" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label>{{t "Certificato (PEM: prima il certificato di firma, poi le CA)"}}
+    <textarea name="certificate" rows="8" spellcheck="false" required placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
+  <button class="primary">{{t "Importa il certificato"}}</button>
+</form>
+{{end}}
+{{end}}
+
+{{if $.IsAdmin}}
+<details{{if not .Chain}} open{{end}}>
+<summary>{{if .Chain}}{{t "Sostituisci il certificato di firma"}}{{else}}{{t "Configura il certificato di firma"}}{{end}}</summary>
+<form method="post" action="/agent-installer/signing/ca" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <h3>{{t "Crea una CA dedicata"}}</h3>
+  <p class="muted">{{t "Una piccola CA solo per la firma del codice (10 anni) e il certificato di firma (3 anni). Distribuisci via GPO codesign-ca.cer tra le autorità radice attendibili e codesign.cer tra gli autori attendibili."}}</p>
+  {{template "subject-fields"}}
+  {{template "passphrase-fields" .MinPass}}
+  <button class="primary">{{t "Crea la CA"}}</button>
+</form>
+<form method="post" action="/agent-installer/signing/request" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <h3>{{t "Usa la CA aziendale (o un'autorità pubblica)"}}</h3>
+  <p class="muted">{{t "La chiave viene creata qui e non esce mai dal servizio di firma: scarichi la richiesta, la fai firmare e importi il certificato."}}</p>
+  {{template "subject-fields"}}
+  {{template "passphrase-fields" .MinPass}}
+  <button>{{t "Crea la richiesta"}}</button>
+</form>
+<form method="post" action="/agent-installer/signing/pfx" enctype="multipart/form-data" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <h3>{{t "Importa un certificato acquistato (PFX)"}}</h3>
+  <label>{{t "File PFX"}} <input type="file" name="pfx" accept=".pfx,.p12" required></label>
+  <label>{{t "Password del PFX"}} <input type="password" name="pfx_password" autocomplete="off"></label>
+  {{template "passphrase-fields" .MinPass}}
+  <button>{{t "Importa"}}</button>
+</form>
+</details>
+{{end}}
+{{end}}
+
+<h2 id="build">{{t "Installer dell'agente"}}</h2>
+<p>{{t "Un MSI firmato, già configurato con l'indirizzo della console, il certificato radice, le chiavi pubbliche e un token di registrazione: si installa con un doppio clic o via GPO, senza inserire nulla. I PC compaiono in attesa di approvazione."}}</p>
+{{with .Missing}}<p><span class="badge chk-warning">{{t "da configurare"}}</span> {{t "Mancano nella configurazione della console:"}} {{range $i, $m := .}}{{if $i}}, {{end}}<code>{{$m}}</code>{{end}}.</p>{{end}}
+{{if and $.IsAdmin .Builder .BuilderUp .Chain (not .Missing)}}
+{{if .Approved}}
+<form method="post" action="/agent-installer/confirm" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <p>{{tf "Creazione dell'installer %s approvata." .Approved}}</p>
+  <label>{{t "Passphrase della chiave di firma"}} <input type="password" name="passphrase" required autocomplete="current-password" autofocus></label>
+  <button class="primary">{{t "Crea e firma l'installer"}}</button>
+</form>
+{{else if .Versions}}
+<form method="post" action="/agent-installer/build" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label>{{t "Versione dell'agente"}} <select name="version">{{range .Versions}}<option>{{.}}</option>{{end}}</select></label>
+  <p class="muted">{{t "Ti verrà chiesto di autenticarti di nuovo con MFA, poi la passphrase della chiave di firma."}}</p>
+  <button class="primary">{{t "Crea l'installer"}}</button>
+</form>
+{{else}}<p class="muted">{{t "Nessuna release dell'agente per Windows pubblicata."}}</p>{{end}}
+{{end}}
+{{if .List}}
+<table>
+<thead><tr><th>{{t "Versione"}}</th><th>{{t "Creato"}}</th><th>{{t "Firmato da"}}</th><th>{{t "Token"}}</th><th>SHA-256</th><th></th></tr></thead>
+<tbody>{{range .List}}<tr>
+  <td>{{.Version}}</td><td>{{fmtTime .CreatedAt}}<br><span class="muted">{{.CreatedBy}}</span></td><td>{{.Signer}}</td>
+  <td>{{with .Token}}{{if .RevokedAt}}<span class="badge revoked">{{t "revocato"}}</span>{{else}}{{tf "valido fino al %s" (fmtTime .ExpiresAt)}} · {{tf "%d registrazioni" .Uses}}{{end}}{{end}}</td>
+  <td><code class="small">{{.SHA256}}</code></td>
+  <td><a href="/agent-installer/{{.ID}}/msi">{{t "Scarica"}}</a></td>
+</tr>{{end}}</tbody>
+</table>
+<p class="muted">{{th "Se un installer finisce in mani sbagliate, revoca il suo token nella pagina <a href=\"/tokens\">Token</a>: i PC già registrati non ne risentono."}}</p>
+{{end}}
+{{end}}
+{{end}}

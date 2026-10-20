@@ -12,14 +12,31 @@ COPY . .
 ARG VERSION=0.0.0-dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
       -o /out/ ./console/cmd/openrmm-gateway ./console/cmd/openrmm-core ./console/cmd/openrmm-server \
-               ./console/cmd/openrmm-signer ./console/cmd/openrmm-admin
+               ./console/cmd/openrmm-signer ./console/cmd/openrmm-admin ./console/cmd/openrmm-builder
 
 # Mount points of the signer's and the package library's volumes, owned by
 # the runtime user: Docker copies ownership into a named volume the first
 # time it is mounted.
-RUN mkdir -p /rootfs/run/openrmm-signer /rootfs/run/openrmm-shell /rootfs/var/lib/openrmm-signer /rootfs/var/lib/openrmm/packages \
- && chmod 0750 /rootfs/run/openrmm-signer /rootfs/run/openrmm-shell /rootfs/var/lib/openrmm/packages \
+RUN mkdir -p /rootfs/run/openrmm-signer /rootfs/run/openrmm-shell /rootfs/run/openrmm-builder /rootfs/var/lib/openrmm-signer /rootfs/var/lib/openrmm/packages \
+ && chmod 0750 /rootfs/run/openrmm-signer /rootfs/run/openrmm-shell /rootfs/run/openrmm-builder /rootfs/var/lib/openrmm/packages \
  && chmod 0700 /rootfs/var/lib/openrmm-signer
+
+# openrmm-builder: signs and builds agent installers with msitools/wixl and
+# osslsigncode (Debian packages). Separate image, never internet-facing.
+#   docker build --target builder -t open-rmm-builder .
+FROM debian:bookworm-slim AS builder
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends wixl msitools osslsigncode openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /var/lib/openrmm-builder /run/openrmm-builder \
+ && chown 65532:65532 /var/lib/openrmm-builder /run/openrmm-builder \
+ && chmod 0700 /var/lib/openrmm-builder && chmod 0750 /run/openrmm-builder
+COPY --from=build /out/openrmm-builder /usr/local/bin/
+COPY packaging/wix/openrmm-agent.wxs /usr/share/openrmm/openrmm-agent.wxs
+USER 65532:65532
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["/usr/local/bin/openrmm-builder", "healthcheck"]
+ENTRYPOINT ["/usr/local/bin/openrmm-builder"]
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/ /usr/local/bin/

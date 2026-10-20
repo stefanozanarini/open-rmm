@@ -122,6 +122,12 @@ services:
       OPENRMM_MFA_CLAIM: ${OPENRMM_MFA_CLAIM:-amr}
       OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:?set OPENRMM_TENANT_MAP in .env}
       OPENRMM_SIGNER_SOCKET: /run/openrmm-signer/signer.sock
+      # Agent installers built by the builder service (see .env.example).
+      OPENRMM_AGENT_SERVER: ${OPENRMM_AGENT_SERVER:-}
+      OPENRMM_AGENT_JOB_KEYS: ${OPENRMM_AGENT_JOB_KEYS:-}
+      OPENRMM_MODULE_KEYS: ${OPENRMM_MODULE_KEYS:-}
+      OPENRMM_RELEASE_KEYS: ${OPENRMM_RELEASE_KEYS:-}
+      OPENRMM_SIGN_TIMESTAMP: ${OPENRMM_SIGN_TIMESTAMP:-http://timestamp.digicert.com}
       # Central console: link listener for customer consoles (see .env.example).
       OPENRMM_FEDERATION_LISTEN: ${OPENRMM_FEDERATION_LISTEN:-}
       OPENRMM_FEDERATION_PUBLIC_ADDR: ${OPENRMM_FEDERATION_PUBLIC_ADDR:-}
@@ -136,6 +142,8 @@ services:
       - ./console-tls:/run/openrmm/tls:ro
       - signer-socket:/run/openrmm-signer
       - shell-socket:/run/openrmm-shell
+      - builder-socket:/run/openrmm-builder
+      - ./pki/ca/root-ca.crt:/run/openrmm/agent/root-ca.crt:ro
       - packages:/var/lib/openrmm/packages
     ports:
       - "${OPENRMM_CONSOLE_BIND:-127.0.0.1:8080}:8080"
@@ -203,12 +211,34 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 
+  # Holds the Authenticode signing key (encrypted with a passphrase asked at
+  # each use) and builds signed agent installers. Reachable only by the
+  # server through a socket; outbound only for the timestamp server.
+  builder:
+    image: ${OPENRMM_BUILDER_IMAGE:-open-rmm-builder:dev}
+    build:
+      context: ..
+      target: builder
+    restart: unless-stopped
+    volumes:
+      - builder-state:/var/lib/openrmm-builder
+      - builder-socket:/run/openrmm-builder
+    tmpfs: [/tmp]
+    networks: [builder-egress]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 512m
+
 networks:
   internal:
     internal: true
   public: {}
   # Outbound only (nothing publishes ports on it): the signer's way to Microsoft.
   signer-egress: {}
+  # Outbound only: the builder's way to the RFC 3161 timestamp server.
+  builder-egress: {}
   # Core → gateway tunnel. With a separate DMZ host the core reaches the
   # gateway over the network instead (OPENRMM_GATEWAY_TUNNEL).
   tunnel: {}
@@ -218,4 +248,6 @@ volumes:
   packages: {}
   signer-socket: {}
   shell-socket: {}
+  builder-socket: {}
+  builder-state: {}
   signer-state: {}

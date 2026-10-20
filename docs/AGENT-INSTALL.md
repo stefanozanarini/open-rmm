@@ -2,6 +2,18 @@
 
 The agent is installed with an MSI package, suitable for Group Policy (GPO) deployment. The package installs the agent and the watchdog as system services; the configuration comes from Group Policy (recommended) or from MSI properties.
 
+## Simplest: the installer built by the console
+
+On the console, **Installer** page (Admin): set up the signing certificate once (dedicated CA with your organization's details, or a request for the enterprise CA), then **Build the installer** for an agent version: you approve with MFA and enter the passphrase of the signing key. The resulting MSI is signed and already contains the gateway address, the root certificate, the public keys and an enrollment token:
+
+- **double click** on a PC (or `msiexec /i openrmm-agent-x.y.z.msi /qn`): nothing to enter;
+- **Group Policy**: assign the same MSI; the ADMX settings are optional and take precedence;
+- the PC appears in the console **pending approval**: the token in the MSI never approves agents by itself. Revoke it on the Token page if the MSI leaks.
+
+With a dedicated CA, deploy `codesign-ca.cer` (Trusted Root) and `codesign.cer` (Trusted Publishers) by Group Policy before installing, from the links on the same page.
+
+The rest of this page describes the manual way: generic MSI and configuration by Group Policy or msiexec properties.
+
 ## What you need
 
 | Value | Where it comes from |

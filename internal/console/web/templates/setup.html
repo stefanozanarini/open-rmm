@@ -12,6 +12,9 @@
 </table>
 
 <h2 id="codesign">{{t "Firma del codice"}}</h2>
+{{if .Builder}}
+<p>{{th "La chiave di firma e gli installer dell'agente si gestiscono nella pagina <a href=\"/agent-installer\">Installazione dell'agente</a>."}}</p>
+{{else}}
 <p>{{th "Eseguibili e MSI dell'agente vanno firmati con Authenticode. Le chiavi si creano con <code>openrmm-admin</code> sulla macchina che costruisce l'MSI, <strong>mai sulla console</strong>: qui si registra solo il certificato pubblico, per scaricarlo e distribuirlo via GPO e per ricevere un avviso prima della scadenza."}}</p>
 <details>
 <summary>{{t "Come ottenere il certificato"}}</summary>
@@ -47,5 +50,6 @@ certutil -encode codesign.cer codesign.crt</pre>
   <div class="actions"><button class="primary">{{t "Salva il certificato"}}</button>
   {{if .CodeSign}}<button name="remove" value="1" formnovalidate>{{t "Rimuovi"}}</button>{{end}}</div>
 </form>
+{{end}}
 {{end}}
 {{end}}

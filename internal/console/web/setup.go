@@ -32,6 +32,7 @@ type setupData struct {
 	Items     []setupItem
 	Done, All int
 	Missing   []string // recommended modules not published
+	Builder   bool     // signing and installers handled by openrmm-builder
 	CodeSign  *codesign.Chain
 	CodeInfo  codesign.Info
 	Expiring  bool
@@ -100,7 +101,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	now := s.now()
-	var d setupData
+	d := setupData{Builder: s.builder != nil}
 	add := func(it setupItem) { d.Items = append(d.Items, it) }
 
 	add(setupItem{Title: s.T(r, "Accesso con Entra ID e MFA"), Status: setupDone,
@@ -208,6 +209,9 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	add(it)
 
 	it = setupItem{Title: s.T(r, "Firma del codice (Authenticode)"), Link: "#codesign", LinkLabel: s.T(r, "Certificato")}
+	if d.Builder {
+		it.Link = "/agent-installer#signing"
+	}
 	if set.CodeSigningCert != "" {
 		ch, err := codesign.ParseChain([]byte(set.CodeSigningCert), now)
 		if err != nil {

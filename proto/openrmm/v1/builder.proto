@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package openrmm.v1;
+
+option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
+
+// BuilderService holds the Authenticode signing key, encrypted with a
+// passphrase the console never stores, and builds signed agent installers.
+// It listens on a Unix socket shared only with the web console.
+service BuilderService {
+  rpc Status(BuilderStatusRequest) returns (BuilderStatus);
+  // CreateCA creates a dedicated code-signing CA and a signing certificate.
+  rpc CreateCA(CreateCARequest) returns (BuilderStatus);
+  // CreateRequest creates a key and a request for an enterprise or public CA.
+  rpc CreateRequest(CreateRequestRequest) returns (BuilderStatus);
+  // ImportCertificate completes a request with the certificate issued for it.
+  rpc ImportCertificate(ImportCertificateRequest) returns (BuilderStatus);
+  // ImportPFX imports a key and certificate (purchased certificate).
+  rpc ImportPFX(ImportPFXRequest) returns (BuilderStatus);
+  // Renew issues a new signing certificate with the dedicated CA.
+  rpc Renew(RenewRequest) returns (BuilderStatus);
+  // Build builds and signs an agent installer; the MSI comes in chunks.
+  rpc Build(BuildRequest) returns (stream BuildChunk);
+}
+
+message BuilderStatusRequest {}
+
+message CertSubject {
+  string common_name = 1;
+  string organization = 2;
+  string organizational_unit = 3;
+  string locality = 4;
+  string province = 5;
+  string country = 6;
+}
+
+message BuilderStatus {
+  string state = 1;          // none | pending | ready
+  string chain_pem = 2;      // signing certificate, then its CAs
+  bool dedicated_ca = 3;     // the CA key is held here too (renewal)
+  string request_pem = 4;    // pending certificate request
+}
+
+message CreateCARequest {
+  CertSubject subject = 1;
+  string passphrase = 2;
+}
+
+message CreateRequestRequest {
+  CertSubject subject = 1;
+  string passphrase = 2;
+}
+
+message ImportCertificateRequest {
+  string chain_pem = 1;
+}
+
+message ImportPFXRequest {
+  bytes pfx = 1;
+  string pfx_password = 2;
+  string passphrase = 3;
+}
+
+message RenewRequest {
+  string passphrase = 1;
+}
+
+message BuildRequest {
+  string version = 1;
+  bytes agent_exe = 2;
+  bytes watchdog_exe = 3;
+  // MSI properties set as defaults: SERVER, ROOTCA, ENROLLTOKEN,
+  // JOBSIGNINGKEYS, MODULESIGNINGKEYS, RELEASESIGNINGKEYS.
+  map<string, string> properties = 4;
+  string passphrase = 5;
+  string timestamp_url = 6;
+}
+
+message BuildChunk {
+  bytes data = 1;
+  string sha256 = 2; // last chunk: hex SHA-256 of the MSI
+}

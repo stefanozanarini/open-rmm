@@ -33,7 +33,8 @@ func TestPreview(t *testing.T) {
 	if os.Getenv("OPENRMM_PREVIEW") == "" {
 		t.Skip("set OPENRMM_PREVIEW=1")
 	}
-	e := startConsole(t)
+	var b *testBuilder
+	e := startConsole(t, withBuilder(t, &b))
 	e.idp.signIn(admin)
 	ctx := context.Background()
 	now := time.Now()
@@ -62,6 +63,8 @@ func TestPreview(t *testing.T) {
 		Details: map[string]any{"hostname": "pc01"}})
 
 	previewAD(t, e)
+	e.store.PutRelease(ctx, store.Release{Version: "1.0.0", Platform: "windows/amd64",
+		Files: map[string][]byte{"openrmm-agent.exe": []byte("MZ"), "openrmm-watchdog.exe": []byte("MZ")}})
 	cfgV := e.idp.srv.URL
 	v, err := authn.NewVerifier(ctx, authn.Config{Issuer: cfgV, ClientID: "console-app", MFAClaim: "amr",
 		TenantMap: map[string][]string{e.idp.tid: {e.tenant}}, MaxAuthAge: 10 * time.Minute})
@@ -69,6 +72,7 @@ func TestPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws, err := web.New(web.Config{Store: e.store, Verifier: v, Signer: e.signer, PublicURL: "http://127.0.0.1:18080",
+		Builder: b.client, AgentInstall: b.ai,
 		ClientSecret: "secret", Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), HTTPClient: http.DefaultClient})
 	if err != nil {
 		t.Fatal(err)

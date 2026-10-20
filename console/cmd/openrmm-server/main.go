@@ -13,6 +13,13 @@
 //	OPENRMM_SIGNER_SOCKET              signer socket (default /run/openrmm-signer/signer.sock)
 //	OPENRMM_SHELL_SOCKET               shell broker socket of the core, for interactive shells
 //	                                   (default /run/openrmm-shell/shell.sock; "off" disables)
+//	OPENRMM_BUILDER_SOCKET             openrmm-builder socket, for signed agent installers
+//	                                   (default /run/openrmm-builder/builder.sock; "off" disables)
+//	OPENRMM_AGENT_SERVER               gateway address preset in installers (agent.example.com:443)
+//	OPENRMM_AGENT_ROOT_CA              root certificate file (default /run/openrmm/agent/root-ca.crt)
+//	OPENRMM_AGENT_JOB_KEYS, OPENRMM_MODULE_KEYS, OPENRMM_RELEASE_KEYS
+//	                                   public keys preset in installers ("ed25519:...")
+//	OPENRMM_SIGN_TIMESTAMP             RFC 3161 server (default http://timestamp.digicert.com; "none")
 //	OPENRMM_OIDC_ISSUER, OPENRMM_OIDC_CLIENT_ID, OPENRMM_MFA_CLAIM, OPENRMM_TENANT_MAP
 //	                                   see internal/console/authn
 //
@@ -30,6 +37,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -50,6 +58,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/console/web"
 	"github.com/stefanozanarini/open-rmm/internal/federation"
+	"github.com/stefanozanarini/open-rmm/internal/pki"
 )
 
 func main() {
@@ -155,11 +164,21 @@ func run(log *slog.Logger) error {
 		defer sc.Close()
 		shell = openrmmv1.NewShellBrokerServiceClient(sc)
 	}
+	var bld openrmmv1.BuilderServiceClient
+	if sock := env("OPENRMM_BUILDER_SOCKET", "/run/openrmm-builder/builder.sock"); sock != "off" {
+		bc, err := grpc.NewClient("unix://"+sock, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return err
+		}
+		defer bc.Close()
+		bld = openrmmv1.NewBuilderServiceClient(bc)
+	}
 	srv, err := web.New(web.Config{
 		Store: db, Verifier: v, Signer: openrmmv1.NewSignerServiceClient(conn), Logger: log,
 		PublicURL: publicURL, ClientSecret: strings.TrimSpace(string(secret)),
 		Packages: pkgfiles.Dir{Path: env("OPENRMM_PACKAGES_DIR", "/var/lib/openrmm/packages")},
 		Hub:      fed.hub, LinkAddr: fed.linkAddr, FedVerifier: fed.verifier, Uplink: fed.uplink, Shell: shell,
+		Builder: bld, AgentInstall: agentInstall(log),
 	})
 	if err != nil {
 		return err
@@ -277,4 +296,24 @@ func (f *fedSetup) start(ctx context.Context, log *slog.Logger, srv *web.Server)
 		go f.uplink.Run(ctx)
 	}
 	return nil
+}
+
+// agentInstall reads what agent installers are preconfigured with; missing
+// values are shown on the installer page.
+func agentInstall(log *slog.Logger) web.AgentInstall {
+	a := web.AgentInstall{Server: os.Getenv("OPENRMM_AGENT_SERVER"), JobKeys: os.Getenv("OPENRMM_AGENT_JOB_KEYS"),
+		ModuleKeys: os.Getenv("OPENRMM_MODULE_KEYS"), ReleaseKeys: os.Getenv("OPENRMM_RELEASE_KEYS"),
+		Timestamp: env("OPENRMM_SIGN_TIMESTAMP", "http://timestamp.digicert.com")}
+	if a.Timestamp == "none" {
+		a.Timestamp = ""
+	}
+	path := env("OPENRMM_AGENT_ROOT_CA", "/run/openrmm/agent/root-ca.crt")
+	if raw, err := os.ReadFile(path); err == nil { // #nosec G304,G703 -- path set by the operator in the container configuration
+		if certs, err := pki.ParseCertsPEM(raw); err == nil {
+			a.RootCA = base64.StdEncoding.EncodeToString(certs[0].Raw)
+		} else {
+			log.Warn("agent root certificate unreadable", "file", path, "err", err)
+		}
+	}
+	return a
 }

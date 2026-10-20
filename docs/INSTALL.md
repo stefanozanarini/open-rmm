@@ -74,6 +74,10 @@ The console must be served over HTTPS, either:
 - put certificate and key in `deploy/console-tls/` and set `OPENRMM_CONSOLE_TLS_CERT=/run/openrmm/tls/console.crt` and `OPENRMM_CONSOLE_TLS_KEY=/run/openrmm/tls/console.key`;
 - or use an internal TLS reverse proxy in front of the console port.
 
+## 3b. Agent installers (optional, recommended)
+
+Fill in `.env`: `OPENRMM_AGENT_SERVER` (the gateway name of step 2 with its public port), `OPENRMM_AGENT_JOB_KEYS` (the key printed by `setup-secrets.sh`), `OPENRMM_MODULE_KEYS` and `OPENRMM_RELEASE_KEYS` (public keys of the offline release keys). The root certificate is read from `pki/ca/root-ca.crt`. The `builder` container then builds signed MSIs from the console (**Installer** page): see [AGENT-INSTALL.md](AGENT-INSTALL.md). Back up its volume (`builder-state`): it holds the encrypted signing key.
+
 ## 4. Start
 
 ```bash

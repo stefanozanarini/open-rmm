@@ -511,17 +511,19 @@ Once Entra ID sign-in works, the **Configurazione** page (Admin role) is a check
 - **code signing**;
 - **Active Directory** (optional).
 
-### 12.1 Code signing (Authenticode)
+### 12.1 Code signing (Authenticode) and agent installers
 
-Keys are created by `openrmm-admin` on the machine that builds the MSI, **never by the console**, which is reachable from the internet. Three options:
+**Recommended: the `builder` service.** A separate container (`openrmm-builder`, Debian with msitools/wixl, osslsigncode and OpenSSL; no published port, reachable only by the web console through a Unix socket, outbound only to the timestamp server) holds the signing key **encrypted with a passphrase the console never stores** (PKCS#8, PBKDF2-SHA256 600,000 iterations, AES-256): OpenSSL and osslsigncode read it with the passphrase through a pipe, so the key is never written in clear. From the console (**Agent installation** page, Admin):
 
-1. **Enterprise CA (AD CS)**, recommended with a domain: `openrmm-admin codesign csr` creates an RSA 3072 key and a request; `certreq -submit -attrib "CertificateTemplate:CodeSigning"` gets it signed. Domain computers already trust the CA.
-2. **Dedicated CA**: `openrmm-admin codesign ca` creates a code-signing CA (10 years, can only issue end-entity certificates) and a signing certificate (3 years). The CA key is needed only for renewal and goes offline.
-3. **Public certificate** (purchased, or Microsoft Trusted Signing): `codesign csr`, then the CA's procedure.
+1. **Dedicated CA**: the console creates a code-signing CA (10 years, end-entity certificates only) and the signing certificate (3 years) with the subject given (organization, unit, locality, province, country); the CA key stays in the builder, encrypted, to renew the certificate from the console.
+2. **Enterprise CA (AD CS)**: the key is created in the builder and never leaves it; the console offers the request (CSR) for the *Code Signing* template and imports the issued certificate, checking that it matches the key.
+3. **Public certificate**: import of a PFX (OpenSSL output piped straight into the encrypted form).
 
-`openrmm-admin codesign check` verifies the chain, the code-signing usage and that the key matches. `make msi SIGN_CERT=… SIGN_KEY=…` signs both executables and the MSI with `osslsigncode` (SHA-256, RFC 3161 timestamp so that signatures outlive the certificate).
+**Signed installers preconfigured for this console**: an Admin approves a build with a fresh MFA sign-in (bound to the version), then enters the passphrase (never kept in the session). The builder signs both executables of the published release, builds the MSI with the gateway address, the root certificate, the three public keys and a **dedicated enrollment token** as property defaults (one year, 10,000 uses, **never auto-approving**: PCs appear pending approval), signs the MSI with an RFC 3161 timestamp and streams it back; the console keeps it in the package store and offers it for download (Operator role). Everything is audited. A double click installs the agent with nothing to enter; Group Policy values still take precedence. If an installer leaks, revoking its token is enough.
 
-The console keeps only the **public certificate** (keys are refused): it offers `codesign.cer` (Trusted Publishers) and, for a dedicated CA, `codesign-ca.cer` (Trusted Root) for Group Policy, and warns 60 days before expiry.
+**Alternative without the builder**: keys created by `openrmm-admin codesign ca|csr` on a build machine, `make msi SIGN_CERT=… SIGN_KEY=…`, and only the public certificate pasted in the console.
+
+Either way the console offers `codesign.cer` (Trusted Publishers) and, for a dedicated CA, `codesign-ca.cer` (Trusted Root) for Group Policy, and warns 60 days before expiry.
 
 ### 12.2 Active Directory (optional)
 
@@ -553,6 +555,7 @@ The console matches computers and agents by host name and shows:
 | 8 | Federation with full central operations | ✅ |
 | 9 | `firmware`: BIOS, firmware and drivers through Dell Command Update, Lenovo System Update and HP Image Assistant, in the Patch dashboard | ✅ (to be validated on real endpoints) |
 | 10 | Interactive shell: MFA per session, opt-in local policy, ConPTY, xterm.js, every line audited | ✅ (to be validated on real Windows) |
+| 11 | Builder service: signing key on the console encrypted with a passphrase, dedicated CA or enterprise CA from the console, signed MSIs preconfigured with gateway, root certificate, keys and token | ✅ |
 | Later | Further plugins (§8.10), Linux agent packages | 📋 |
 
 ---
@@ -601,3 +604,4 @@ The console matches computers and agents by host name and shows:
 | 2026-10-19 | Code-signing keys are created by `openrmm-admin` on the build machine, never by the internet-facing console, which keeps only the public certificate; the setup is a checklist page after the command-line bootstrap rather than a one-time-code wizard |
 | 2026-10-19 | Active Directory is read by the `adinventory` module with a domain member's computer account instead of an LDAPS service account on the console |
 | 2026-10-19 | Interactive shell approved with **MFA per session** (one agent, at most 60 minutes, every line audited, off unless the endpoint's local policy allows it) instead of per command; full terminal with xterm.js served by the console, scripts allowed on that page only |
+| 2026-10-20 | The Authenticode key may live on the console, in a separate **builder** container, **encrypted with a passphrase** asked at each use (with MFA for builds); the console builds **signed MSIs preconfigured** with gateway, root certificate, public keys and a non-auto-approving enrollment token. Internal PCs reach the gateway in the DMZ through split DNS |

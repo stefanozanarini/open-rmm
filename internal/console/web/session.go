@@ -46,6 +46,8 @@ type Pending struct {
 	Return     string `json:"return,omitempty"`
 	// For "policy": the canonical policy document being approved.
 	PolicyDoc []byte `json:"policy_doc,omitempty"`
+	// For "installer": the agent version of the installer to build.
+	Installer string `json:"installer,omitempty"`
 }
 
 // SessionData is stored server-side; the browser only holds a random id.
@@ -63,6 +65,8 @@ type SessionData struct {
 	Link      string     `json:"link,omitempty"`
 	FedKey    string     `json:"fed_key,omitempty"`
 	FedStepUp *fedStepUp `json:"fed_step_up,omitempty"`
+	// InstallerApproval: an MFA approval waiting for the signing passphrase.
+	InstallerApproval *installerApproval `json:"installer_approval,omitempty"`
 }
 
 type session struct {

@@ -21,6 +21,7 @@
     <a href="/patches">{{t "Patch"}}</a>
     <a href="/packages">Software</a>
     {{if .IsAdmin}}<a href="/tokens">{{t "Token"}}</a>{{end}}
+    {{if .CanRun}}<a href="/agent-installer">{{t "Installer"}}</a>{{end}}
     <a href="/alerts">{{t "Avvisi"}}{{if .OpenAlerts}} <span class="badge sev-critical">{{.OpenAlerts}}</span>{{end}}</a>
     <a href="/audit">{{t "Attività"}}</a>
     <a href="/updates">{{t "Versioni agente"}}</a>
