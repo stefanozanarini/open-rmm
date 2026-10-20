@@ -338,7 +338,7 @@ func TestConsoleApproveAndRunJobWithStepUp(t *testing.T) {
 	e.idp.mu.Lock()
 	auth := e.idp.lastAuth
 	e.idp.mu.Unlock()
-	if auth.Get("prompt") != "login" || auth.Get("max_age") != "0" || !strings.HasPrefix(auth.Get("nonce"), "job.") {
+	if auth.Get("prompt") != "login" || auth.Has("max_age") || !strings.HasPrefix(auth.Get("nonce"), "job.") {
 		t.Fatalf("step-up authorize params: %v", auth)
 	}
 

@@ -25,8 +25,11 @@ import (
 func (s *Server) authOptions(p *Pending, stepUp bool) []oauth2.AuthCodeOption {
 	opts := []oauth2.AuthCodeOption{oidc.Nonce(p.Nonce), oauth2.S256ChallengeOption(p.CodeVerifier)}
 	if stepUp {
-		// Force a new interactive sign-in for this approval.
-		opts = append(opts, oauth2.SetAuthURLParam("prompt", "login"), oauth2.SetAuthURLParam("max_age", "0"))
+		// Force a new interactive sign-in for this approval. No max_age:
+		// Entra caps the ID token's lifetime to it, so max_age=0 yields a
+		// token already expired on arrival; freshness is checked on the
+		// token instead (CheckFresh).
+		opts = append(opts, oauth2.SetAuthURLParam("prompt", "login"))
 	}
 	if ctxID, ok := strings.CutPrefix(s.verifier.Config().MFAClaim, "acrs:"); ok {
 		// Ask for the Conditional Access authentication context that
@@ -144,6 +147,8 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		s.completePolicy(w, r, sess, p, claims, raw)
 	case "installer":
 		s.completeInstaller(w, r, sess, p, claims, s.verifier)
+	case "publish":
+		s.completePublish(w, r, sess, p, claims, s.verifier)
 	default:
 		http.Error(w, tr(lang, "accesso non valido"), http.StatusBadRequest)
 	}
