@@ -13,6 +13,16 @@ The console runs in containers on a Linux host with Docker and the Compose plugi
 
 Every service runs as an unprivileged user (65532), with a read-only file system, no Linux capabilities, and memory and process limits. The gateway, the only internet-facing service, has no database credentials, no CA private key and no access to the signer socket: it only relays agent traffic over the tunnel that `core` opens towards it ([ARCHITECTURE.md](ARCHITECTURE.md) §6.7).
 
+## 0. Host
+
+Tested target: **Ubuntu Server 26.04 LTS** (any recent Linux with Docker works: the images are static, distroless binaries).
+
+- **Docker Engine and the Compose plugin from Docker's own apt repository** (`docker-ce`, `docker-compose-plugin`), not the snap package (it confines volumes and sockets in ways that break the shared signer and shell sockets).
+- **Time synchronization** (`systemd-timesyncd` or chrony): sign-in tokens, MFA freshness checks and certificates depend on the clock.
+- **Firewall**: Docker publishes ports with its own iptables/nftables rules, which **bypass ufw**. Expose only what is meant to be reachable by binding the published ports to the right address in `.env` (`OPENRMM_CONSOLE_BIND` on the operators' LAN address, `OPENRMM_FEDERATION_BIND` only on a central console), and filter in front of the host (perimeter firewall) for the gateway port.
+- **Automatic security updates** (`unattended-upgrades`, enabled by default on Ubuntu Server) and a dedicated VM per role: with the DMZ split ([deploy/dmz](../deploy/dmz)), the gateway runs on its own VM in the DMZ and the rest on an internal VM.
+- Disk: the database, and the package library (`packages` volume) sized for the installers you distribute (a few GB).
+
 ## 1. Configuration
 
 ```bash
