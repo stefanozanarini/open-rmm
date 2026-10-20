@@ -1,0 +1,34 @@
+{
+  "scan": [],
+  "upgrade": [
+    {
+      "name": "all",
+      "type": "bool",
+      "label": {
+        "it": "Aggiorna tutte le applicazioni",
+        "en": "Upgrade every application"
+      },
+      "default": false
+    },
+    {
+      "name": "ids",
+      "type": "list",
+      "label": {
+        "it": "Applicazioni (id winget)",
+        "en": "Applications (winget ids)"
+      },
+      "help": {
+        "it": "Uno per riga, es. 7zip.7zip. Ignorato se aggiorni tutto.",
+        "en": "One per line, e.g. 7zip.7zip. Ignored when upgrading all."
+      }
+    },
+    {
+      "name": "exclude",
+      "type": "list",
+      "label": {
+        "it": "Escludi (id winget)",
+        "en": "Exclude (winget ids)"
+      }
+    }
+  ]
+}

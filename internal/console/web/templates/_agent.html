@@ -227,24 +227,31 @@
 </form>
 <p class="muted">{{t "Una sessione PowerShell su questo PC, approvata con MFA. Il PC deve consentirla con la policy locale (GPO) e ogni riga digitata è registrata."}}</p>
 {{end}}
+{{if and .CanRun .Data.Packages (eq .Data.Agent.Status "active")}}
+<h2>{{t "Installa software"}}</h2>
+<form method="post" action="/agents/bulk" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="agent" value="{{.Data.Agent.ID}}">
+  <label>{{t "Pacchetto"}} <select name="package">{{range .Data.Packages}}<option value="{{.SHA256}}">{{.Name}} {{.Version}} ({{.FileName}})</option>{{end}}</select></label>
+  <button class="primary">{{t "Continua"}}</button>
+</form>
+<p class="muted">{{th "Dalla libreria della pagina <a href=\"/packages\">Software</a>. Per disinstallare, usa l'elenco del software installato."}}</p>
+{{end}}
 {{if and .CanRun .Data.Actions}}
 {{$csrf := .CSRF}}{{$id := .Data.Agent.ID}}
 <h2>{{t "Esegui un comando"}}</h2>
 <p class="muted">{{t "Prima dell'esecuzione ti verrà chiesto di autenticarti di nuovo con Microsoft: l'approvazione vale solo per quel comando."}}</p>
-{{if .Data.Commands}}
+{{range .Data.Commands}}
+<details class="action">
+<summary><strong>{{.Module}}</strong> · {{.Action}}{{if .Description}} <span class="muted">— {{.Description}}</span>{{end}}</summary>
 <form method="post" action="/agents/{{$id}}/jobs" class="stack">
   <input type="hidden" name="csrf" value="{{$csrf}}">
-  <label>{{t "Azione"}}
-    <select name="target">
-    {{range .Data.Commands}}<option value="{{.Module}}|{{.Version}}|{{.Action}}">{{.Module}} {{.Version}} · {{.Action}}{{if .Description}} — {{.Description}}{{end}}</option>{{end}}
-    </select>
-  </label>
-  <label>{{t "Parametri (JSON, facoltativi)"}}
-    <input name="params" value="{}" spellcheck="false">
-  </label>
+  <input type="hidden" name="target" value="{{.Module}}|{{.Version}}|{{.Action}}">
+  {{if .Known}}{{template "param-fields" .Fields}}{{else}}<label>{{t "Parametri (JSON, facoltativi)"}} <input name="params" value="{}" spellcheck="false"></label>{{end}}
   {{template "ttl"}}
   <button class="primary">{{t "Approva ed esegui"}}</button>
 </form>
+</details>
 {{end}}
 {{range .Data.Scripts}}
 <h3>{{t "Script PowerShell"}}</h3>
@@ -278,7 +285,7 @@
 {{end}}
 
 {{define "agent-policies"}}
-<h2>{{t "Policy"}}</h2>
+<h2>{{t "Raccolte"}}</h2>
 {{if .Data.Results}}
 <table>
 <thead><tr><th>Policy</th><th>{{t "Regola"}}</th><th>{{t "Stato"}}</th><th>{{t "Ultima esecuzione"}}</th><th>{{t "Dettagli"}}</th></tr></thead>
@@ -292,7 +299,7 @@
 </tr>{{end}}
 </tbody>
 </table>
-{{else}}<p class="muted">{{t "Nessun risultato di policy."}}</p>{{end}}
+{{else}}<p class="muted">{{t "Nessuna raccolta ancora ricevuta: dopo l'approvazione l'agente invia i dati entro pochi minuti, se i moduli sono pubblicati."}}</p>{{end}}
 {{end}}
 
 {{define "agent-jobs"}}
@@ -314,6 +321,17 @@
 {{else}}<p class="muted">{{t "Nessuna nota."}}</p>{{end}}
 {{end}}
 
+{{define "param-fields"}}
+{{range .}}{{$f := .}}
+{{if eq .Type "bool"}}<label class="check"><input type="checkbox" name="p.{{.Name}}" value="true"{{if .Value}} checked{{end}}> {{.Text}}</label>
+{{else if eq .Type "enum"}}<label>{{.Text}} <select name="p.{{.Name}}">{{if not .Required}}<option value="">{{t "predefinito del modulo"}}</option>{{end}}{{range .Options}}<option value="{{.Value}}"{{if .Checked}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+{{else if eq .Type "multi"}}<fieldset><legend>{{.Text}}</legend>{{range .Options}}<label class="check"><input type="checkbox" name="p.{{$f.Name}}" value="{{.Value}}"{{if .Checked}} checked{{end}}> {{.Label}}</label>{{end}}</fieldset>
+{{else if eq .Type "int"}}<label>{{.Text}} <input type="number" name="p.{{.Name}}" value="{{.Value}}"{{with .MinS}} min="{{.}}"{{end}}{{with .MaxS}} max="{{.}}"{{end}}{{if .Required}} required{{end}}></label>
+{{else if or (eq .Type "list") (eq .Type "text")}}<label>{{.Text}} <textarea name="p.{{.Name}}" rows="3" spellcheck="false"{{if .Required}} required{{end}}>{{.Value}}</textarea></label>
+{{else}}<label>{{.Text}} <input name="p.{{.Name}}" value="{{.Value}}"{{if .Required}} required{{end}}></label>{{end}}
+{{with .Help}}<p class="muted small">{{.}}</p>{{end}}
+{{end}}
+{{end}}
 {{define "ttl"}}
 <label>{{t "Validità"}}
   <select name="ttl_minutes"><option value="15">{{t "15 minuti"}}</option><option value="60" selected>{{t "1 ora"}}</option><option value="480">{{t "8 ore"}}</option><option value="1440">{{t "24 ore"}}</option></select>

@@ -1,0 +1,133 @@
+{
+  "scan": [
+    {
+      "name": "max_age_days",
+      "type": "int",
+      "label": {
+        "it": "Segnala gli aggiornamenti di sicurezza mancanti da più di (giorni)",
+        "en": "Flag security updates missing for more than (days)"
+      },
+      "default": 30,
+      "min": 0,
+      "max": 365
+    }
+  ],
+  "install": [
+    {
+      "name": "classifications",
+      "type": "multi",
+      "label": {
+        "it": "Classificazioni",
+        "en": "Classifications"
+      },
+      "options": [
+        {
+          "value": "security",
+          "label": {
+            "it": "Sicurezza",
+            "en": "Security"
+          }
+        },
+        {
+          "value": "critical",
+          "label": {
+            "it": "Critici",
+            "en": "Critical"
+          }
+        },
+        {
+          "value": "rollup",
+          "label": {
+            "it": "Aggiornamenti cumulativi",
+            "en": "Update rollups"
+          }
+        },
+        {
+          "value": "update",
+          "label": {
+            "it": "Aggiornamenti",
+            "en": "Updates"
+          }
+        },
+        {
+          "value": "definition",
+          "label": {
+            "it": "Definizioni",
+            "en": "Definitions"
+          }
+        },
+        {
+          "value": "driver",
+          "label": {
+            "it": "Driver",
+            "en": "Drivers"
+          }
+        },
+        {
+          "value": "feature_pack",
+          "label": {
+            "it": "Feature pack",
+            "en": "Feature packs"
+          }
+        },
+        {
+          "value": "service_pack",
+          "label": {
+            "it": "Service pack",
+            "en": "Service packs"
+          }
+        },
+        {
+          "value": "tools",
+          "label": {
+            "it": "Strumenti",
+            "en": "Tools"
+          }
+        },
+        {
+          "value": "upgrade",
+          "label": {
+            "it": "Upgrade di versione",
+            "en": "Upgrades"
+          }
+        }
+      ],
+      "default": [
+        "security",
+        "critical",
+        "rollup",
+        "update",
+        "definition"
+      ]
+    },
+    {
+      "name": "include_kbs",
+      "type": "list",
+      "label": {
+        "it": "Solo questi KB",
+        "en": "Only these KBs"
+      },
+      "help": {
+        "it": "Uno per riga, es. KB5034441. Vuoto: tutti quelli delle classificazioni scelte.",
+        "en": "One per line, e.g. KB5034441. Empty: all of the selected classifications."
+      }
+    },
+    {
+      "name": "exclude_kbs",
+      "type": "list",
+      "label": {
+        "it": "Escludi questi KB",
+        "en": "Exclude these KBs"
+      }
+    },
+    {
+      "name": "allow_managed",
+      "type": "bool",
+      "label": {
+        "it": "Installa anche se gestito da WSUS/Intune",
+        "en": "Install even if managed by WSUS/Intune"
+      },
+      "default": false
+    }
+  ]
+}

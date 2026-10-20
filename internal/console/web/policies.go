@@ -100,6 +100,10 @@ func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 		d.Name, d.Rules = "Base", rules
 	}
 	if id := r.PathValue("id"); id != "" {
+		if isBaseline(t, id) {
+			s.flash(w, r, s.T(r, "La raccolta automatica è mantenuta dalla console."), "/policies")
+			return
+		}
 		cur, err := s.store.GetPolicy(r.Context(), t, id)
 		if err != nil {
 			http.NotFound(w, r)
@@ -187,6 +191,10 @@ func (s *Server) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
+	if isBaseline(t, r.PostFormValue("id")) {
+		s.flash(w, r, s.T(r, "La raccolta automatica è mantenuta dalla console."), "/policies")
+		return
+	}
 	_, raw, err := s.buildPolicy(r.Context(), t, r)
 	if err != nil {
 		d := policyFormData{ID: r.PostFormValue("id"), Name: r.PostFormValue("name"), AppliesTo: r.PostFormValue("applies_to"),
@@ -254,6 +262,10 @@ func (s *Server) handleDeletePolicy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if !ok || !ids.IsUUID(id) {
 		http.NotFound(w, r)
+		return
+	}
+	if isBaseline(t, id) {
+		s.flash(w, r, s.T(r, "La raccolta automatica è mantenuta dalla console."), "/policies")
 		return
 	}
 	cur, err := s.store.GetPolicy(r.Context(), t, id)

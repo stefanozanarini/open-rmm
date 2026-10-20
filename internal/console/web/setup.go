@@ -159,19 +159,15 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	periodic := 0
-	for _, m := range recommended {
-		if _, ok := latest[m.Module]; ok && m.Every != "" {
-			periodic++
-		}
+	auto := false
+	for _, p := range pols {
+		auto = auto || isBaseline(t, p.ID)
 	}
-	it = setupItem{Title: s.T(r, "Policy di base"), Link: "/policies/new?template=baseline", LinkLabel: s.T(r, "Crea la policy di base")}
-	if len(pols) == 0 && periodic == 0 {
-		it.Status, it.Detail, it.Link, it.LinkLabel = setupTodo, s.T(r, "Pubblica prima i moduli: la policy di base li esegue periodicamente."), "/modules", s.T(r, "Moduli")
-	} else if len(pols) == 0 {
-		it.Status, it.Detail = setupTodo, s.T(r, "Inventario, aggiornamenti, stato della protezione, accessi, Trend Micro dove installato e Active Directory sui domain controller. La policy è precompilata con i moduli pubblicati e va approvata con MFA.")
+	it = setupItem{Title: s.T(r, "Raccolta automatica"), Link: "/modules", LinkLabel: s.T(r, "Moduli")}
+	if auto {
+		it.Status, it.Detail = setupDone, s.T(r, "Inventario, aggiornamenti, stato della protezione, accessi, Trend Micro dove installato e Active Directory sui domain controller vengono raccolti da soli sugli agenti approvati.")
 	} else {
-		it.Status, it.Detail, it.Link, it.LinkLabel = setupDone, s.Tf(r, "%d policy attive.", len(pols)), "/policies", s.T(r, "Policy")
+		it.Status, it.Detail = setupTodo, s.T(r, "Pubblica i moduli: la raccolta di inventario, aggiornamenti e protezione parte da sola.")
 	}
 	add(it)
 

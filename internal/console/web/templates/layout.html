@@ -17,9 +17,9 @@
     <a href="/agents">{{t "Tutti gli agenti"}}</a>
     <a href="/jobs">{{t "Job"}}</a>
     <a href="/modules">{{t "Moduli"}}</a>
-    <a href="/policies">{{t "Policy"}}</a>
     <a href="/patches">{{t "Patch"}}</a>
     <a href="/packages">Software</a>
+    <a href="/reports">Reporting</a>
     {{if .IsAdmin}}<a href="/tokens">{{t "Token"}}</a>{{end}}
     {{if .CanRun}}<a href="/agent-installer">{{t "Installer"}}</a>{{end}}
     <a href="/alerts">{{t "Avvisi"}}{{if .OpenAlerts}} <span class="badge sev-critical">{{.OpenAlerts}}</span>{{end}}</a>

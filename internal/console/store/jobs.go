@@ -21,8 +21,10 @@ type Module struct {
 	Signature      []byte
 	ManifestSHA256 []byte
 	Archive        []byte // empty in listings
-	UploadedAt     time.Time
-	UploadedBy     string
+	// Params is the module's params.json (form description), if any.
+	Params     []byte
+	UploadedAt time.Time
+	UploadedBy string
 }
 
 type JobState string

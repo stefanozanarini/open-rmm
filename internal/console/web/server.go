@@ -286,6 +286,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /jobs/{id}", s.auth(s.handleJob))
 	mux.Handle("GET /modules", s.auth(s.handleModules))
 	mux.Handle("GET /updates", s.auth(s.handleUpdates))
+	mux.Handle("GET /reports", s.auth(s.handleReports))
 	mux.Handle("GET /tokens", s.role(authn.RoleAdmin, s.handleTokens))
 	mux.Handle("POST /tokens", s.role(authn.RoleAdmin, s.handleCreateToken))
 	mux.Handle("GET /audit", s.auth(s.handleAudit))

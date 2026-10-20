@@ -1,0 +1,76 @@
+{{define "content"}}
+{{with .Data}}
+<nav class="tabs" aria-label="{{t "Report"}}">
+  <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Computer"}}</a>
+  <a href="/reports{{qs "tab" "os"}}" {{if eq .Tab "os"}}class="current"{{end}}>{{t "Sistemi operativi"}}</a>
+  <a href="/reports{{qs "tab" "logons"}}" {{if eq .Tab "logons"}}class="current"{{end}}>{{t "Accessi"}}</a>
+</nav>
+
+{{if eq .Tab "computers"}}
+<p class="muted">{{t "Trova i computer per software installato, sistema operativo, utente, modello o sede, dai dati dell'ultimo inventario. I filtri si combinano; ogni campo cerca il testo contenuto, senza distinguere maiuscole e minuscole."}}</p>
+<form method="get" action="/reports" class="stack">
+  <input type="hidden" name="tab" value="computers">
+  <div class="grid2">
+    <label>{{t "Software installato"}} <input name="software" value="{{.Software}}" placeholder="7-Zip"></label>
+    <label>{{t "Versione del software"}} <input name="version" value="{{.Version}}" placeholder="24."></label>
+    <label>{{t "Sistema operativo"}} <input name="os" value="{{.OSFilter}}" placeholder="Windows 11 23H2"></label>
+    <label>{{t "Utente collegato"}} <input name="user" value="{{.User}}"></label>
+    <label>{{t "Produttore o modello"}} <input name="model" value="{{.Model}}" placeholder="Latitude"></label>
+    <label>{{t "Sede"}} <select name="site"><option value="">{{t "Tutte le sedi"}}</option>
+      {{range .Sites}}<option value="{{.ID}}"{{if eq $.Data.Site .ID}} selected{{end}}>{{.Name}}</option>{{end}}
+      <option value="none"{{if eq .Site "none"}} selected{{end}}>{{t "Senza sede"}}</option></select></label>
+  </div>
+  <div class="actions"><button class="primary">{{t "Cerca"}}</button> <a href="/reports{{qs "tab" "computers" "all" "1"}}">{{t "tutti i computer"}}</a></div>
+</form>
+{{if .Searched}}
+<p>{{tf "%d computer." (len .Rows)}}{{if .Rows}} <a href="/reports?{{.Query}}&amp;format=csv">{{t "Esporta CSV"}}</a>{{end}}</p>
+{{if .Rows}}
+<table>
+<thead><tr><th>{{t "Computer"}}</th><th>{{t "Sede"}}</th><th>{{t "Sistema operativo"}}</th><th>{{t "Modello"}}</th><th>{{t "Utente"}}</th>{{if or .Software .Version}}<th>{{t "Software"}}</th>{{end}}<th>{{t "Inventario"}}</th></tr></thead>
+<tbody>
+{{range .Rows}}<tr>
+  <td><a href="/agents/{{.Agent.ID}}">{{.Agent.Host.Hostname}}</a>{{if eq .Agent.Status "pending"}} <span class="badge pending">{{label .Agent.Status}}</span>{{end}}</td>
+  <td>{{.Site}}</td><td>{{.OS}}</td><td>{{.Model}}</td><td>{{.User}}</td>
+  {{if or $.Data.Software $.Data.Version}}<td>{{range .Software}}{{.Name}} <span class="muted">{{.Version}}</span><br>{{end}}</td>{{end}}
+  <td>{{if .Seen.IsZero}}<span class="muted">{{t "non ancora ricevuto"}}</span>{{else}}{{fmtTime .Seen}}{{end}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{end}}
+{{end}}
+{{end}}
+
+{{if eq .Tab "os"}}
+<p>{{t "Computer per sistema operativo, versione e build."}} {{if .OS}}<a href="/reports?{{.Query}}&amp;format=csv">{{t "Esporta CSV"}}</a>{{end}}</p>
+<table>
+<thead><tr><th>{{t "Sistema operativo"}}</th><th>{{t "Computer"}}</th></tr></thead>
+<tbody>
+{{range .OS}}<tr><td><a href="/reports{{qs "tab" "computers" "os" .Label}}">{{.Label}}</a></td><td>{{.Count}}</td></tr>{{else}}<tr><td colspan="2" class="muted">{{t "Nessun computer."}}</td></tr>{{end}}
+</tbody>
+</table>
+{{end}}
+
+{{if eq .Tab "logons"}}
+<p class="muted">{{t "Accessi locali e da desktop remoto registrati sui computer, i più recenti per primi."}}</p>
+<form method="get" action="/reports" class="inline">
+  <input type="hidden" name="tab" value="logons">
+  <label>{{t "Utente"}} <input name="logon_user" value="{{.LogonUser}}"></label>
+  <label>{{t "Ultimi giorni"}} <input name="days" type="number" min="1" max="365" value="{{.Days}}"></label>
+  <button class="primary">{{t "Cerca"}}</button>
+</form>
+<p>{{tf "%d accessi." (len .Logons)}}{{if .Truncated}} {{tf "Mostrati i primi %d: restringi la ricerca." (len .Logons)}}{{end}}{{if .Logons}} <a href="/reports?{{.Query}}&amp;format=csv">{{t "Esporta CSV"}}</a>{{end}}</p>
+{{if .Logons}}
+<table>
+<thead><tr><th>{{t "Quando"}}</th><th>{{t "Computer"}}</th><th>{{t "Utente"}}</th><th>{{t "Tipo"}}</th><th>{{t "Origine"}}</th><th>{{t "Esito"}}</th></tr></thead>
+<tbody>
+{{range .Logons}}<tr>
+  <td>{{fmtTime .At}}</td><td><a href="/agents/{{.AgentID}}?tab=logons">{{.Hostname}}</a></td>
+  <td>{{if .Domain}}{{.Domain}}\{{end}}{{.User}}</td><td>{{.Kind}}</td>
+  <td>{{.SourceIP}}{{with .SourceHost}} <span class="muted">{{.}}</span>{{end}}</td><td>{{.Status}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{end}}
+{{end}}
+{{end}}
+{{end}}

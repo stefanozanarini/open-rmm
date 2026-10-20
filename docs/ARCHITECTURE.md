@@ -163,7 +163,7 @@ A job is `{job_id, tenant_id, agent_id, module, version, module_sha256, action, 
 
 ### 3.7 Policies and conditional plugins ✅
 
-Recurring work (inventory every 24 h, Trend Micro status every 15 min, logon events every 5 min) and automatic plugin activation are expressed as **policies**. A policy is a canonical JSON document:
+Recurring work (inventory every 24 h, Trend Micro status every 15 min, logon events every 5 min) and automatic plugin activation are expressed as **policies**. The standard collections need no operator: the console keeps an **automatic collection** policy per tenant (fixed modules, actions and intervals, no parameters) that the signer signs without an approval because it checks that exact content ([MODULES.md](MODULES.md), *Automatic collection*); policies written by Admins (with MFA) are for anything else. A policy is a canonical JSON document:
 
 ```json
 {"id":"…","tenant_id":"…","name":"security-baseline","version":7,"applies_to":"all",
@@ -612,3 +612,4 @@ The console matches computers and agents by host name and shows:
 | 2026-10-19 | Interactive shell approved with **MFA per session** (one agent, at most 60 minutes, every line audited, off unless the endpoint's local policy allows it) instead of per command; full terminal with xterm.js served by the console, scripts allowed on that page only |
 | 2026-10-20 | The Authenticode key may live on the console, in a separate **builder** container, **encrypted with a passphrase** asked at each use (with MFA for builds); the console builds **signed MSIs preconfigured** with gateway, root certificate, public keys and a non-auto-approving enrollment token. Internal PCs reach the gateway in the DMZ through split DNS |
 | 2026-10-20 | **Module and agent release keys in the builder**, encrypted with the same passphrase as the Authenticode key, created from the console; modules and releases published from the console after MFA and the passphrase. Offline keys remain supported. First installation: `OPENRMM_MFA_CLAIM=none` added for directories that enforce MFA themselves (Entra omits `amr` from v2.0 ID tokens unless requested) |
+| 2026-10-20 | **Automatic collection** instead of a baseline policy to write: the console keeps it per tenant and the signer signs it without MFA only when it matches the fixed list of read-only collections; the console image ships the agent and the modules, published with MFA and the passphrase only. Policies move under Settings as an advanced option |

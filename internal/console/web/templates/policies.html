@@ -1,16 +1,17 @@
 {{define "content"}}
-<p class="muted">{{t "Le policy eseguono periodicamente i moduli sugli agenti, anche quando sono offline. Ogni regola può avere condizioni (servizio, file o chiave di registro presenti, client/server): il modulo viene scaricato ed eseguito solo dove la condizione è vera. Ogni versione va approvata con una nuova autenticazione."}}</p>
+<p>{{t "Inventario, aggiornamenti, protezione e accessi sono raccolti da soli dalla raccolta automatica, mantenuta dalla console: qui servono solo regole aggiuntive, per esempio un riavvio in una finestra di manutenzione."}}</p>
+<p class="muted">{{t "Le regole eseguono periodicamente i moduli sugli agenti, anche quando sono offline, solo dove la condizione è vera (servizio, file o chiave di registro presenti, client/server). Ogni versione va approvata con una nuova autenticazione."}}</p>
 {{if .IsAdmin}}<p><a class="button" href="/policies/new">{{t "Nuova policy"}}</a></p>{{end}}
 <table>
 <thead><tr><th>{{t "Nome"}}</th><th>{{t "Si applica a"}}</th><th>{{t "Regole"}}</th><th>{{t "Versione"}}</th><th>{{t "Modificata"}}</th><th></th></tr></thead>
 <tbody>
 {{range .Data.Policies}}<tr>
-  <td>{{if $.IsAdmin}}<a href="/policies/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
+  <td>{{if eq .CreatedBy "automatic"}}{{.Name}} <span class="badge">{{t "automatica"}}</span>{{else if $.IsAdmin}}<a href="/policies/{{.ID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
   <td>{{label .AppliesTo}}</td>
   <td>{{.Rules}}</td>
   <td>{{.Version}}</td>
   <td>{{fmtTime .CreatedAt}} {{.CreatedBy}}</td>
-  <td>{{if $.IsAdmin}}<form method="post" action="/policies/{{.ID}}/delete" class="inline">
+  <td>{{if and $.IsAdmin (ne .CreatedBy "automatic")}}<form method="post" action="/policies/{{.ID}}/delete" class="inline">
     <input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="danger">{{t "Elimina"}}</button></form>{{end}}</td>
 </tr>{{else}}<tr><td colspan="6" class="muted">{{t "Nessuna policy."}}</td></tr>{{end}}
 </tbody>

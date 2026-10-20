@@ -153,7 +153,7 @@ OPENRMM_VISIONONE_REGION=eu
 
 and restart `core`. Its log shows `vision one synchronized` every 15 minutes with the number of endpoints matched by host name; results appear as `visionone/…` checks on the agent pages and Workbench alerts under **Avvisi**. The `core` container needs outbound HTTPS to `api.eu.xdr.trendmicro.com`.
 
-**Policies.** Publish the `accesslog`, `trendmicro` and `protection-status` modules and create policies, for example: `accesslog`·`collect` every `5m` on all endpoints; `protection-status`·`status` every `1h`; `trendmicro`·`status` every `15m` with condition `{"service_exists":"ntrtscan"}` and parameters `{"expect":["sep"]}` (servers: `ds_agent` and `swp`). See [MODULES.md](MODULES.md).
+**Collection.** Publish the modules (**Modules** page): the automatic collection then runs `accesslog` every 5 minutes, `protection-status` every hour and `trendmicro` every 15 minutes where a Trend agent is installed, without any policy to write ([MODULES.md](MODULES.md), *Automatic collection*). To check for specific Trend products (`{"expect":["sep"]}`), add a scheduled rule.
 
 ## Signing keys
 

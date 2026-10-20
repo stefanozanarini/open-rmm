@@ -94,15 +94,16 @@ func TestConsoleCatalogDeployAndUninstall(t *testing.T) {
 
 	c, csrf := e.login(t, admin)
 	_, body, _ := post(t, c, e.console.URL+"/catalog", url.Values{"csrf": {csrf}, "winget_id": {"7zip.7zip"}})
-	if !strings.Contains(body, "7-Zip 24.08 aggiunto al catalogo") {
+	// Adding an application downloads its installer at once.
+	if !strings.Contains(body, "7-Zip 24.08 aggiunto alla libreria") {
 		t.Fatalf("add to catalog: %s", body)
 	}
 	if !strings.Contains(body, `chk-warning">2<`) {
 		t.Fatal("two outdated endpoints expected")
 	}
 	_, body, _ = post(t, c, e.console.URL+"/catalog/7zip.7zip/import", url.Values{"csrf": {csrf}})
-	if !strings.Contains(body, "aggiunto alla libreria") {
-		t.Fatalf("import: %s", body)
+	if !strings.Contains(body, "già nella libreria") {
+		t.Fatalf("import again: %s", body)
 	}
 	sum := sha256.Sum256(e.installer)
 	sha := hex.EncodeToString(sum[:])

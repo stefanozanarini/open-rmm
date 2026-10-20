@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -86,6 +87,12 @@ type LogonEvent struct {
 	Status     string
 }
 
+// AgentLogon is a logon event with its agent.
+type AgentLogon struct {
+	AgentID string
+	LogonEvent
+}
+
 // SecurityStore keeps settings, checks, alerts and logon events.
 type SecurityStore interface {
 	GetSettings(ctx context.Context, tenantID string) (Settings, error)
@@ -105,6 +112,10 @@ type SecurityStore interface {
 	ListAlerts(ctx context.Context, tenantID, agentID string, openOnly bool, limit int) ([]Alert, error)
 	AcknowledgeAlert(ctx context.Context, tenantID, id, by string, at time.Time) error
 
+	// SearchLogons returns the logon events of every agent whose user name
+	// contains user (any user when empty), since the given time, most
+	// recent first.
+	SearchLogons(ctx context.Context, tenantID, user string, since time.Time, limit int) ([]AgentLogon, error)
 	// AddLogonEvents stores events not stored yet and returns them, oldest
 	// first. Events older than LogonRetention are purged.
 	AddLogonEvents(ctx context.Context, tenantID, agentID string, events []LogonEvent, now time.Time) ([]LogonEvent, error)
@@ -318,6 +329,28 @@ func (m *Memory) ListLogonEvents(_ context.Context, tenantID, agentID string, li
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := append([]LogonEvent(nil), m.sec().logons[agentKey(tenantID, agentID)]...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (m *Memory) SearchLogons(_ context.Context, tenantID, user string, since time.Time, limit int) ([]AgentLogon, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []AgentLogon
+	for k, evs := range m.sec().logons {
+		agent, ok := strings.CutPrefix(k, tenantID+"/")
+		if !ok {
+			continue
+		}
+		for _, e := range evs {
+			if !e.At.Before(since) && strings.Contains(strings.ToLower(e.User), strings.ToLower(user)) {
+				out = append(out, AgentLogon{AgentID: agent, LogonEvent: e})
+			}
+		}
+	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
 	if len(out) > limit {
 		out = out[:limit]
@@ -558,6 +591,31 @@ func (p *Postgres) LogonHistory(ctx context.Context, tenantID, agentID, user, ip
 		return time.Time{}, seen, err
 	}
 	return *first, seen, err
+}
+
+func (p *Postgres) SearchLogons(ctx context.Context, tenantID, user string, since time.Time, limit int) ([]AgentLogon, error) {
+	var out []AgentLogon
+	err := p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT agent_id::text, channel, record_id, at, event_id, kind, username, domain, logon_type,
+			source_ip, source_host, status FROM logon_events
+			WHERE at >= $1 AND strpos(lower(username), lower($2)) > 0 ORDER BY at DESC, record_id DESC LIMIT $3`, since, user, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var e AgentLogon
+			var eid, lt int32
+			if err := rows.Scan(&e.AgentID, &e.Channel, &e.RecordID, &e.At, &eid, &e.Kind, &e.User, &e.Domain, &lt,
+				&e.SourceIP, &e.SourceHost, &e.Status); err != nil {
+				return err
+			}
+			e.EventID, e.LogonType = int(eid), int(lt)
+			out = append(out, e)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 func (p *Postgres) ListLogonEvents(ctx context.Context, tenantID, agentID string, limit int) ([]LogonEvent, error) {

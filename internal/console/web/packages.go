@@ -303,6 +303,29 @@ func (s *Server) handleAddCatalog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r.Context(), t, op, "catalog.added", id, map[string]any{"version": app.Version, "match_name": app.MatchName})
+	// The installer comes along at once, so the application can be
+	// distributed right away; a failed download leaves the catalog entry
+	// with its Download button.
+	if s.packages.Path != "" {
+		var rel wingetcat.Release
+		if err := json.Unmarshal(app.Release, &rel); err == nil {
+			if _, err := s.store.GetPackage(r.Context(), t, rel.SHA256); errors.Is(err, store.ErrNotFound) {
+				extendDeadlines(w, 35*time.Minute)
+				dctx, dcancel := context.WithTimeout(r.Context(), 30*time.Minute)
+				defer dcancel()
+				size, err := s.winget.Download(dctx, &rel, s.packages, maxPackageSize)
+				if err != nil {
+					s.log.Warn("catalog download", "id", rel.ID, "url", rel.URL, "err", err)
+					s.flash(w, r, s.Tf(r, "%s %s aggiunto al catalogo, ma il download non è riuscito: %v", app.Name, app.Version, err), "/packages")
+					return
+				}
+				s.addPackage(w, r, store.Package{TenantID: t, SHA256: rel.SHA256, Name: rel.Name, Version: rel.Version,
+					Publisher: rel.Publisher, FileName: rel.FileName, Size: size, Kind: rel.Kind, SilentArgs: rel.SilentArgs,
+					ProductCode: rel.ProductCode, Source: "winget", WingetID: rel.ID, SourceURL: rel.URL, CreatedBy: "operator:" + op.Username})
+				return
+			}
+		}
+	}
 	s.flash(w, r, s.Tf(r, "%s %s aggiunto al catalogo.", app.Name, app.Version), "/packages")
 }
 

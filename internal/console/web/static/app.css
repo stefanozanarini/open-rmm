@@ -120,3 +120,9 @@ section.warn { background:var(--warn); border-color:var(--line); }
 header form.theme select, header form.lang select { padding:2px 4px; font-size:13px; }
 .terminal { height:70vh; background:#000; padding:6px; border:1px solid var(--line); }
 .shell-bar { display:flex; gap:12px; align-items:center; justify-content:space-between; margin:8px 0; }
+details.action { border:1px solid var(--line); border-radius:4px; background:var(--card); margin:6px 0; }
+details.action > summary { cursor:pointer; padding:8px 12px; }
+details.action[open] > summary { border-bottom:1px solid var(--line); }
+details.action > form { padding:12px; }
+form.stack fieldset { border:1px solid var(--line); border-radius:4px; padding:6px 10px; display:flex; flex-wrap:wrap; gap:4px 16px; }
+form.stack fieldset legend { font-weight:600; padding:0 4px; }

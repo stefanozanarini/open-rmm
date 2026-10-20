@@ -147,12 +147,10 @@ func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}
-	params := map[string]any{}
-	if raw := strings.TrimSpace(r.PostFormValue("params")); raw != "" {
-		if err := json.Unmarshal([]byte(raw), &params); err != nil {
-			s.flash(w, r, s.T(r, "I parametri devono essere un oggetto JSON."), back)
-			return
-		}
+	params, msg := s.jobParams(r, mod, man, target[2])
+	if msg != "" {
+		s.flash(w, r, msg, back)
+		return
 	}
 	if man.HasCapability(modules.CapAdHocScript) {
 		script := r.PostFormValue("script")

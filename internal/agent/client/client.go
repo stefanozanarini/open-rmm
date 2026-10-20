@@ -499,8 +499,11 @@ func (s *session) FetchPackage(ctx context.Context, jobID string, ref *openrmmv1
 	}()
 	h := sha256.New()
 	var n int64
+	idle := idleCancel(cancel)
+	defer idle.stop()
 	for {
 		chunk, rerr := stream.Recv()
+		idle.touch()
 		if errors.Is(rerr, io.EOF) {
 			break
 		}
@@ -532,8 +535,11 @@ func (s *session) FetchModule(ctx context.Context, id, version string) (*modcach
 	}
 	var f *modcache.Fetched
 	var archive []byte
+	idle := idleCancel(cancel)
+	defer idle.stop()
 	for {
 		chunk, err := stream.Recv()
+		idle.touch()
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -570,3 +576,18 @@ func parseDER(ders [][]byte) ([]*x509.Certificate, error) {
 	}
 	return out, nil
 }
+
+// downloadIdle bounds the silence of a download stream: over the DMZ relay
+// a console restart can leave a stream open with nothing coming, and the
+// job would wait for the whole download timeout.
+const downloadIdle = 2 * time.Minute
+
+type idleTimer struct{ t *time.Timer }
+
+// idleCancel cancels a download that receives nothing for downloadIdle.
+func idleCancel(cancel context.CancelFunc) *idleTimer {
+	return &idleTimer{t: time.AfterFunc(downloadIdle, cancel)}
+}
+
+func (i *idleTimer) touch() { i.t.Reset(downloadIdle) }
+func (i *idleTimer) stop()  { i.t.Stop() }

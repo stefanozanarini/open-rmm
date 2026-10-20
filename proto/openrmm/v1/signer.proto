@@ -9,12 +9,24 @@ option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv
 // SignerService is exposed by openrmm-signer on a local socket. The signer
 // does not trust its caller: every request carries an operator's id_token,
 // freshly obtained from the identity provider for this very request, and the
-// signer verifies it on its own before signing.
+// signer verifies it on its own before signing. The one exception is the
+// automatic collection policy, which the signer checks against its fixed
+// content instead.
 service SignerService {
   rpc SignJob(SignJobRequest) returns (SignJobResponse);
   // SignPolicy signs a policy document approved by an operator with a fresh
   // MFA sign-in whose nonce is the document's fingerprint.
   rpc SignPolicy(SignPolicyRequest) returns (SignPolicyResponse);
+  // SignBaseline signs a tenant's automatic collection policy without an
+  // operator: only fixed read-only collections, at fixed intervals and
+  // without parameters, for a tenant of this console.
+  rpc SignBaseline(SignBaselineRequest) returns (SignPolicyResponse);
+}
+
+message SignBaselineRequest {
+  string tenant_id = 1;
+  // Canonical policy document (JSON).
+  bytes policy_json = 2;
 }
 
 message SignPolicyRequest {

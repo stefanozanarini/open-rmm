@@ -113,6 +113,19 @@ Invoke-RmmModule @{
 
 SDK functions: `Invoke-RmmModule`, `Send-RmmProgress`, `Send-RmmLog`, `Send-RmmResult`, `Send-RmmError`, `Read-RmmRequest`. An exception in the block becomes an error event with its position in the code. The SDK works on Windows PowerShell 5.1 and PowerShell 7 and uses explicit UTF-8 streams, so it also works without a console (as when started by the service).
 
+## Action parameters (params.json)
+
+A module may describe its actions' parameters in `params.json`, next to `manifest.json`. The console turns it into form fields (agent page and selections) and builds the job parameters from them, refusing values outside the description. It is not signed and not sent to agents (it stays out of the archive): what an agent runs is still decided by the parameters in the signed job. Without it the console shows a JSON field.
+
+```json
+{ "install": [
+    { "name": "classifications", "type": "multi", "label": {"it": "Classificazioni", "en": "Classifications"},
+      "options": [ {"value": "security", "label": {"it": "Sicurezza", "en": "Security"}} ], "default": ["security"] },
+    { "name": "notice_minutes", "type": "int", "label": {"en": "Notice (minutes)"}, "min": 0, "max": 240, "default": 15 } ] }
+```
+
+Types: `string`, `text`, `int` (`min`, `max`), `bool`, `enum` and `multi` (`options`), `list` (one value per line). `required`, `help` and `default` are optional; an empty optional field is left out, so the module applies its own default.
+
 ## Signing and publishing
 
 **From the console** (recommended). Once, a console administrator creates the module and release keys on the **Installer** page (*Module and release keys*), with the passphrase of the code-signing key: installers include the public keys from then on. Then, to publish:
@@ -177,9 +190,26 @@ Details in [ENTRA.md](ENTRA.md). The full text of scripts goes to the audit log.
 | `shell` 1.0.0 | Windows, Linux | `open` (`{"minutes":30}`, at most 60): interactive shell session (capability `interactive_shell`): the agent itself runs Windows PowerShell or bash on a pseudo-terminal, with the module's `Shell.ps1` / `shell.sh` as startup script. Refused unless the local policy `AllowInteractiveShell` is enabled; never in policies; opened from the agent page |
 | `adinventory` 1.0.0 | Windows | `collect`: computer objects of the endpoint's domain (name, OU, operating system, enabled, last domain logon) read with the computer account; at most 10,000. Run it on the domain controllers or one member server. Results feed the *Active Directory* page and the OU tree |
 
-## Policies
+## Automatic collection
 
-To run a module action periodically, or only on endpoints where a condition holds, create a **policy** in the web console (**Policy**, Admin role). Each rule names a module version, an action, parameters, an interval and an optional condition. Saving asks for a new MFA sign-in; the signer signs that exact version and the agents receive it at once. Results of the latest run of each rule appear on the agent page. Modules with the `adhoc_script` capability cannot be used in policies.
+Nothing has to be configured for data to arrive: the console keeps in every tenant an **automatic collection** policy that runs, on every approved agent, the newest published version of:
+
+| Module · action | Every | Where |
+|---|---|---|
+| `inventory` · `collect` | 24 h | all |
+| `winupdate` · `scan` | 24 h | all |
+| `winget` · `scan` | 24 h | all |
+| `firmware` · `scan` | 24 h | all |
+| `protection-status` · `status` | 1 h | all |
+| `accesslog` · `collect` | 5 min | all |
+| `trendmicro` · `status` | 15 min | where a Trend Micro agent service exists |
+| `adinventory` · `collect` | 24 h | domain controllers (`NTDS` service) |
+
+Collections whose module is not published are left out; the policy is updated when modules are published, at startup and every hour. The first run on a new agent comes within two minutes. It is signed by the signer **without an operator's approval** because the signer accepts only this exact list (`policy.CheckBaseline`): fixed modules, actions and intervals, no parameters, no windows. What runs is still the module version pinned by hash and signed with the module release key. Operators cannot edit or delete it.
+
+## Scheduled rules (advanced)
+
+To run other module actions periodically, or only on endpoints where a condition holds (for instance a reboot in a maintenance window), create a **policy** (*Settings → Scheduled rules*, Admin role). Each rule names a module version, an action, parameters, an interval and an optional condition. Saving asks for a new MFA sign-in; the signer signs that exact version and the agents receive it at once. Results of the latest run of each rule appear on the agent page. Modules with the `adhoc_script` capability cannot be used in policies.
 
 For example, a policy with one rule `{"id": "inventory", "module": "inventory", "version": "1.0.0", "action": "collect", "every": "24h"}` keeps every endpoint's inventory up to date; new endpoints send it within a couple of minutes of receiving the policy.
 

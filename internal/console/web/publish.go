@@ -372,6 +372,7 @@ func (s *Server) handlePublishModule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.consume(r.Context(), w, sess)
+	s.syncAfterPublish(r.Context())
 	s.flash(w, r, s.Tf(r, "Modulo %s %s firmato e pubblicato.", m.ID, m.Version), "/modules")
 }
 
@@ -409,6 +410,7 @@ func (s *Server) handlePublishBundledModules(w http.ResponseWriter, r *http.Requ
 		if msg != "" {
 			if len(done) > 0 {
 				s.consume(r.Context(), w, sess)
+				s.syncAfterPublish(r.Context())
 				msg = s.Tf(r, "Pubblicati: %s. Poi: %s", strings.Join(done, ", "), msg)
 			}
 			s.flash(w, r, msg, back)
@@ -421,6 +423,7 @@ func (s *Server) handlePublishBundledModules(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	s.consume(r.Context(), w, sess)
+	s.syncAfterPublish(r.Context())
 	s.flash(w, r, s.Tf(r, "Moduli firmati e pubblicati: %s.", strings.Join(done, ", ")), "/modules")
 }
 
@@ -458,9 +461,17 @@ func (s *Server) publishModule(r *http.Request, op *Operator, m *modules.Manifes
 	if err != nil {
 		return "", err
 	}
+	params, err := fs.ReadFile(src, modules.ParamsFile)
+	if err == nil {
+		if _, err := modules.ParseParams(params, m); err != nil {
+			return s.Tf(r, "Modulo non valido: %s", err.Error()), nil
+		}
+	} else {
+		params = nil
+	}
 	err = s.store.PutModule(ctx, store.Module{ID: m.ID, Version: m.Version, Description: m.Description,
 		KeyID: b.KeyID, Manifest: raw, Signature: b.Signature, ManifestSHA256: v.ManifestHash, Archive: archive,
-		UploadedBy: "operator:" + op.Username})
+		Params: params, UploadedBy: "operator:" + op.Username})
 	if errors.Is(err, store.ErrModuleExists) {
 		return s.Tf(r, "%s %s è già pubblicato: aumenta la versione nel manifest.", m.ID, m.Version), nil
 	}
@@ -678,4 +689,21 @@ func (s *Server) publishRelease(r *http.Request, op *Operator, version, platform
 	}
 	s.auditAll(ctx, op, "release.published", detail)
 	return "", nil
+}
+
+// Params returns the params.json shipped for a module version, if any.
+func (mb ModuleBundle) Params(id, version string) []byte {
+	list, err := mb.List()
+	if err != nil {
+		return nil
+	}
+	for _, b := range list {
+		if b.Manifest.ID == id && b.Manifest.Version == version {
+			raw, err := os.ReadFile(filepath.Join(b.Dir, modules.ParamsFile))
+			if err == nil {
+				return raw
+			}
+		}
+	}
+	return nil
 }

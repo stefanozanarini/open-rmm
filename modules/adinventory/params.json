@@ -1,0 +1,15 @@
+{
+  "collect": [
+    {
+      "name": "max",
+      "type": "int",
+      "label": {
+        "it": "Computer al massimo",
+        "en": "Computers at most"
+      },
+      "default": 10000,
+      "min": 1,
+      "max": 10000
+    }
+  ]
+}

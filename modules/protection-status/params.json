@@ -1,0 +1,15 @@
+{
+  "status": [
+    {
+      "name": "max_signature_age_days",
+      "type": "int",
+      "label": {
+        "it": "Firme antivirus più vecchie di (giorni)",
+        "en": "Antivirus signatures older than (days)"
+      },
+      "default": 3,
+      "min": 1,
+      "max": 60
+    }
+  ]
+}

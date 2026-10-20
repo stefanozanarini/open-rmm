@@ -54,8 +54,8 @@ func PackFS(m *Manifest, fsys fs.FS, extra map[string][]byte) ([]byte, error) {
 		if !d.Type().IsRegular() {
 			return fmt.Errorf("%s: only regular files can be packed", p)
 		}
-		if p == "manifest.json" {
-			return nil
+		if p == "manifest.json" || p == ParamsFile {
+			return nil // the manifest is signed apart; params.json is for the console only
 		}
 		info, err := d.Info()
 		if err != nil {

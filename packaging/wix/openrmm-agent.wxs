@@ -14,6 +14,8 @@
     MODULESIGNINGKEYS   ed25519:...
     RELEASESIGNINGKEYS  ed25519:...
     ALLOWADHOCSCRIPTS   1 or 0
+    ALLOWINTERACTIVESHELL 1 (default) or 0: interactive shell sessions, each
+                        approved with MFA; a GPO value takes precedence
 
   With Group Policy the recommended way is to assign the MSI unchanged and
   set the same values through the ADMX template (packaging/admx), which
@@ -34,6 +36,7 @@
     <Condition Message="The open-rmm agent requires 64-bit Windows.">VersionNT64</Condition>
     <!-- No Modify/Repair: a repair would write the enrollment token back. -->
     <Property Id="ARPNOMODIFY" Value="1"/>
+    <Property Id="ALLOWINTERACTIVESHELL" Value="1"/>
     <Property Id="ARPNOREPAIR" Value="1"/>
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/stefanozanarini/open-rmm"/>
 
@@ -89,6 +92,7 @@
         <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="ModuleSigningKeys" Type="string" Value="[MODULESIGNINGKEYS]"/>
         <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="ReleaseSigningKeys" Type="string" Value="[RELEASESIGNINGKEYS]"/>
         <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="AllowAdHocScripts" Type="string" Value="[ALLOWADHOCSCRIPTS]"/>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\open-rmm" Name="AllowInteractiveShell" Type="integer" Value="[ALLOWINTERACTIVESHELL]"/>
       </Component>
     </Directory>
 

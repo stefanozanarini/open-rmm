@@ -225,6 +225,30 @@ func (s *Server) serveShell(ws *websocket.Conn, r *http.Request, j store.Job, a 
 			}
 		}
 	}()
+	// A session the agent refuses (local policy, offline) never sends data:
+	// watch the job and say why instead of showing an empty terminal.
+	go func() {
+		t := time.NewTicker(2 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+			cur, err := s.store.GetJob(ctx, j.TenantID, j.ID)
+			if err != nil || !cur.State.Final() || cur.State == store.JobSucceeded {
+				continue
+			}
+			msg := s.Tf(r, "Sessione rifiutata dall'agente: %s", cur.Error)
+			if cur.State == store.JobExpired {
+				msg = s.T(r, "Sessione scaduta: l'agente non si è collegato in tempo.")
+			}
+			_ = sendWS(msg)
+			cancel()
+			return
+		}
+	}()
 	// Agent to the terminal.
 	for {
 		f, err := stream.Recv()

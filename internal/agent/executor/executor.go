@@ -247,6 +247,9 @@ func (e *Executor) Start(job *openrmmv1.Job) {
 	e.mu.Lock()
 	if e.running[job.GetJobId()] {
 		e.mu.Unlock()
+		// Delivered again after a reconnection: say it is still running,
+		// so the console does not show it as never started.
+		e.send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING})
 		return
 	}
 	e.running[job.GetJobId()] = true

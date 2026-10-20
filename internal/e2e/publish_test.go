@@ -14,12 +14,15 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
 	"github.com/stefanozanarini/open-rmm/internal/console/signer"
 	"github.com/stefanozanarini/open-rmm/internal/console/web"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
+	"github.com/stefanozanarini/open-rmm/internal/policy"
 	"github.com/stefanozanarini/open-rmm/internal/release"
 	"github.com/stefanozanarini/open-rmm/internal/signing"
 )
@@ -300,5 +303,60 @@ func TestConsolePublishBundledModules(t *testing.T) {
 	}
 	if _, body := get(t, c, e.console.URL+"/modules"); strings.Contains(body, `value="inventory@1.0.0"`) {
 		t.Fatal("published module still offered")
+	}
+
+	// Publishing started the automatic collection, signed without an
+	// operator and limited to the standard collections.
+	pv, err := e.store.GetPolicy(ctx, e.tenant, policy.BaselineID(e.tenant))
+	if err != nil || pv.CreatedBy != "automatic" || pv.Version != 1 {
+		t.Fatalf("automatic collection: %+v, %v", pv, err)
+	}
+	var env openrmmv1.SignedEnvelope
+	if err := proto.Unmarshal(pv.Envelope, &env); err != nil || !bytes.Equal(env.GetPayload(), pv.Document) {
+		t.Fatalf("envelope: %v", err)
+	}
+	p, _ := policy.Parse(pv.Document)
+	var modules []string
+	for _, r := range p.Rules {
+		modules = append(modules, r.Module+"@"+r.ModuleVersion)
+	}
+	if strings.Join(modules, ",") != "inventory@1.0.0,winupdate@1.0.0" {
+		t.Fatalf("rules = %v", modules)
+	}
+	// Unchanged modules: no new version. Operators cannot edit it.
+	if err := e.web.SyncBaselines(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if pv2, _ := e.store.GetPolicy(ctx, e.tenant, p.ID); pv2.Version != 1 {
+		t.Fatalf("version bumped without changes: %d", pv2.Version)
+	}
+	if _, body, _ := post(t, c, e.console.URL+"/policies/"+p.ID+"/delete", url.Values{"csrf": {csrf}}); !strings.Contains(body, "mantenuta dalla console") {
+		t.Fatal("automatic collection deleted by hand")
+	}
+	// Typed parameter fields from params.json, turned into job parameters.
+	pc := e.addWindowsAgent(t, "PC-PARAMS")
+	if _, body := get(t, c, e.console.URL+"/agents/"+pc+"?tab=commands"); !strings.Contains(body, `name="p.classifications"`) ||
+		!strings.Contains(body, `name="p.allow_managed"`) {
+		t.Fatalf("parameter fields missing: %s", body)
+	}
+	form := url.Values{"csrf": {csrf}, "target": {"winupdate|1.0.0|install"}, "p.classifications": {"security", "critical"},
+		"p.include_kbs": {"KB5034441"}, "ttl_minutes": {"60"}}
+	if code, _, _ := post(t, c, e.console.URL+"/agents/"+pc+"/jobs", form); code != 200 {
+		t.Fatalf("run: %d", code)
+	}
+	jobs, _ := e.store.ListJobs(ctx, e.tenant, pc, 5)
+	if len(jobs) != 1 || string(jobs[0].Params) != `{"allow_managed":false,"classifications":["security","critical"],"include_kbs":["KB5034441"]}` {
+		t.Fatalf("job params: %+v", jobs)
+	}
+	form.Set("p.classifications", "evil")
+	if _, body, _ := post(t, c, e.console.URL+"/agents/"+pc+"/jobs", form); !strings.Contains(body, "Parametri non validi") {
+		t.Fatal("invalid choice accepted")
+	}
+
+	// The signer refuses anything else without an operator.
+	p.Rules[0].Action = "install"
+	raw, _ := p.Canonical()
+	if _, err := e.signer.SignBaseline(ctx, &openrmmv1.SignBaselineRequest{TenantId: e.tenant, PolicyJson: raw}); err == nil {
+		t.Fatal("signer signed a modified automatic collection")
 	}
 }

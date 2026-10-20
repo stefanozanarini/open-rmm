@@ -50,9 +50,10 @@ type Config struct {
 	ReleaseSigningKeys []string `json:"release_signing_keys,omitempty"`
 	// AllowAdHocScripts is a local policy; default true (architecture §6.4).
 	AllowAdHocScripts *bool `json:"allow_adhoc_scripts,omitempty"`
-	// AllowInteractiveShell is a local policy; default false: interactive
-	// shell sessions must be enabled on the endpoint (GPO).
-	AllowInteractiveShell bool `json:"allow_interactive_shell,omitempty"`
+	// AllowInteractiveShell is a local policy; default true (each session
+	// still needs an operator's MFA approval). Set it to false on endpoints
+	// that must never accept one (GPO).
+	AllowInteractiveShell *bool `json:"allow_interactive_shell,omitempty"`
 
 	root        *x509.Certificate
 	keys        *signing.Keyring
@@ -204,7 +205,9 @@ func (c *Config) ModuleKeyring() *signing.Keyring { return c.moduleKeys }
 func (c *Config) ReleaseKeyring() *signing.Keyring { return c.releaseKeys }
 
 // InteractiveShellAllowed reports the local policy for shell sessions.
-func (c *Config) InteractiveShellAllowed() bool { return c.AllowInteractiveShell }
+func (c *Config) InteractiveShellAllowed() bool {
+	return c.AllowInteractiveShell == nil || *c.AllowInteractiveShell
+}
 
 // AdHocScriptsAllowed reports the effective local policy.
 func (c *Config) AdHocScriptsAllowed() bool {

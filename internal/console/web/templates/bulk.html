@@ -16,16 +16,19 @@
 {{end}}
 {{if .Commands}}
 <h2>{{t "Esegui un comando"}}</h2>
+{{range .Commands}}
+<details class="action">
+<summary><strong>{{.Module}}</strong> · {{.Action}}{{if .Description}} <span class="muted">— {{.Description}}</span>{{end}}</summary>
 <form method="post" action="/agents/bulk" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
-  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
-  <label>{{t "Azione"}}
-    <select name="target">{{range .Commands}}<option value="{{.Module}}|{{.Version}}|{{.Action}}">{{.Module}} {{.Version}} · {{.Action}}{{if .Description}} — {{.Description}}{{end}}</option>{{end}}</select>
-  </label>
-  <label>{{t "Parametri (JSON, facoltativi)"}} <input name="params" value="{}" spellcheck="false"></label>
+  {{range $.Data.Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <input type="hidden" name="target" value="{{.Module}}|{{.Version}}|{{.Action}}">
+  {{if .Known}}{{template "param-fields" .Fields}}{{else}}<label>{{t "Parametri (JSON, facoltativi)"}} <input name="params" value="{}" spellcheck="false"></label>{{end}}
   {{template "ttl"}}
   <button class="primary">{{t "Approva ed esegui"}}</button>
 </form>
+</details>
+{{end}}
 {{end}}
 {{range .Scripts}}
 <h2>{{t "Script PowerShell"}}</h2>

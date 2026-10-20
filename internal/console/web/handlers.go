@@ -47,6 +47,10 @@ func (s *Server) handleSelectTenant(w http.ResponseWriter, r *http.Request) {
 type runnable struct {
 	Module, Version, Action, Description string
 	AdHoc                                bool
+	// Fields of the action's parameters; Known is false when the module
+	// has no description (the form shows a JSON field).
+	Fields []paramField
+	Known  bool
 }
 
 type agentData struct {
@@ -72,6 +76,8 @@ type agentData struct {
 	AD       *adPlace // computer object in Active Directory
 	Site     agentSite
 	Shell    bool // an interactive shell can be opened
+	// Packages of the library, to install from the agent page.
+	Packages []store.Package
 	// Return is where forms on this agent go back to; Panel is set when the
 	// agent is shown in the bottom panel of the agent list.
 	Return string
@@ -145,6 +151,9 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 	if d.Site, err = s.agentSite(r, t, a, ipv4); err != nil {
 		return nil, err
 	}
+	if d.Packages, err = s.store.ListPackages(r.Context(), t); err != nil {
+		return nil, err
+	}
 	snaps, err := s.adSnapshots(r.Context(), t)
 	if err != nil {
 		return nil, err
@@ -201,9 +210,17 @@ func (s *Server) runnableOn(r *http.Request, a store.Agent) ([]runnable, error) 
 		if _, ok := man.Entrypoints[platform]; !ok || man.HasCapability(modules.CapInteractiveShell) {
 			continue // shells open from their own button, one agent at a time
 		}
+		if man.ID == softwareModule {
+			continue // installs and removals have their own forms (package, installed application)
+		}
+		sch, known := s.paramSchema(m, man)
 		for name, act := range man.Actions {
-			out = append(out, runnable{Module: man.ID, Version: man.Version, Action: name, Description: act.Description,
-				AdHoc: man.HasCapability(modules.CapAdHocScript)})
+			x := runnable{Module: man.ID, Version: man.Version, Action: name, Description: act.Description,
+				AdHoc: man.HasCapability(modules.CapAdHocScript)}
+			if specs, ok := sch[name]; known && ok {
+				x.Known, x.Fields = true, paramFields(s.lang(r), specs)
+			}
+			out = append(out, x)
 		}
 	}
 	sortRunnables(out)
@@ -291,12 +308,10 @@ func (s *Server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}
-	params := map[string]any{}
-	if raw := strings.TrimSpace(r.PostFormValue("params")); raw != "" {
-		if err := json.Unmarshal([]byte(raw), &params); err != nil {
-			s.flash(w, r, s.T(r, "I parametri devono essere un oggetto JSON."), back)
-			return
-		}
+	params, msg := s.jobParams(r, mod, man, action)
+	if msg != "" {
+		s.flash(w, r, msg, back)
+		return
 	}
 	if man.HasCapability(modules.CapAdHocScript) {
 		script := r.PostFormValue("script")

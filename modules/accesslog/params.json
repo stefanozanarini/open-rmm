@@ -1,0 +1,26 @@
+{
+  "collect": [
+    {
+      "name": "initial_hours",
+      "type": "int",
+      "label": {
+        "it": "Prima raccolta: ultime (ore)",
+        "en": "First collection: last (hours)"
+      },
+      "default": 24,
+      "min": 1,
+      "max": 720
+    },
+    {
+      "name": "max_events",
+      "type": "int",
+      "label": {
+        "it": "Eventi al massimo per esecuzione",
+        "en": "Events per run at most"
+      },
+      "default": 2000,
+      "min": 10,
+      "max": 20000
+    }
+  ]
+}

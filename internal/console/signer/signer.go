@@ -244,6 +244,56 @@ func (s *Server) SignPolicy(ctx context.Context, req *openrmmv1.SignPolicyReques
 	return &openrmmv1.SignPolicyResponse{Envelope: env, Operator: op}, nil
 }
 
+// SignBaseline signs a tenant's automatic collection policy. No operator
+// approves it: the signer accepts only the fixed collections of
+// policy.BaselineRules, for a tenant of this console's own directories.
+func (s *Server) SignBaseline(_ context.Context, req *openrmmv1.SignBaselineRequest) (*openrmmv1.SignPolicyResponse, error) {
+	raw := req.GetPolicyJson()
+	if len(raw) > 1<<20 {
+		return nil, status.Error(codes.InvalidArgument, "policy too large")
+	}
+	p, err := policy.Parse(raw)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	canon, err := p.Canonical()
+	if err != nil || !bytes.Equal(canon, raw) {
+		return nil, status.Error(codes.InvalidArgument, "policy document is not canonical")
+	}
+	if p.TenantID != req.GetTenantId() {
+		return nil, status.Error(codes.InvalidArgument, "tenant mismatch")
+	}
+	if !s.ownTenant(p.TenantID) {
+		s.log.Warn("automatic collection refused", "reason", "tenant not managed here", "tenant", p.TenantID)
+		return nil, status.Error(codes.PermissionDenied, "tenant not managed by this console")
+	}
+	if err := policy.CheckBaseline(p); err != nil {
+		s.log.Warn("automatic collection refused", "reason", err.Error(), "tenant", p.TenantID)
+		return nil, status.Error(codes.PermissionDenied, err.Error())
+	}
+	env, err := proto.Marshal(&openrmmv1.SignedEnvelope{KeyId: s.signer.KeyID(), Payload: raw,
+		Signature: s.signer.Sign(signing.DomainPolicy, raw)})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "encode envelope")
+	}
+	s.log.Info("automatic collection signed", "policy", p.ID, "version", p.Version, "tenant", p.TenantID,
+		"rules", len(p.Rules), "sha256", fmt.Sprintf("%x", sha256.Sum256(raw)))
+	return &openrmmv1.SignPolicyResponse{Envelope: env, Operator: "automatic"}, nil
+}
+
+// ownTenant tells whether tenant belongs to this console's own directories
+// (not to a central console's operators).
+func (s *Server) ownTenant(tenant string) bool {
+	for _, ts := range s.verifiers[0].Config().TenantMap {
+		for _, t := range ts {
+			if t == tenant {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // operatorOf names the operator, marking those of a central console.
 func operatorOf(c *authn.Claims, v *authn.Verifier) string {
 	if v.Config().MaxRole != "" {

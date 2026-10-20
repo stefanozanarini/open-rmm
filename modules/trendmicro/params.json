@@ -1,0 +1,80 @@
+{
+  "status": [
+    {
+      "name": "expect",
+      "type": "multi",
+      "label": {
+        "it": "Prodotti che devono essere installati",
+        "en": "Products that must be installed"
+      },
+      "options": [
+        {
+          "value": "sep",
+          "label": {
+            "it": "Standard Endpoint Protection",
+            "en": "Standard Endpoint Protection"
+          }
+        },
+        {
+          "value": "swp",
+          "label": {
+            "it": "Server & Workload Protection",
+            "en": "Server & Workload Protection"
+          }
+        },
+        {
+          "value": "basecamp",
+          "label": {
+            "it": "Vision One Endpoint Basecamp",
+            "en": "Vision One Endpoint Basecamp"
+          }
+        },
+        {
+          "value": "ztsa",
+          "label": {
+            "it": "Zero Trust Secure Access",
+            "en": "Zero Trust Secure Access"
+          }
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "type": "multi",
+      "label": {
+        "it": "Controlla solo questi prodotti",
+        "en": "Check only these products"
+      },
+      "options": [
+        {
+          "value": "sep",
+          "label": {
+            "it": "Standard Endpoint Protection",
+            "en": "Standard Endpoint Protection"
+          }
+        },
+        {
+          "value": "swp",
+          "label": {
+            "it": "Server & Workload Protection",
+            "en": "Server & Workload Protection"
+          }
+        },
+        {
+          "value": "basecamp",
+          "label": {
+            "it": "Vision One Endpoint Basecamp",
+            "en": "Vision One Endpoint Basecamp"
+          }
+        },
+        {
+          "value": "ztsa",
+          "label": {
+            "it": "Zero Trust Secure Access",
+            "en": "Zero Trust Secure Access"
+          }
+        }
+      ]
+    }
+  ]
+}

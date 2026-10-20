@@ -1,0 +1,67 @@
+{
+  "reboot": [
+    {
+      "name": "only_if_pending",
+      "type": "bool",
+      "label": {
+        "it": "Solo se è richiesto un riavvio",
+        "en": "Only if a reboot is pending"
+      },
+      "default": true
+    },
+    {
+      "name": "notice_minutes",
+      "type": "int",
+      "label": {
+        "it": "Preavviso agli utenti (minuti)",
+        "en": "Notice to users (minutes)"
+      },
+      "default": 15,
+      "min": 0,
+      "max": 240
+    },
+    {
+      "name": "message",
+      "type": "string",
+      "label": {
+        "it": "Messaggio agli utenti",
+        "en": "Message to users"
+      },
+      "help": {
+        "it": "Vuoto: messaggio standard.",
+        "en": "Empty: standard message."
+      }
+    },
+    {
+      "name": "skip_if_user",
+      "type": "bool",
+      "label": {
+        "it": "Salta se c'è un utente collegato",
+        "en": "Skip if a user is logged on"
+      },
+      "default": false
+    },
+    {
+      "name": "min_battery_percent",
+      "type": "int",
+      "label": {
+        "it": "Batteria minima (%)",
+        "en": "Minimum battery (%)"
+      },
+      "default": 30,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "name": "min_pending_hours",
+      "type": "int",
+      "label": {
+        "it": "Riavvio richiesto da almeno (ore)",
+        "en": "Reboot pending for at least (hours)"
+      },
+      "default": 0,
+      "min": 0,
+      "max": 720
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "scan": [],
+  "install": [
+    {
+      "name": "types",
+      "type": "multi",
+      "label": {
+        "it": "Tipi di aggiornamento",
+        "en": "Update types"
+      },
+      "options": [
+        {
+          "value": "firmware",
+          "label": {
+            "it": "Firmware",
+            "en": "Firmware"
+          }
+        },
+        {
+          "value": "driver",
+          "label": {
+            "it": "Driver",
+            "en": "Drivers"
+          }
+        },
+        {
+          "value": "application",
+          "label": {
+            "it": "Applicazioni del produttore",
+            "en": "Vendor applications"
+          }
+        }
+      ],
+      "default": [
+        "firmware",
+        "driver"
+      ]
+    },
+    {
+      "name": "include_bios",
+      "type": "bool",
+      "label": {
+        "it": "Includi il BIOS",
+        "en": "Include the BIOS"
+      },
+      "help": {
+        "it": "BitLocker viene sospeso per un riavvio.",
+        "en": "BitLocker is suspended for one reboot."
+      },
+      "default": false
+    },
+    {
+      "name": "severity",
+      "type": "enum",
+      "label": {
+        "it": "Gravità",
+        "en": "Severity"
+      },
+      "options": [
+        {
+          "value": "all",
+          "label": {
+            "it": "Tutti",
+            "en": "All"
+          }
+        },
+        {
+          "value": "recommended",
+          "label": {
+            "it": "Consigliati e critici",
+            "en": "Recommended and critical"
+          }
+        },
+        {
+          "value": "critical",
+          "label": {
+            "it": "Solo critici",
+            "en": "Critical only"
+          }
+        }
+      ],
+      "default": "all"
+    },
+    {
+      "name": "min_battery_percent",
+      "type": "int",
+      "label": {
+        "it": "Batteria minima per il BIOS (%)",
+        "en": "Minimum battery for the BIOS (%)"
+      },
+      "default": 50,
+      "min": 0,
+      "max": 100
+    }
+  ]
+}

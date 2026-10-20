@@ -13,9 +13,9 @@ const jobsChannel = "openrmm_jobs"
 
 func (p *Postgres) PutModule(ctx context.Context, m Module) error {
 	_, err := p.pool.Exec(ctx, `INSERT INTO modules
-		(id, version, description, key_id, manifest, signature, manifest_sha256, archive, uploaded_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		m.ID, m.Version, m.Description, m.KeyID, m.Manifest, m.Signature, m.ManifestSHA256, m.Archive, m.UploadedBy)
+		(id, version, description, key_id, manifest, signature, manifest_sha256, archive, uploaded_by, params)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		m.ID, m.Version, m.Description, m.KeyID, m.Manifest, m.Signature, m.ManifestSHA256, m.Archive, m.UploadedBy, m.Params)
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 		return ErrModuleExists
@@ -26,9 +26,9 @@ func (p *Postgres) PutModule(ctx context.Context, m Module) error {
 func (p *Postgres) GetModule(ctx context.Context, id, version string) (Module, error) {
 	var m Module
 	err := p.pool.QueryRow(ctx, `SELECT id, version, description, key_id, manifest, signature,
-		manifest_sha256, archive, uploaded_at, uploaded_by FROM modules WHERE id = $1 AND version = $2`, id, version).
+		manifest_sha256, archive, uploaded_at, uploaded_by, params FROM modules WHERE id = $1 AND version = $2`, id, version).
 		Scan(&m.ID, &m.Version, &m.Description, &m.KeyID, &m.Manifest, &m.Signature, &m.ManifestSHA256,
-			&m.Archive, &m.UploadedAt, &m.UploadedBy)
+			&m.Archive, &m.UploadedAt, &m.UploadedBy, &m.Params)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Module{}, ErrNotFound
 	}
@@ -37,7 +37,7 @@ func (p *Postgres) GetModule(ctx context.Context, id, version string) (Module, e
 
 func (p *Postgres) ListModules(ctx context.Context) ([]Module, error) {
 	rows, err := p.pool.Query(ctx, `SELECT id, version, description, key_id, manifest, signature,
-		manifest_sha256, uploaded_at, uploaded_by FROM modules ORDER BY id, version`)
+		manifest_sha256, uploaded_at, uploaded_by, params FROM modules ORDER BY id, version`)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (p *Postgres) ListModules(ctx context.Context) ([]Module, error) {
 	for rows.Next() {
 		var m Module
 		if err := rows.Scan(&m.ID, &m.Version, &m.Description, &m.KeyID, &m.Manifest, &m.Signature,
-			&m.ManifestSHA256, &m.UploadedAt, &m.UploadedBy); err != nil {
+			&m.ManifestSHA256, &m.UploadedAt, &m.UploadedBy, &m.Params); err != nil {
 			return nil, err
 		}
 		out = append(out, m)

@@ -54,7 +54,7 @@ func (e *env) broker(t *testing.T) openrmmv1.ShellBrokerServiceClient {
 // shellAgent starts an agent whose local policy allows shells (or not).
 func shellAgent(t *testing.T, e *env, allow bool) string {
 	cfg := e.agentConfig(t, e.tokenWith(t, 1, true))
-	cfg.AllowInteractiveShell = allow
+	cfg.AllowInteractiveShell = &allow
 	runAgent(t, cfg)
 	return e.onlyAgent(t).ID
 }

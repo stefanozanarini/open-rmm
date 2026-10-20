@@ -88,8 +88,15 @@ func TestConsoleSetupAndCodeSigning(t *testing.T) {
 	c, csrf := e.login(t, admin)
 
 	_, body := get(t, c, e.console.URL+"/setup")
-	if !strings.Contains(body, "Configurazione") || !strings.Contains(body, "winupdate") || !strings.Contains(body, "Crea la policy di base") {
+	if !strings.Contains(body, "Configurazione") || !strings.Contains(body, "winupdate") || !strings.Contains(body, "la raccolta di inventario") {
 		t.Fatalf("setup page: %s", body)
+	}
+	// Once synced, the automatic collection is reported as running.
+	if err := e.web.SyncBaselines(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, body = get(t, c, e.console.URL+"/setup"); !strings.Contains(body, "vengono raccolti da soli") {
+		t.Fatalf("setup page after sync: %s", body)
 	}
 	// The baseline policy is prefilled with the published modules only.
 	_, body = get(t, c, e.console.URL+"/policies/new?template=baseline")

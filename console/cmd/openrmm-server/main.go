@@ -192,6 +192,20 @@ func run(log *slog.Logger) error {
 	if err := fed.start(ctx, log, srv); err != nil {
 		return err
 	}
+	// Automatic collection: at startup (new tenants, modules published
+	// with openrmm-admin) and every hour after that.
+	go func() {
+		for {
+			if err := srv.SyncBaselines(ctx); err != nil {
+				log.Error("automatic collection", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Hour):
+			}
+		}
+	}()
 	go func() {
 		t := time.NewTicker(10 * time.Minute)
 		defer t.Stop()

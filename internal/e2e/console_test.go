@@ -151,6 +151,7 @@ type consoleEnv struct {
 	winget    *httptest.Server
 	// installer is what the fake winget repository serves for 7zip.7zip.
 	installer []byte
+	web       *web.Server
 }
 
 var admin = opIdentity{OID: ids.NewUUID(), Name: "Mario Rossi", Username: "mario@cliente.it",
@@ -230,7 +231,7 @@ func startConsole(t *testing.T, opts ...consoleOpt) *consoleEnv {
 		Host:            store.HostInfo{Hostname: "pc01", OS: "linux", Arch: "amd64", OSVersion: "Ubuntu"},
 		CertFingerprint: "fp", CertNotAfter: time.Now().Add(time.Hour)})
 	e := &consoleEnv{store: st, idp: idp, console: console, signer: sc, tenant: tenant, agentID: agentID, jobSigner: jobSigner,
-		packages: pkgDir, winget: wg, installer: installer}
+		packages: pkgDir, winget: wg, installer: installer, web: ws}
 	e.jobKeys = signing.NewKeyring()
 	pub, _ := signing.ParsePublicKey(pubKey(jobSigner))
 	e.jobKeys.Add(pub, signing.DomainJob)
