@@ -72,7 +72,7 @@
 {{if .Data.Checks}}
 <table>
 <thead><tr><th>{{t "Controllo"}}</th><th>{{t "Stato"}}</th><th>{{t "Dettaglio"}}</th><th>{{t "Aggiornato"}}</th></tr></thead>
-<tbody>{{range .Data.Checks}}<tr><td>{{.CheckID}}</td><td><span class="badge chk-{{.Status}}">{{label .Status}}</span></td><td>{{.Summary}}</td><td>{{fmtTime .UpdatedAt}}</td></tr>{{end}}</tbody>
+<tbody>{{range .Data.Checks}}<tr><td>{{.CheckID}}</td><td><span class="badge chk-{{.Status}}">{{label .Status}}</span></td><td>{{msg .Summary}}</td><td>{{fmtTime .UpdatedAt}}</td></tr>{{end}}</tbody>
 </table>
 {{else}}<p class="muted">{{th "Nessun controllo. I controlli arrivano dai moduli eseguiti dalle policy (ad esempio <code>trendmicro</code> e <code>protection-status</code>)."}}</p>{{end}}
 {{end}}
@@ -122,9 +122,30 @@
 {{if .Missing}}<p><span class="badge chk-warning">{{t "winget assente"}}</span> {{t "winget non è installato su questo endpoint: le applicazioni si confrontano solo con il catalogo della console"}}</p>
 {{else if .Upgrades}}
 <table>
-<thead><tr><th>{{t "Applicazione"}}</th><th>Id</th><th>{{t "Installata"}}</th><th>{{t "Disponibile"}}</th></tr></thead>
-<tbody>{{range .Upgrades}}<tr><td>{{.Name}}</td><td><code>{{.ID}}</code></td><td>{{.Version}}</td><td>{{.Available}}</td></tr>{{end}}</tbody>
+{{$wg := and $.CanRun $.Data.Updates.WingetVersion}}
+{{if $wg}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" id="wg-selected">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <input type="hidden" name="target" value="winget|{{$.Data.Updates.WingetVersion}}|upgrade">
+  <input type="hidden" name="ttl_minutes" value="240">
+</form>{{end}}
+<table>
+<thead><tr>{{if $wg}}<th></th>{{end}}<th>{{t "Applicazione"}}</th><th>Id</th><th>{{t "Installata"}}</th><th>{{t "Disponibile"}}</th>{{if $wg}}<th></th>{{end}}</tr></thead>
+<tbody>{{range $i, $a := .Upgrades}}<tr>
+  {{if $wg}}<td><input type="checkbox" form="wg-selected" name="p.ids" value="{{$a.ID}}" aria-label="{{t "seleziona"}}"></td>{{end}}
+  <td>{{$a.Name}}</td><td><code>{{$a.ID}}</code></td><td>{{$a.Version}}</td><td>{{$a.Available}}</td>
+  {{if $wg}}<td><form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}">
+    <input type="hidden" name="target" value="winget|{{$.Data.Updates.WingetVersion}}|upgrade">
+    <input type="hidden" name="ttl_minutes" value="240">
+    <input type="hidden" name="p.ids" value="{{$a.ID}}">
+    <button title="{{tf "Aggiorna %s alla versione %s" $a.Name $a.Available}}">↑ {{t "Aggiorna"}}</button></form></td>{{end}}
+</tr>{{end}}</tbody>
 </table>
+{{if $wg}}<div class="actions">
+  <button class="primary" form="wg-selected">{{t "Aggiorna i selezionati"}}</button>
+  <button form="wg-selected" name="p.all" value="true">{{t "Aggiorna tutte"}}</button>
+  <span class="muted">{{t "Richiede l'approvazione MFA. Le applicazioni in uso potrebbero essere chiuse durante l'aggiornamento."}}</span>
+</div>{{end}}
 {{else}}<p class="muted">{{tf "Nessuna applicazione da aggiornare (verificato il %s)." (fmtTime .ScannedAt)}}</p>{{end}}
 {{end}}
 {{with .Firmware}}
@@ -387,7 +408,7 @@
 <tbody>
 {{range .Alerts}}<tr>
   <td><span class="badge sev-{{.Severity}}">{{label .Severity}}</span></td>
-  <td>{{.Summary}}</td><td>{{.Count}}</td><td>{{fmtTime .LastSeen}}</td>
+  <td>{{msg .Summary}}</td><td>{{.Count}}</td><td>{{fmtTime .LastSeen}}</td>
   <td>{{if $.CanRun}}<form method="post" action="/alerts/{{.ID}}/ack" class="inline">
     <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Return}}">
     <button>{{t "Prendi in carico"}}</button></form>{{end}}</td>

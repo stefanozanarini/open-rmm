@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -74,19 +75,22 @@ type Config struct {
 
 // Server serves the console.
 type Server struct {
-	store    store.Store
-	verifier *authn.Verifier
-	signer   openrmmv1.SignerServiceClient
-	log      *slog.Logger
-	oauth    oauth2.Config
-	origin   string
-	idpHost  string
-	now      func() time.Time
-	client   *http.Client
-	pages    map[string]map[string]*template.Template // language, page
-	packages pkgfiles.Dir
-	winget   *wingetcat.Client
-	ad       adCache
+	// refreshed: finished jobs whose refresh was attempted (RunRefreshes),
+	// so that a refused collection is not retried every 30 seconds.
+	refreshed sync.Map
+	store     store.Store
+	verifier  *authn.Verifier
+	signer    openrmmv1.SignerServiceClient
+	log       *slog.Logger
+	oauth     oauth2.Config
+	origin    string
+	idpHost   string
+	now       func() time.Time
+	client    *http.Client
+	pages     map[string]map[string]*template.Template // language, page
+	packages  pkgfiles.Dir
+	winget    *wingetcat.Client
+	ad        adCache
 
 	hub          *federation.Hub
 	linkAddr     string
@@ -145,9 +149,10 @@ func New(cfg Config) (*Server, error) {
 func funcs(lang string) template.FuncMap {
 	timeFmt := dateFormat(lang) + " 15:04:05"
 	return template.FuncMap{
-		"t":  func(key string) string { return tr(lang, key) },
-		"tf": func(key string, args ...any) string { return trf(lang, key, args...) },
-		"th": func(key string) template.HTML { return trHTML(lang, key) },
+		"t":   func(key string) string { return tr(lang, key) },
+		"tf":  func(key string, args ...any) string { return trf(lang, key, args...) },
+		"th":  func(key string) template.HTML { return trHTML(lang, key) },
+		"msg": func(s string) string { return trMessage(lang, s) },
 		"fmtTime": func(t any) string {
 			switch v := t.(type) {
 			case time.Time:

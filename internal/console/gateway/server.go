@@ -26,6 +26,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/open-rmm/internal/winver"
 )
 
 const (
@@ -508,7 +509,7 @@ func hostFromProto(h *openrmmv1.HostInfo) store.HostInfo {
 	return store.HostInfo{
 		Hostname:     h.GetHostname(),
 		OS:           h.GetOs(),
-		OSVersion:    h.GetOsVersion(),
+		OSVersion:    winver.Fix(h.GetOsVersion()), // agents up to 1.0.2 report Windows 11 as 10
 		Arch:         h.GetArch(),
 		AgentVersion: h.GetAgentVersion(),
 		MachineID:    h.GetMachineId(),

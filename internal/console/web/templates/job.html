@@ -10,8 +10,16 @@
   <dt>{{t "Scade"}}</dt><dd>{{fmtTime .Job.ExpiresAt}}</dd>
 </dl>
 {{if .Job.Error}}<h2>{{t "Errore"}}</h2><pre class="error">{{.Job.Error}}</pre>{{end}}
+{{if .Result}}<h2>{{t "Risultato"}}</h2>
+{{with .Outcome}}<p class="outcome">{{.}}</p>{{end}}
+{{with .ResultView}}<div class="result">{{.}}</div>{{end}}
+{{end}}
 {{if .Output}}<h2>Output</h2><pre>{{.Output}}</pre>{{end}}
-{{if .Result}}<h2>{{t "Risultato"}}</h2><pre>{{.Result}}</pre>{{end}}
-<h2>{{t "Parametri"}}</h2><pre>{{.Params}}</pre>
+<h2>{{t "Parametri"}}</h2>
+{{if eq .Params "{}"}}<p class="muted">{{t "nessuno"}}</p>{{else}}<div class="result">{{.ParamsView}}</div>{{end}}
+<details class="raw"><summary>JSON</summary>
+{{if .Result}}<h3>{{t "Risultato"}}</h3><pre>{{.Result}}</pre>{{end}}
+<h3>{{t "Parametri"}}</h3><pre>{{.Params}}</pre>
+</details>
 {{end}}
 {{end}}

@@ -73,6 +73,23 @@ func TestConsolePatchView(t *testing.T) {
 		t.Fatal("older installation not found by search")
 	}
 
+	// Application upgrades: one button per application, or the selected ones.
+	wg := publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "winget"))
+	e.store.PutUpdateStatus(ctx, store.UpdateStatus{TenantID: e.tenant, AgentID: busy, Source: updates.SourceWinget, ScannedAt: now, ThirdParty: 1,
+		Data: []byte(`{"scanned_at":"` + now.Format(time.RFC3339) + `","upgrades":[{"name":"PuTTY","id":"PuTTY.PuTTY","version":"0.81.0.0","available":"0.85.0.0"}]}`)})
+	_, body = get(t, c, e.console.URL+"/agents/"+busy)
+	if !strings.Contains(body, `name="p.ids" value="PuTTY.PuTTY"`) || !strings.Contains(body, `value="winget|`+wg.Manifest.Version+`|upgrade"`) {
+		t.Fatalf("no upgrade button: %s", body)
+	}
+	form := url.Values{"csrf": {csrf}, "target": {"winget|" + wg.Manifest.Version + "|upgrade"}, "ttl_minutes": {"240"}, "p.ids": {"PuTTY.PuTTY"}}
+	if code, _, _ := post(t, c, e.console.URL+"/agents/"+busy+"/jobs", form); code != 200 {
+		t.Fatalf("upgrade: %d", code)
+	}
+	if jobs, _ := e.store.ListJobs(ctx, e.tenant, busy, 5); len(jobs) != 1 || jobs[0].Module != "winget" || jobs[0].Action != "upgrade" ||
+		!strings.Contains(string(jobs[0].Params), `"ids":["PuTTY.PuTTY"]`) {
+		t.Fatalf("upgrade job: %+v", jobs)
+	}
+
 	// On-demand scan: signed at once, no step-up.
 	e.idp.mu.Lock()
 	before := e.idp.lastAuth
@@ -107,7 +124,7 @@ func TestConsolePatchView(t *testing.T) {
 		}
 	}
 	// Installing the selection carries the chosen KBs and every classification.
-	form := url.Values{"csrf": {csrf}, "target": {"winupdate|" + mod.Manifest.Version + "|install"}, "ttl_minutes": {"480"},
+	form = url.Values{"csrf": {csrf}, "target": {"winupdate|" + mod.Manifest.Version + "|install"}, "ttl_minutes": {"480"},
 		"p.include_kbs": {"KB5066586", "KB2267602"}, "p.classifications": {"security", "definition", "driver"}}
 	if code, _, _ := post(t, c, e.console.URL+"/agents/"+pc+"/jobs", form); code != 200 {
 		t.Fatalf("install: %d", code)

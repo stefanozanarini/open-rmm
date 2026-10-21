@@ -5,7 +5,7 @@
 {{range .Alerts}}<tr>
   <td><span class="badge sev-{{.Severity}}">{{label .Severity}}</span></td>
   <td>{{if .Hostname}}<a href="/agents/{{.AgentID}}">{{.Hostname}}</a>{{end}}</td>
-  <td>{{.Summary}}<br><span class="muted">{{label .Kind}}</span></td>
+  <td>{{msg .Summary}}<br><span class="muted">{{label .Kind}}</span></td>
   <td>{{.Count}}</td>
   <td>{{fmtTime .FirstSeen}}<br>{{fmtTime .LastSeen}}</td>
   <td>{{if .AcknowledgedAt}}<span class="muted">{{tf "preso in carico da %s" .AcknowledgedBy}}<br>{{fmtTime .AcknowledgedAt}}</span>

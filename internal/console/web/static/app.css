@@ -197,3 +197,11 @@ svg.hbar rect.cat-1 { fill:var(--cat-1); } svg.hbar rect.cat-2 { fill:var(--cat-
 @media (max-width:680px) { .viz.wide { grid-column:auto; } }
 .viz.wide table.hbars th { width:40%; }
 ul.legend.inline { display:flex; gap:16px; margin-bottom:4px; font-size:12px; }
+
+/* Job results */
+p.outcome { font-size:16px; font-weight:600; margin:6px 0 12px; }
+.result dl.facts.result { margin:0; }
+.result dd dl.facts.result { background:none; border:0; border-left:2px solid var(--line); padding:0 0 0 10px; grid-template-columns:160px 1fr; }
+.result table { margin:4px 0; }
+details.raw { margin-top:24px; }
+details.raw > summary { cursor:pointer; color:var(--muted); }

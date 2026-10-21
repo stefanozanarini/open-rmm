@@ -80,3 +80,38 @@ func TestRebootRescans(t *testing.T) {
 		t.Errorf("old scan: %d scans after a second round", s)
 	}
 }
+
+// After software is installed, the console collects the inventory and the
+// application updates again, once.
+func TestRefreshAfterSoftwareChange(t *testing.T) {
+	e := startConsole(t)
+	ctx := context.Background()
+	now := time.Now()
+	versions := map[string]string{}
+	for _, m := range []string{"software", "inventory", "winget", "winupdate"} {
+		versions[m] = publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", m)).Manifest.Version
+	}
+	pc := e.addWindowsAgent(t, "PC-SW")
+	finished := func(module, action string, ago time.Duration, state store.JobState) {
+		j := store.Job{TenantID: e.tenant, ID: ids.NewUUID(), AgentID: pc, Module: module, ModuleVersion: versions[module], Action: action,
+			Params: []byte("{}"), Envelope: []byte("x"), CreatedBy: "operator:admin", ExpiresAt: now.Add(time.Hour), CreatedAt: now.Add(-ago - time.Minute)}
+		if err := e.store.CreateJob(ctx, j); err != nil {
+			t.Fatal(err)
+		}
+		e.store.UpdateJob(ctx, e.tenant, pc, j.ID, store.JobUpdate{State: state}, now.Add(-ago))
+	}
+	finished("software", "install", time.Minute, store.JobSucceeded)
+	finished("winupdate", "install", 2*time.Hour, store.JobSucceeded) // too old: no refresh
+	e.web.RunRefreshes(ctx)
+	e.web.RunRefreshes(ctx)
+	count := map[string]int{}
+	jobs, _ := e.store.ListJobs(ctx, e.tenant, pc, 50)
+	for _, j := range jobs {
+		if j.State == store.JobQueued {
+			count[j.Module+"/"+j.Action]++
+		}
+	}
+	if count["inventory/collect"] != 1 || count["winget/scan"] != 1 || count["winupdate/scan"] != 0 {
+		t.Fatalf("refreshes queued: %v", count)
+	}
+}

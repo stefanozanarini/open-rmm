@@ -88,6 +88,9 @@ func usedKeys(t *testing.T) map[string]bool {
 	for _, l := range logonTypes {
 		keys[l] = keys[l] || false
 	}
+	for _, l := range resultKeys {
+		keys[l] = keys[l] || false
+	}
 	for _, tb := range tabs {
 		keys[tb.Label] = keys[tb.Label] || false
 	}

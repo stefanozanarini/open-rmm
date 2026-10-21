@@ -302,3 +302,74 @@ func (s *Server) RunRebootRescans(ctx context.Context) {
 		}
 	}
 }
+
+// Refresh after changes: when a job that changes an endpoint ends (software
+// installed or removed, Windows or application updates installed), the
+// console collects again what it changed, so the console shows the new
+// state within minutes instead of at the next daily collection.
+var refreshAfter = map[[2]string][][2]string{
+	{"software", "install"}:   {{"inventory", "collect"}, {"winget", "scan"}},
+	{"software", "uninstall"}: {{"inventory", "collect"}, {"winget", "scan"}},
+	{"winget", "upgrade"}:     {{"inventory", "collect"}, {"winget", "scan"}},
+	{"winupdate", "install"}:  {{"winupdate", "scan"}, {"inventory", "collect"}},
+}
+
+// refreshWindow is how long after a job ends its refresh is still queued
+// (a console restart in between, an agent briefly offline).
+const refreshWindow = 30 * time.Minute
+
+// RunRefreshes queues the refreshes of recently finished jobs. Called every
+// 30 seconds; a refresh is queued once, when no newer run of the same
+// collection exists.
+func (s *Server) RunRefreshes(ctx context.Context) {
+	if s.signer == nil {
+		return
+	}
+	tenants, err := s.store.ListTenants(ctx)
+	if err != nil {
+		s.log.Error("refresh after changes", "err", err)
+		return
+	}
+	now := s.now()
+	s.refreshed.Range(func(k, v any) bool {
+		if now.Sub(v.(time.Time)) > 2*refreshWindow {
+			s.refreshed.Delete(k)
+		}
+		return true
+	})
+	for _, t := range tenants {
+		jobs, err := s.store.ListJobs(ctx, t.ID, "", 500)
+		if err != nil {
+			continue
+		}
+		// Newest run of each collection per agent.
+		latest := map[[3]string]time.Time{}
+		for _, j := range jobs {
+			k := [3]string{j.AgentID, j.Module, j.Action}
+			if j.CreatedAt.After(latest[k]) {
+				latest[k] = j.CreatedAt
+			}
+		}
+		for _, j := range jobs {
+			follow, ok := refreshAfter[[2]string{j.Module, j.Action}]
+			if !ok || j.FinishedAt == nil || now.Sub(*j.FinishedAt) > refreshWindow ||
+				(j.State != store.JobSucceeded && j.State != store.JobFailed) {
+				continue
+			}
+			if _, done := s.refreshed.LoadOrStore(j.ID, now); done {
+				continue
+			}
+			for _, c := range follow {
+				k := [3]string{j.AgentID, c[0], c[1]}
+				if latest[k].After(*j.FinishedAt) {
+					continue
+				}
+				if msg, err := s.startCollect(ctx, t.ID, j.AgentID, c[0], c[1], nil); err != nil || msg != "" {
+					s.log.Warn("refresh after changes", "agent", j.AgentID, "module", c[0], "err", err, "msg", msg)
+					continue
+				}
+				latest[k] = now
+			}
+		}
+	}
+}

@@ -230,6 +230,8 @@ type agentUpdates struct {
 	HiddenHistory    int // older installations left out (no search)
 	Query            string
 	WinupdateVersion string
+	// WingetVersion is the module version used to upgrade applications.
+	WingetVersion string
 	Classifications  []string
 }
 
@@ -324,6 +326,7 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 		out.FirmwareVersion = latest[updates.FirmwareModule]
 	}
 	out.WinupdateVersion = latest["winupdate"]
+	out.WingetVersion = latest["winget"]
 	out.Classifications = []string{"security", "critical", "rollup", "update", "definition", "driver", "feature_pack", "service_pack", "tools", "upgrade"}
 	if out.Windows != nil {
 		out.Query = strings.TrimSpace(r.URL.Query().Get("pq"))

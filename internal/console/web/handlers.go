@@ -1,6 +1,7 @@
 package web
 
 import (
+	"html/template"
 	"encoding/json"
 	"errors"
 	"github.com/stefanozanarini/open-rmm/internal/adinv"
@@ -433,9 +434,14 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 type jobData struct {
 	Job    store.Job
 	Agent  store.Agent
-	Result string
+	Result string // JSON, folded
 	Params string
 	Output string // the script module's output, shown as text
+	// Outcome is a sentence for the result; ResultView and ParamsView the
+	// fields as labelled values and tables.
+	Outcome    string
+	ResultView template.HTML
+	ParamsView template.HTML
 }
 
 func (d jobData) refresh() int {
@@ -471,7 +477,8 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a, _ := s.store.GetAgent(r.Context(), t, j.AgentID)
-	d := jobData{Job: j, Agent: a, Params: pretty(j.Params)}
+	lang := s.lang(r)
+	d := jobData{Job: j, Agent: a, Params: pretty(j.Params), ParamsView: renderResult(lang, j.Params)}
 	if len(j.Result) > 0 {
 		var res struct {
 			Output *string `json:"output"`
@@ -480,6 +487,11 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 			d.Output = *res.Output
 		}
 		d.Result = pretty(j.Result)
+		d.ResultView = renderResult(lang, j.Result, "output")
+		var fields map[string]any
+		if json.Unmarshal(j.Result, &fields) == nil && j.State == store.JobSucceeded {
+			d.Outcome = jobOutcome(lang, j.Module, j.Action, fields)
+		}
 	}
 	s.render(w, r, "job", "Job "+j.ID[:8], d)
 }

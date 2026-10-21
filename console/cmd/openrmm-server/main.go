@@ -207,6 +207,19 @@ func run(log *slog.Logger) error {
 			}
 		}
 	}()
+	// Collect again what a finished job changed (software, updates).
+	go func() {
+		t := time.NewTicker(30 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				srv.RunRefreshes(ctx)
+			}
+		}
+	}()
 	go func() {
 		t := time.NewTicker(10 * time.Minute)
 		defer t.Stop()

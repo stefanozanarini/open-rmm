@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"golang.org/x/sys/windows/registry"
+
+	"github.com/stefanozanarini/open-rmm/internal/winver"
 )
 
 func osVersion() string {
@@ -19,7 +21,7 @@ func osVersion() string {
 	display, _, _ := k.GetStringValue("DisplayVersion")
 	build, _, _ := k.GetStringValue("CurrentBuild")
 	ubr, _, _ := k.GetIntegerValue("UBR")
-	return fmt.Sprintf("%s %s (build %s.%d)", name, display, build, ubr)
+	return winver.Fix(fmt.Sprintf("%s %s (build %s.%d)", name, display, build, ubr))
 }
 
 // OSFamily returns "client" or "server" from the installation type
