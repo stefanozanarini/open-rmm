@@ -7,11 +7,11 @@
   <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}}
     <a href="{{rowLink $.View .ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}{{if eq .UpdateRing "pilot"}} <span class="badge pending" title="{{t "Anello aggiornamenti"}}">pilot</span>{{end}}
     <a class="open" href="/agents/{{.ID}}" title="{{t "apri la pagina dell'agente"}}">↗</a></td>
-  <td class="icons">{{with .Alerts}}<span class="badge sev-critical" title="{{t "avvisi aperti"}}">{{tf "%d avvisi" .}}</span>{{end}}
-    {{with .Checks}}{{if ne . "ok"}}<span class="badge chk-{{.}}" title="{{t "controlli"}}">{{label .}}</span>{{end}}{{end}}
-    {{with .Missing}}<span class="badge chk-failing" title="{{t "aggiornamenti di sicurezza mancanti"}}">{{tf "%d patch" .}}</span>{{end}}
-    {{if .Reboot}}<span class="badge chk-warning" title="{{t "riavvio in sospeso"}}">{{t "riavvio"}}</span>{{end}}
-    {{with .ThirdParty}}<span class="badge chk-warning" title="{{t "applicazioni da aggiornare"}}">{{tf "%d app" .}}</span>{{end}}</td>
+  <td class="icons">{{$id := .ID}}{{with .Alerts}}<a class="badge sev-critical" href="/alerts" title="{{t "avvisi aperti"}}">{{tf "%d avvisi" .}}</a>{{end}}
+    {{with .Checks}}{{if ne . "ok"}}<a class="badge chk-{{.}}" href="{{rowTab $.View $id "checks" ""}}" title="{{t "apri i controlli"}}">{{label .}}</a>{{end}}{{end}}
+    {{with .Missing}}<a class="badge chk-failing" href="{{rowTab $.View $id "patches" "patches"}}" title="{{t "apri l'elenco delle patch"}}">{{tf "%d patch" .}}</a>{{end}}
+    {{if .Reboot}}{{if eq .Status "active"}}<a class="badge chk-warning" href="{{rowTab $.View $id "commands" "act-reboot-reboot"}}" title="{{t "apri il riavvio dell'endpoint"}}">⏻ {{t "riavvio"}}</a>{{else}}<span class="badge chk-warning" title="{{t "riavvio in sospeso"}}">{{t "riavvio"}}</span>{{end}}{{end}}
+    {{with .ThirdParty}}<a class="badge chk-warning" href="{{rowTab $.View $id "patches" "patches"}}" title="{{t "applicazioni da aggiornare"}}">{{tf "%d app" .}}</a>{{end}}</td>
   <td>{{.Site}}{{if .SiteManual}} <span class="muted" title="{{t "assegnata a mano"}}">✎</span>{{end}}</td>
   <td>{{.Inv.LoggedOnUser}}</td>
   <td>{{.Inv.Manufacturer}} {{.Inv.Model}}</td>

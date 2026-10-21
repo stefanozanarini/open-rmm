@@ -209,6 +209,7 @@ func funcs(lang string) template.FuncMap {
 		// panelCtx shows an agent's sections inside the agent list.
 		"panelCtx": func(p page, d *agentData) page { p.Data = d; return p },
 		"rowLink":  rowLink,
+		"rowTab":   rowTabLink,
 		"rowsCtx": func(d agentsData, rows []agentRow, sel bool) map[string]any {
 			return map[string]any{"Rows": rows, "Select": sel, "View": d}
 		},

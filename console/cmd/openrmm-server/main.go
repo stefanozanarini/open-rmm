@@ -218,6 +218,7 @@ func run(log *slog.Logger) error {
 				if err := db.DeleteExpiredSessions(ctx, time.Now()); err != nil {
 					log.Error("session cleanup", "err", err)
 				}
+				srv.RunRebootRescans(ctx)
 			}
 		}
 	}()

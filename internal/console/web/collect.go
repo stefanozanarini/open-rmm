@@ -15,6 +15,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/policy"
+	"github.com/stefanozanarini/open-rmm/internal/updates"
 )
 
 // On-demand collections: an operator refreshes what the automatic
@@ -232,4 +233,72 @@ func (s *Server) handleSetRing(w http.ResponseWriter, r *http.Request) {
 		s.audit(r.Context(), t, op, "agent.ring_set", id, map[string]any{"ring": ring})
 	}
 	s.flash(w, r, s.Tf(r, "Anello aggiornamenti: %s.", ring), back)
+}
+
+// Restart checks: a pending reboot is reported by the Windows Update scan,
+// which runs every 24 hours, so a restarted endpoint would show it until
+// the next scan. For online agents with a reboot pending, the console scans
+// again 10 minutes after a restart job ends (with the inventory, for the
+// boot time), and every rebootRescanEvery otherwise, to notice restarts
+// done outside the console.
+const (
+	rebootRescanAfterJob = 10 * time.Minute
+	rebootRescanEvery    = 3 * time.Hour
+)
+
+// RunRebootRescans queues those scans. Called every 10 minutes.
+func (s *Server) RunRebootRescans(ctx context.Context) {
+	if s.signer == nil {
+		return
+	}
+	tenants, err := s.store.ListTenants(ctx)
+	if err != nil {
+		s.log.Error("reboot rescans", "err", err)
+		return
+	}
+	now := s.now()
+	for _, t := range tenants {
+		statuses, err := s.store.ListUpdateStatus(ctx, t.ID, "")
+		if err != nil {
+			continue
+		}
+		for _, st := range statuses {
+			if st.Source != updates.SourceWindows || !st.Reboot {
+				continue
+			}
+			a, err := s.store.GetAgent(ctx, t.ID, st.AgentID)
+			if err != nil || a.Status != store.AgentActive || !s.online(a) {
+				continue
+			}
+			jobs, err := s.store.ListJobs(ctx, t.ID, a.ID, 200)
+			if err != nil {
+				continue
+			}
+			var lastScan, rebooted time.Time
+			for _, j := range jobs {
+				switch {
+				case j.Module == "winupdate" && j.Action == "scan" && j.CreatedAt.After(lastScan):
+					lastScan = j.CreatedAt
+				case j.Module == "reboot" && j.State == store.JobSucceeded && j.FinishedAt != nil && j.FinishedAt.After(rebooted):
+					rebooted = *j.FinishedAt
+				}
+			}
+			if lastScan.Before(st.ScannedAt) {
+				lastScan = st.ScannedAt
+			}
+			afterJob := rebooted.After(lastScan) && now.Sub(rebooted) >= rebootRescanAfterJob
+			if !afterJob && now.Sub(lastScan) < rebootRescanEvery {
+				continue
+			}
+			collections := [][2]string{{"winupdate", "scan"}}
+			if afterJob {
+				collections = append(collections, [2]string{"inventory", "collect"})
+			}
+			for _, c := range collections {
+				if msg, err := s.startCollect(ctx, t.ID, a.ID, c[0], c[1], nil); err != nil || msg != "" {
+					s.log.Warn("reboot rescan", "agent", a.ID, "module", c[0], "err", err, "msg", msg)
+				}
+			}
+		}
+	}
 }

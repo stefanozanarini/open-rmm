@@ -100,6 +100,11 @@ func TestConsolePatchDashboard(t *testing.T) {
 			t.Errorf("patches page lacks the link %s", want)
 		}
 	}
+	// The same badges in the agent list open the agent's panel.
+	if _, list := get(t, c, e.console.URL+"/agents"); !strings.Contains(list, `href="/agents?agent=`+behind+`&amp;tab=patches#patches"`) ||
+		!strings.Contains(list, `href="/agents?agent=`+behind+`&amp;tab=commands#act-reboot-reboot"`) {
+		t.Errorf("agent list badges do not link to the patches and the restart")
+	}
 	if strings.Index(body, "PC-BEHIND") > strings.Index(body, "PC-OK") || strings.Index(body, "PC-OK") > strings.Index(body, "PC-NEVER") {
 		t.Error("endpoints not ranked from the most behind")
 	}

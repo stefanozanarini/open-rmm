@@ -314,6 +314,17 @@ func rowLink(d agentsData, agentID string) string {
 	return "/agents?" + v.Encode()
 }
 
+// rowTabLink opens an agent's panel on a tab, scrolled to hash (optional):
+// how the status badges lead to the checks, the patches or the restart.
+func rowTabLink(d agentsData, agentID, tab, hash string) string {
+	d.Tab = tab
+	l := rowLink(d, agentID)
+	if hash != "" {
+		l += "#" + hash
+	}
+	return l
+}
+
 // safeReturn keeps redirects inside the agent pages.
 func safeReturn(ret, fallback string) string {
 	if (strings.HasPrefix(ret, "/agents?") || strings.HasPrefix(ret, "/agents/")) && !strings.ContainsAny(ret, "\\\r\n") &&
