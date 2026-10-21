@@ -110,6 +110,7 @@
   <td>{{isoDate .Date}}</td>
 </tr>{{end}}</tbody>
 </table>
+{{with $u.HiddenHistory}}<p class="muted small">{{tf "Mostrate le ultime %d installazioni; altre %d più vecchie: cercale per nome o KB." maxHistory .}}</p>{{end}}
 {{if and $.CanRun $u.WinupdateVersion $u.Missing}}<div class="actions"><button class="primary">{{t "Installa i selezionati"}}</button>
   <span class="muted">{{t "Richiede l'approvazione MFA. Il PC non viene riavviato: il riavvio necessario viene segnalato."}}</span></div>{{end}}
 </form>

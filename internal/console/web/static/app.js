@@ -19,6 +19,13 @@
   window.addEventListener("hashchange", openTarget);
   openTarget();
 
+  // "Select all" boxes tick every agent box of their form.
+  document.querySelectorAll("input[data-check-all]").forEach(function (all) {
+    all.addEventListener("change", function () {
+      all.form.querySelectorAll('input[type=checkbox][name="agent"]').forEach(function (c) { c.checked = all.checked; });
+    });
+  });
+
   // Theme and language apply as soon as they are chosen; the Apply buttons
   // stay for browsers without scripts.
   document.querySelectorAll("header form.theme, header form.lang").forEach(function (f) {

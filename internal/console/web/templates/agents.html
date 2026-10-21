@@ -76,7 +76,15 @@
 <section class="warn">
 <h2>{{tf "In attesa di approvazione (%d)" (len .Pending)}}</h2>
 <p>{{t "Questi agenti sono connessi ma non ricevono comandi finché non vengono approvati. Verifica che siano PC dell'azienda prima di approvarli."}}</p>
-{{template "agentrows" (rowsCtx . .Pending false)}}
+{{if $.IsAdmin}}<form method="post" action="/agents/approve">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{template "agentrows" (rowsCtx . .Pending true)}}
+<div class="actions">
+  <label class="inline"><input type="checkbox" data-check-all> {{t "seleziona tutti"}}</label>
+  <button class="primary" name="do" value="approve">{{t "Approva i selezionati"}}</button>
+  <button class="danger" name="do" value="revoke">{{t "Rifiuta i selezionati"}}</button>
+</div>
+</form>{{else}}{{template "agentrows" (rowsCtx . .Pending false)}}{{end}}
 </section>
 {{end}}
 {{if .Active}}

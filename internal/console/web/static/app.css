@@ -77,7 +77,8 @@ h3 + table, table + table { margin-top:8px; }
 main { max-width:1500px; }
 .workspace { display:grid; grid-template-columns:200px 1fr; gap:20px; align-items:start; }
 .tree { display:flex; flex-direction:column; gap:2px; background:var(--card); border:1px solid var(--line); padding:10px; position:sticky; top:8px; }
-.tree a { padding:4px 8px; border-radius:4px; color:var(--fg); text-decoration:none; }
+.tree a { padding:4px 8px; border-radius:4px; color:var(--fg); text-decoration:none; overflow-wrap:anywhere; }
+.tree { min-width:0; }
 .tree a.current { background:var(--sel); font-weight:600; }
 .tree a:hover { background:var(--sel); }
 .tree-title { margin:0 0 6px; font-weight:700; }

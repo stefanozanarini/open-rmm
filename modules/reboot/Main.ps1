@@ -1,4 +1,4 @@
-# open-rmm reboot module. Other modules never reboot: they report that a
+﻿# open-rmm reboot module. Other modules never reboot: they report that a
 # reboot is pending, and this module applies the reboot policy. When to
 # reboot (maintenance window, days) is decided by the policy rule window.
 #

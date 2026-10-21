@@ -1,6 +1,6 @@
 {
   "id": "reboot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reboots the endpoint according to the reboot policy: only when needed, with notice to logged-on users, not on low battery.",
   "protocol_version": 1,
   "entrypoints": {

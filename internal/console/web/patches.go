@@ -227,6 +227,7 @@ type agentUpdates struct {
 	// Query; WinupdateVersion is the module version used to install.
 	Rows             []updateRow
 	Missing          int
+	HiddenHistory    int // older installations left out (no search)
 	Query            string
 	WinupdateVersion string
 	Classifications  []string
@@ -251,9 +252,12 @@ func kbLink(kbs []string) string {
 	return "https://support.microsoft.com/help/" + strings.TrimPrefix(kbs[0], "KB")
 }
 
-func updateRows(rep *updates.WindowsReport, q string) ([]updateRow, int) {
+// maxHistoryRows is how many past installations the patch table lists when
+// not searching: the most recent ones.
+const maxHistoryRows = 10
+
+func updateRows(rep *updates.WindowsReport, q string) (rows []updateRow, missing, hidden int) {
 	var out []updateRow
-	missing := 0
 	match := func(title string, kbs []string) bool {
 		return q == "" || contains(title, q) || contains(strings.Join(kbs, " "), q)
 	}
@@ -269,13 +273,21 @@ func updateRows(rep *updates.WindowsReport, q string) ([]updateRow, int) {
 		out = append(out, updateRow{State: "missing", Severity: sev, Title: u.Title, KBs: u.KBs, Link: kbLink(u.KBs),
 			Date: u.Released, Selected: u.Important()})
 	}
+	var past []updateRow
 	for _, h := range rep.History {
 		if !match(h.Title, h.KBs) {
 			continue
 		}
-		out = append(out, updateRow{State: h.Result, Title: h.Title, KBs: h.KBs, Link: kbLink(h.KBs), Date: h.Date})
+		past = append(past, updateRow{State: h.Result, Title: h.Title, KBs: h.KBs, Link: kbLink(h.KBs), Date: h.Date})
 	}
-	return out, missing
+	sort.SliceStable(past, func(i, j int) bool {
+		a, b := past[i].Date, past[j].Date
+		return a != nil && (b == nil || a.After(*b))
+	})
+	if q == "" && len(past) > maxHistoryRows {
+		past, hidden = past[:maxHistoryRows], len(past)-maxHistoryRows
+	}
+	return append(out, past...), missing, hidden
 }
 
 func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdates, error) {
@@ -315,7 +327,7 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 	out.Classifications = []string{"security", "critical", "rollup", "update", "definition", "driver", "feature_pack", "service_pack", "tools", "upgrade"}
 	if out.Windows != nil {
 		out.Query = strings.TrimSpace(r.URL.Query().Get("pq"))
-		out.Rows, out.Missing = updateRows(out.Windows, out.Query)
+		out.Rows, out.Missing, out.HiddenHistory = updateRows(out.Windows, out.Query)
 	}
 	return out, nil
 }

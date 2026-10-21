@@ -1,4 +1,4 @@
-# open-rmm software module: install a package of the console's library, or
+﻿# open-rmm software module: install a package of the console's library, or
 # uninstall an application. Never reboots: a needed reboot is recorded for
 # the reboot module.
 #

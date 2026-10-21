@@ -1,6 +1,6 @@
 {
   "id": "software",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Installs packages of the console's library (MSI, Inno Setup, NSIS, WiX bundles, other installers with silent switches) and uninstalls applications silently.",
   "protocol_version": 1,
   "entrypoints": {

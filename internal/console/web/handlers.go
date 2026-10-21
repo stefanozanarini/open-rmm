@@ -268,6 +268,63 @@ func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {
 	s.flash(w, r, s.Tf(r, "Agente %s approvato.", a.Host.Hostname), "/agents/"+id)
 }
 
+// handleApproveMany approves, or turns down (revokes), the pending agents
+// selected in the list.
+func (s *Server) handleApproveMany(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, s.T(r, "richiesta non valida"), http.StatusBadRequest)
+		return
+	}
+	op := sessionFrom(r.Context()).data.Operator
+	approve := r.PostFormValue("do") != "revoke"
+	selected := r.PostForm["agent"]
+	if len(selected) == 0 {
+		s.flash(w, r, s.T(r, "Seleziona almeno un agente."), "/agents")
+		return
+	}
+	if len(selected) > 500 {
+		http.Error(w, s.T(r, "richiesta non valida"), http.StatusBadRequest)
+		return
+	}
+	done := 0
+	for _, id := range selected {
+		if !ids.IsUUID(id) {
+			continue
+		}
+		a, err := s.store.GetAgent(r.Context(), t, id)
+		if err != nil || a.Status != store.AgentPending {
+			continue
+		}
+		if approve {
+			switch err := s.store.ApproveAgent(r.Context(), t, id, "operator:"+op.Username, s.now()); {
+			case errors.Is(err, store.ErrNotPending):
+				continue
+			case err != nil:
+				s.fail(w, r, err)
+				return
+			}
+			s.audit(r.Context(), t, op, "agent.approved", id, map[string]any{"hostname": a.Host.Hostname, "machine_id": a.Host.MachineID})
+		} else {
+			if err := s.store.SetAgentStatus(r.Context(), t, id, store.AgentRevoked); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			s.audit(r.Context(), t, op, "agent.revoked", id, map[string]any{"hostname": a.Host.Hostname})
+		}
+		done++
+	}
+	if approve {
+		s.flash(w, r, s.Tf(r, "%d agenti approvati.", done), "/agents")
+	} else {
+		s.flash(w, r, s.Tf(r, "%d agenti rifiutati e revocati.", done), "/agents")
+	}
+}
+
 func (s *Server) handleRevoke(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
 	id := r.PathValue("id")

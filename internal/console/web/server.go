@@ -207,9 +207,10 @@ func funcs(lang string) template.FuncMap {
 			return fmt.Sprint(t)
 		},
 		// panelCtx shows an agent's sections inside the agent list.
-		"panelCtx": func(p page, d *agentData) page { p.Data = d; return p },
-		"rowLink":  rowLink,
-		"rowTab":   rowTabLink,
+		"panelCtx":   func(p page, d *agentData) page { p.Data = d; return p },
+		"rowLink":    rowLink,
+		"rowTab":     rowTabLink,
+		"maxHistory": func() int { return maxHistoryRows },
 		"rowsCtx": func(d agentsData, rows []agentRow, sel bool) map[string]any {
 			return map[string]any{"Rows": rows, "Select": sel, "View": d}
 		},
@@ -277,6 +278,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /agents", s.auth(s.handleAgents))
 	mux.Handle("GET /agents/{id}", s.auth(s.handleAgent))
 	mux.Handle("POST /agents/{id}/approve", s.role(authn.RoleAdmin, s.handleApprove))
+	mux.Handle("POST /agents/approve", s.role(authn.RoleAdmin, s.handleApproveMany))
 	mux.Handle("POST /agents/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevoke))
 	mux.Handle("POST /agents/{id}/jobs", s.role(authn.RoleOperator, s.handleRunJob))
 	mux.Handle("POST /agents/{id}/collect", s.role(authn.RoleOperator, s.handleCollect))

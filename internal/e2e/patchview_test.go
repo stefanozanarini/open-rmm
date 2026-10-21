@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"html"
 	"net/url"
 	"path/filepath"
@@ -55,6 +56,23 @@ func TestConsolePatchView(t *testing.T) {
 		t.Fatal("search ignored")
 	}
 
+	// Past installations: only the 10 most recent, unless searching.
+	busy := e.addWindowsAgent(t, "PC-HISTORY")
+	var hist []string
+	for d := 1; d <= 13; d++ {
+		hist = append(hist, fmt.Sprintf(`{"title":"Update %02d (KB50000%02d)","kbs":["KB50000%02d"],"date":"2026-09-%02dT10:00:00Z","result":"succeeded"}`, d, d, d, d))
+	}
+	e.store.PutUpdateStatus(ctx, store.UpdateStatus{TenantID: e.tenant, AgentID: busy, Source: updates.SourceWindows, ScannedAt: now,
+		Data: []byte(`{"managed_by":"none","updates":[],"pending_reboot":{"required":false},"history":[` + strings.Join(hist, ",") + `]}`)})
+	_, body = get(t, c, e.console.URL+"/agents/"+busy)
+	if !strings.Contains(body, "KB5000013") || !strings.Contains(body, "KB5000004") || strings.Contains(body, "KB5000003") ||
+		!strings.Contains(body, "altre 3 più vecchie") || strings.Index(body, "KB5000013") > strings.Index(body, "KB5000012") {
+		t.Fatalf("history not limited to the 10 most recent: %s", body)
+	}
+	if _, body = get(t, c, e.console.URL+"/agents/"+busy+"?pq=KB5000001"); !strings.Contains(body, "Update 01") {
+		t.Fatal("older installation not found by search")
+	}
+
 	// On-demand scan: signed at once, no step-up.
 	e.idp.mu.Lock()
 	before := e.idp.lastAuth
@@ -79,7 +97,7 @@ func TestConsolePatchView(t *testing.T) {
 		"parameters": {Module: "winupdate", Action: "scan", ParamsJson: []byte(`{"max_age_days":1}`)},
 		"script":     {Module: "script", Action: "run"},
 	} {
-		req.TenantId, req.AgentId, req.ModuleVersion, req.ModuleSha256 = e.tenant, pc, "1.1.0", mod.ManifestHash
+		req.TenantId, req.AgentId, req.ModuleVersion, req.ModuleSha256 = e.tenant, pc, mod.Manifest.Version, mod.ManifestHash
 		req.TtlSeconds, req.RequestNonce = 600, jobreq.NewRequestNonce()
 		if req.ParamsJson == nil {
 			req.ParamsJson = []byte("{}")

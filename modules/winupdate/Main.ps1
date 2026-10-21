@@ -1,4 +1,4 @@
-# open-rmm Windows Update module (Windows Update Agent COM API).
+﻿# open-rmm Windows Update module (Windows Update Agent COM API).
 #
 # scan     lists the missing updates, the pending reboot and who manages
 #          updates on the endpoint (WSUS, Intune or nobody).

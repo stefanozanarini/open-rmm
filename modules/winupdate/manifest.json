@@ -1,6 +1,6 @@
 {
   "id": "winupdate",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Windows Update through the Windows Update Agent API: scan, install (never reboots), WSUS/Intune detection.",
   "protocol_version": 1,
   "entrypoints": {
