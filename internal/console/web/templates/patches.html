@@ -28,9 +28,9 @@
   <td>{{if .Online}}<span class="dot online"></span>{{else}}<span class="dot"></span>{{end}} <a href="/agents/{{.Agent.ID}}">{{.Agent.Host.Hostname}}</a>{{if eq .Agent.Host.OSFamily "server"}} <span class="badge">server</span>{{end}}</td>
   {{with .Windows}}
   <td>{{if .Important}}<a class="badge chk-failing" href="/agents/{{.AgentID}}#patches" title="{{t "apri l'elenco delle patch"}}">{{.Important}}</a>{{else}}<span class="badge chk-ok">0</span>{{end}}</td>
-  <td>{{if .Important}}{{tf "%d giorni" .OldestDays}}{{if .Behind}} <span class="muted">({{.Behind}} Patch Tuesday)</span>{{end}}{{else}}-{{end}}</td>
-  <td>{{.Other}}</td>
-  <td>{{if .Reboot}}<span class="badge chk-warning">{{tf "da %d gg" $days}}</span>{{else}}-{{end}}</td>
+  <td>{{if .Important}}<a href="/agents/{{.AgentID}}#patches">{{tf "%d giorni" .OldestDays}}</a>{{if .Behind}} <span class="muted">({{.Behind}} Patch Tuesday)</span>{{end}}{{else}}-{{end}}</td>
+  <td>{{if .Other}}<a class="badge" href="/agents/{{.AgentID}}#patches" title="{{t "apri l'elenco delle patch"}}">{{.Other}}</a>{{else}}0{{end}}</td>
+  <td>{{if .Reboot}}<a class="badge chk-warning" href="/agents/{{.AgentID}}#act-reboot-reboot" title="{{t "apri il riavvio dell'endpoint"}}">⏻ {{tf "da %d gg" $days}}</a>{{else}}-{{end}}</td>
   {{else}}<td colspan="4" class="muted">{{t "nessuna verifica di Windows Update"}}</td>{{end}}
   <td>{{if .WingetMissing}}<span class="badge chk-warning" title="{{t "winget non è installato su questo endpoint: le applicazioni si confrontano solo con il catalogo della console"}}">{{t "winget assente"}}</span>{{else}}{{with .Winget}}{{if .ThirdParty}}<a class="badge chk-warning" href="/agents/{{.AgentID}}#patches">{{.ThirdParty}}</a>{{else}}0{{end}}{{else}}-{{end}}{{end}}</td>
   <td>{{with .Firmware}}{{if .Important}}<span class="badge chk-failing">{{.Important}}</span> {{end}}{{if .Other}}{{.Other}}{{end}}{{if and (not .Important) (not .Other)}}0{{end}}{{else}}-{{end}}{{if .BIOS}} <span class="badge chk-warning">BIOS</span>{{end}}</td>

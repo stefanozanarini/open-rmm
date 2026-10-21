@@ -1074,6 +1074,7 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"Software più installati": "Most installed software",
 	"computer per applicazione, senza distinguere le versioni; esclusi i componenti di sistema": "computers per application, any version; system components excluded",
 	"%d versioni": "%d versions",
+	"apri il riavvio dell'endpoint": "open the endpoint's restart",
 	"Libero: meno del 10%":                    "Free: less than 10%",
 	"Libero: meno del 20%":                    "Free: less than 20%",
 	"Nessun dato":                            "No data",

@@ -94,6 +94,12 @@ func TestConsolePatchDashboard(t *testing.T) {
 			t.Errorf("dashboard lacks %q", want)
 		}
 	}
+	// Counts and the pending reboot lead to the patch list and the restart.
+	for _, want := range []string{`href="/agents/` + behind + `#patches"`, `href="/agents/` + behind + `#act-reboot-reboot"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("patches page lacks the link %s", want)
+		}
+	}
 	if strings.Index(body, "PC-BEHIND") > strings.Index(body, "PC-OK") || strings.Index(body, "PC-OK") > strings.Index(body, "PC-NEVER") {
 		t.Error("endpoints not ranked from the most behind")
 	}

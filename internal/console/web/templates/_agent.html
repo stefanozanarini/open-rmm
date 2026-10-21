@@ -82,7 +82,7 @@
 {{with .Data.Updates}}
 {{with .Windows}}
 <p class="muted">{{tf "Windows Update verificato il %s" (fmtTime .ScannedAt)}} · {{tf "gestione: %s" (label .ManagedBy)}}{{if ne .ManagedBy "none"}} ({{t "open-rmm osserva soltanto"}}{{with .WSUSServer}}, {{tf "server %s" .}}{{end}}){{end}}{{with .LastSuccess}} · {{tf "ultima installazione riuscita %s" (isoDate .)}}{{end}}</p>
-{{if .PendingReboot.Required}}<p><span class="badge chk-warning">{{t "riavvio in sospeso"}}</span>{{with .PendingReboot.Since}} {{tf "dal %s" (isoDate .)}}{{end}} <span class="muted">({{range $i, $r := .PendingReboot.Reasons}}{{if $i}}, {{end}}{{label $r}}{{end}})</span></p>{{end}}
+{{if .PendingReboot.Required}}<p><span class="badge chk-warning">{{t "riavvio in sospeso"}}</span>{{with .PendingReboot.Since}} {{tf "dal %s" (isoDate .)}}{{end}} <span class="muted">({{range $i, $r := .PendingReboot.Reasons}}{{if $i}}, {{end}}{{label $r}}{{end}})</span>{{if $.CanRun}} <a class="button" href="/agents/{{$.Data.Agent.ID}}#act-reboot-reboot">⏻ {{t "Riavvia…"}}</a>{{end}}</p>{{end}}
 {{$u := $.Data.Updates}}
 <div class="toolbar">
   {{if and $.CanRun $u.WinupdateVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
