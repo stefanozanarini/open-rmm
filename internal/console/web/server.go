@@ -279,6 +279,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agents/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevoke))
 	mux.Handle("POST /agents/{id}/jobs", s.role(authn.RoleOperator, s.handleRunJob))
 	mux.Handle("POST /agents/{id}/collect", s.role(authn.RoleOperator, s.handleCollect))
+	mux.Handle("POST /agents/{id}/ad-reader", s.role(authn.RoleAdmin, s.handleADReader))
+	mux.Handle("POST /agents/{id}/ring", s.role(authn.RoleAdmin, s.handleSetRing))
 	mux.Handle("POST /agents/{id}/firmware", s.role(authn.RoleOperator, s.handleFirmwareInstall))
 	mux.Handle("POST /agents/{id}/shell", s.role(authn.RoleOperator, s.handleOpenShell))
 	mux.Handle("GET /shell/{id}", s.role(authn.RoleOperator, s.handleShellPage))
@@ -287,6 +289,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /jobs/{id}", s.auth(s.handleJob))
 	mux.Handle("GET /modules", s.auth(s.handleModules))
 	mux.Handle("GET /updates", s.auth(s.handleUpdates))
+	mux.Handle("POST /updates/target", s.role(authn.RoleAdmin, s.handleSetTarget))
 	mux.Handle("GET /reports", s.auth(s.handleReports))
 	mux.Handle("GET /tokens", s.role(authn.RoleAdmin, s.handleTokens))
 	mux.Handle("POST /tokens", s.role(authn.RoleAdmin, s.handleCreateToken))
@@ -318,6 +321,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /alerts/{id}/ack", s.role(authn.RoleOperator, s.handleAckAlert))
 	mux.Handle("GET /settings", s.role(authn.RoleAdmin, s.handleSettings))
 	mux.Handle("POST /settings", s.role(authn.RoleAdmin, s.handleSaveSettings))
+	mux.Handle("POST /settings/logo", s.role(authn.RoleAdmin, s.handleLogoUpload))
+	mux.Handle("GET /logo", s.auth(s.handleLogo))
 	mux.Handle("GET /policies", s.auth(s.handlePolicies))
 	mux.Handle("GET /policies/new", s.role(authn.RoleAdmin, s.handlePolicyForm))
 	mux.Handle("GET /policies/{id}", s.role(authn.RoleAdmin, s.handlePolicyForm))
@@ -466,6 +471,8 @@ type page struct {
 	// this console; ShowLinks shows the linked consoles page in the menu.
 	Federated bool
 	ShowLinks bool
+	// HasLogo: the tenant has a company logo (served at /logo).
+	HasLogo bool
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title string, data any) {
@@ -490,6 +497,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title stri
 		if sess.data.Tenant != "" {
 			if open, err := s.store.ListAlerts(r.Context(), sess.data.Tenant, "", true, 1000); err == nil {
 				p.OpenAlerts = len(open)
+			}
+			if st, err := s.store.GetSettings(r.Context(), sess.data.Tenant); err == nil {
+				p.HasLogo = len(st.Logo) > 0
 			}
 		}
 		if sess.data.Flash != "" {

@@ -336,6 +336,34 @@ function Get-RemoteAccessInfo {
     }
 }
 
+# Get-LocalAdmins lists the members of the built-in Administrators group,
+# found by its SID (the name is localized). Members are local accounts,
+# domain (or Entra ID) users and groups; a member whose account no longer
+# exists shows as its SID.
+function Get-LocalAdmins {
+    $sid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
+    $name = $sid.Translate([System.Security.Principal.NTAccount]).Value.Split('\')[-1]
+    $group = [ADSI]"WinNT://$env:COMPUTERNAME/$name,group"
+    $out = @()
+    foreach ($m in @($group.Invoke('Members'))) {
+        $path = [string]$m.GetType().InvokeMember('ADsPath', 'GetProperty', $null, $m, $null)
+        $class = ([string]$m.GetType().InvokeMember('Class', 'GetProperty', $null, $m, $null)).ToLowerInvariant()
+        $parts = @(($path -replace '^WinNT://', '') -split '/')
+        if ($parts.Count -ge 3 -and $parts[-2] -ieq $env:COMPUTERNAME) {
+            $out += @{ name = "$env:COMPUTERNAME\$($parts[-1])"; type = $class; scope = 'local' }
+        }
+        elseif ($parts.Count -ge 2) {
+            $scope = 'domain'
+            if ($parts[0] -ieq 'AzureAD') { $scope = 'entra' }
+            $out += @{ name = "$($parts[0])\$($parts[-1])"; type = $class; scope = $scope }
+        }
+        else {
+            $out += @{ name = $parts[0]; type = $class; scope = 'unknown' }
+        }
+    }
+    $out
+}
+
 Invoke-RmmModule @{
     collect = {
         param($Params, $Request)
@@ -356,6 +384,7 @@ Invoke-RmmModule @{
         Send-RmmProgress 60 'software'
         $inv.software = @(Get-Section 'software' { Get-SoftwareInfo } @())
         $inv.remote_access = Get-Section 'remote_access' { Get-RemoteAccessInfo } @{}
+        $inv.local_admins = @(Get-Section 'local_admins' { Get-LocalAdmins } @())
         $inv
     }
 }

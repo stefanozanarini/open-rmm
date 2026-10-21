@@ -49,6 +49,15 @@ type Inventory struct {
 	Monitors     []Monitor    `json:"monitors,omitempty"`
 	Software     []Software   `json:"software,omitempty"`
 	RemoteAccess RemoteAccess `json:"remote_access"`
+	// LocalAdmins: members of the built-in Administrators group (inventory 1.1.0).
+	LocalAdmins []LocalAccount `json:"local_admins,omitempty"`
+}
+
+// LocalAccount is a member of a local group.
+type LocalAccount struct {
+	Name  string `json:"name"`            // DOMAIN\name, COMPUTER\name or a SID
+	Type  string `json:"type,omitempty"`  // user | group
+	Scope string `json:"scope,omitempty"` // local | domain | entra | unknown
 }
 
 type System struct {
@@ -324,6 +333,18 @@ func (inv *Inventory) normalize() {
 	inv.Software = sw
 	r := &inv.RemoteAccess
 	r.SupremoID, r.AnyDeskID, r.TeamViewerID = digits(r.SupremoID), digits(r.AnyDeskID), digits(r.TeamViewerID)
+	if len(inv.LocalAdmins) > maxItems {
+		inv.LocalAdmins = inv.LocalAdmins[:maxItems]
+	}
+	admins := inv.LocalAdmins[:0]
+	for _, a := range inv.LocalAdmins {
+		if a.Name = clip(a.Name); a.Name == "" {
+			continue
+		}
+		a.Type, a.Scope = clip(a.Type), clip(a.Scope)
+		admins = append(admins, a)
+	}
+	inv.LocalAdmins = admins
 }
 
 // VisibleSoftware returns the applications an operator normally cares

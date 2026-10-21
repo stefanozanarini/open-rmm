@@ -199,6 +199,7 @@ func run(log *slog.Logger) error {
 			if err := srv.SyncBaselines(ctx); err != nil {
 				log.Error("automatic collection", "err", err)
 			}
+			srv.RunADReaders(ctx)
 			select {
 			case <-ctx.Done():
 				return

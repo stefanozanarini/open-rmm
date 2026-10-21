@@ -6,10 +6,23 @@
   <dt>{{t "Versione agente"}}</dt><dd>{{.Agent.Host.AgentVersion}}</dd>
   <dt>{{t "Ultimo contatto"}}</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} {{tf "da %v" .}}{{end}}</dd>
   {{with .AD}}<dt>Active Directory</dt><dd>{{.Domain}}{{with .OU}} · <a href="/agents{{qs "ou" $.Data.AD.Key}}">{{.}}</a>{{end}}{{if not .Enabled}} <span class="badge chk-failing">{{t "account disabilitato"}}</span>{{end}}{{with .LastLogon}} · {{tf "ultimo accesso al dominio %s" (fmtTime .)}}{{end}}</dd>{{end}}
+  {{with .Inv}}
+  <dt>{{t "Utente collegato"}}</dt><dd>{{or .OS.LoggedOnUser "-"}} <span class="muted">{{tf "all'inventario del %s" (fmtTime $.Data.InvAt)}}</span></dd>
+  <dt>{{t "Amministratori locali"}}</dt><dd>{{range .LocalAdmins}}{{.Name}}{{if eq .Type "group"}} <span class="badge">{{t "gruppo"}}</span>{{end}}{{if eq .Scope "local"}} <span class="badge">{{t "locale"}}</span>{{else if eq .Scope "entra"}} <span class="badge">Entra ID</span>{{else if eq .Scope "unknown"}} <span class="badge chk-warning">{{t "account inesistente"}}</span>{{end}}<br>{{else}}<span class="muted">{{t "non ancora raccolti (modulo inventory 1.1.0)"}}</span>{{end}}</dd>
+  {{end}}
   <dt>{{t "Sede"}}</dt><dd>{{if .Site.Name}}{{.Site.Name}}{{else}}<span class="muted">{{t "senza sede"}}</span>{{end}}{{if .Site.Manual}} <span class="badge">{{t "assegnata a mano"}}</span>{{end}}</dd>
   <dt>{{t "Registrato"}}</dt><dd>{{fmtTime .Agent.EnrolledAt}}</dd>
   <dt>{{t "Approvato"}}</dt><dd>{{fmtTime .Agent.ApprovedAt}} {{.Agent.ApprovedBy}}</dd>
-  <dt>{{t "Anello aggiornamenti"}}</dt><dd>{{.Agent.UpdateRing}}</dd>
+  <dt>{{t "Anello aggiornamenti"}}</dt><dd>{{if $.IsAdmin}}<form method="post" action="/agents/{{.Agent.ID}}/ring" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{.Return}}">
+    <select name="ring" aria-label="{{t "Anello aggiornamenti"}}"><option value="broad"{{if eq .Agent.UpdateRing "broad"}} selected{{end}}>broad</option><option value="pilot"{{if eq .Agent.UpdateRing "pilot"}} selected{{end}}>pilot</option></select>
+    <button>{{t "Salva"}}</button></form>{{else}}{{.Agent.UpdateRing}}{{end}}</dd>
+  {{if and $.IsAdmin (eq .Agent.Host.OS "windows") (eq .Agent.Status "active")}}
+  <dt>Active Directory</dt><dd><form method="post" action="/agents/{{.Agent.ID}}/ad-reader" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{.Return}}">
+    {{if .ADReader}}<span class="badge chk-ok">{{t "legge Active Directory ogni 24 ore"}}</span> <input type="hidden" name="on" value="0"><button>{{t "Smetti di leggere"}}</button>
+    {{else}}<input type="hidden" name="on" value="1"><button>{{t "Usa questo PC per leggere Active Directory"}}</button>{{end}}</form></dd>
+  {{end}}
   <dt>{{t "Ultimo aggiornamento"}}</dt><dd>{{if .Agent.Update.State}}<span class="badge {{.Agent.Update.State}}">{{label .Agent.Update.State}}</span> {{.Agent.Update.Version}} · {{fmtTime .Agent.Update.At}}{{with .Agent.Update.Error}}<br><span class="muted">{{.}}</span>{{end}}{{else}}-{{end}}</dd>
   <dt>{{t "Certificato valido fino a"}}</dt><dd>{{fmtTime .Agent.CertNotAfter}}</dd>
   <dt>{{t "ID agente"}}</dt><dd><code>{{.Agent.ID}}</code></dd>

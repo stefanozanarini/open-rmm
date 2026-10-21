@@ -27,6 +27,13 @@ type Settings struct {
 	// CAs) the agent's MSI is signed with: offered for Group Policy and
 	// watched for expiry. Never a key.
 	CodeSigningCert string `json:"code_signing_cert,omitempty"`
+	// ADReaders are the agents (domain member servers) that read Active
+	// Directory every 24 hours, besides the domain controllers.
+	ADReaders []string `json:"ad_readers,omitempty"`
+	// Logo is the company logo shown in the console header (PNG, JPEG or
+	// WebP, at most 256 KB), with its media type.
+	Logo     []byte `json:"logo,omitempty"`
+	LogoType string `json:"logo_type,omitempty"`
 }
 
 // Check statuses.

@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-<p class="muted">{{th "Le release dell'agente sono firmate con la chiave delle release della console, oppure offline e pubblicate da riga di comando. Le versioni obiettivo si impostano da riga di comando (<code>openrmm-admin release target</code>)."}}</p>
+<p class="muted">{{th "Le release dell'agente sono firmate con la chiave delle release della console, oppure offline e pubblicate da riga di comando. Gli agenti nuovi sono nell'anello broad; spostane qualcuno in pilot dalla pagina dell'agente per provare le versioni prima degli altri."}}</p>
 {{with .Publish}}{{if .ConsoleAdmin}}
 <h2 id="publish">{{t "Pubblica una release"}}</h2>
 {{if not .BuilderUp}}<p><span class="badge chk-failing">{{t "non raggiungibile"}}</span> {{t "Il servizio di firma non risponde: controlla il container builder."}}</p>
@@ -59,10 +59,15 @@
 </table>
 {{end}}
 <h2>{{t "Release pubblicate"}}</h2>
+{{if $.IsAdmin}}<p class="muted">{{t "Impostando una versione obiettivo, gli agenti di quell'anello si aggiornano da soli, con ritorno automatico alla versione precedente se la nuova non si collega. Prova prima sull'anello pilot."}}</p>{{end}}
 <table>
-<thead><tr><th>{{t "Versione"}}</th><th>{{t "Piattaforma"}}</th><th>{{t "Chiave"}}</th><th>{{t "Pubblicata"}}</th><th>{{t "Note"}}</th></tr></thead>
+<thead><tr><th>{{t "Versione"}}</th><th>{{t "Piattaforma"}}</th><th>{{t "Chiave"}}</th><th>{{t "Pubblicata"}}</th><th>{{t "Note"}}</th>{{if $.IsAdmin}}<th>{{t "Aggiorna gli agenti"}}</th>{{end}}</tr></thead>
 <tbody>
-{{range .Releases}}<tr><td>{{.Version}}</td><td>{{.Platform}}</td><td><code>{{short .KeyID}}</code></td><td>{{fmtTime .PublishedAt}}</td><td>{{.Notes}}</td></tr>{{end}}
+{{range .Releases}}<tr><td>{{.Version}}</td><td>{{.Platform}}</td><td><code>{{short .KeyID}}</code></td><td>{{fmtTime .PublishedAt}}</td><td>{{.Notes}}</td>
+{{if $.IsAdmin}}<td><form method="post" action="/updates/target" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="version" value="{{.Version}}"><input type="hidden" name="platform" value="{{.Platform}}">
+  <select name="ring" aria-label="{{t "Anello"}}"><option value="pilot">pilot</option><option value="broad">broad</option></select>
+  <button>{{t "Imposta come obiettivo"}}</button></form></td>{{end}}</tr>{{end}}
 </tbody>
 </table>
 {{end}}

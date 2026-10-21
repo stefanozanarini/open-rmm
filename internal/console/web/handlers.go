@@ -78,6 +78,8 @@ type agentData struct {
 	Shell    bool // an interactive shell can be opened
 	// Packages of the library, to install from the agent page.
 	Packages []store.Package
+	// ADReader: this agent reads Active Directory every 24 hours.
+	ADReader bool
 	// Return is where forms on this agent go back to; Panel is set when the
 	// agent is shown in the bottom panel of the agent list.
 	Return string
@@ -153,6 +155,9 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 	}
 	if d.Packages, err = s.store.ListPackages(r.Context(), t); err != nil {
 		return nil, err
+	}
+	if st, err := s.store.GetSettings(r.Context(), t); err == nil {
+		d.ADReader = slices.Contains(st.ADReaders, id)
 	}
 	snaps, err := s.adSnapshots(r.Context(), t)
 	if err != nil {
@@ -631,4 +636,33 @@ func sortRunnables(out []runnable) {
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Module+out[i].Version+out[i].Action < out[j].Module+out[j].Version+out[j].Action
 	})
+}
+
+// handleSetTarget sets the version a ring updates to. The release is signed
+// already and agents refuse anything not newer than themselves, so it needs
+// the Admin role but no new sign-in; it is audited.
+func (s *Server) handleSetTarget(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
+		return
+	}
+	ring, platform, version := r.PostFormValue("ring"), r.PostFormValue("platform"), r.PostFormValue("version")
+	if !store.ValidRing(ring) {
+		http.NotFound(w, r)
+		return
+	}
+	op := sessionFrom(r.Context()).data.Operator
+	err := s.store.SetReleaseTarget(r.Context(), store.ReleaseTarget{TenantID: t, Ring: ring, Platform: platform, Version: version,
+		UpdatedBy: "operator:" + op.Username})
+	if errors.Is(err, store.ErrNotFound) {
+		s.flash(w, r, s.T(r, "Versione non disponibile."), "/updates")
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.audit(r.Context(), t, op, "release.target_set", ring, map[string]any{"platform": platform, "version": version})
+	s.flash(w, r, s.Tf(r, "Gli agenti dell'anello %s su %s si aggiorneranno alla %s.", ring, platform, version), "/updates")
 }

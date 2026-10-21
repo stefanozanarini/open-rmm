@@ -2,16 +2,26 @@
 <form method="post" action="/settings" class="stack">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <h2>{{t "Accessi RDP"}}</h2>
-  <p class="muted">{{th "L'accesso remoto (RDP) è previsto solo dalle reti indicate qui. Un accesso RDP da un altro indirizzo genera un avviso critico. Una subnet per riga, ad esempio <code>192.168.10.0/24</code>; un indirizzo singolo vale /32. Se l'elenco è vuoto valgono le reti private:"}} {{range $i, $p := .Data.Defaults}}{{if $i}}, <h2>{{t "Regole pianificate"}}</h2>
-<p class="muted">{{th "Opzione avanzata: regole aggiuntive alla raccolta automatica, per esempio riavvii in una finestra di manutenzione. <a href=\"/policies\">Regole pianificate</a>"}}</p>
-{{end}}<code>{{$p}}</code><h2>{{t "Regole pianificate"}}</h2>
-<p class="muted">{{th "Opzione avanzata: regole aggiuntive alla raccolta automatica, per esempio riavvii in una finestra di manutenzione. <a href=\"/policies\">Regole pianificate</a>"}}</p>
-{{end}}.</p>
+  <p class="muted">{{th "L'accesso remoto (RDP) è previsto solo dalle reti indicate qui. Un accesso RDP da un altro indirizzo genera un avviso critico. Una subnet per riga, ad esempio <code>192.168.10.0/24</code>; un indirizzo singolo vale /32. Se l'elenco è vuoto valgono le reti private:"}} {{range $i, $p := .Data.Defaults}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}.</p>
   <label>{{t "Reti da cui l'RDP è consentito"}}
     <textarea name="rdp_subnets" rows="8" spellcheck="false" placeholder="192.168.10.0/24">{{.Data.Subnets}}</textarea>
   </label>
   <button class="primary">{{t "Salva"}}</button>
 </form>
+
+<h2 id="logo">{{t "Logo aziendale"}}</h2>
+<p class="muted">{{t "Compare in alto a destra in tutte le pagine di questo tenant. PNG, JPEG o WebP, al massimo 256 KB; meglio con sfondo trasparente e alto circa 40 pixel."}}</p>
+{{if .HasLogo}}<p><img class="logo-preview" src="/logo" alt="{{t "Logo aziendale"}}"></p>{{end}}
+<form method="post" action="/settings/logo" enctype="multipart/form-data" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required aria-label="{{t "Logo aziendale"}}">
+  <button class="primary">{{t "Carica"}}</button>
+</form>
+{{if .HasLogo}}<form method="post" action="/settings/logo" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="remove" value="1">
+  <button class="danger">{{t "Rimuovi il logo"}}</button>
+</form>{{end}}
+
 <h2>{{t "Regole pianificate"}}</h2>
 <p class="muted">{{th "Opzione avanzata: regole aggiuntive alla raccolta automatica, per esempio riavvii in una finestra di manutenzione. <a href=\"/policies\">Regole pianificate</a>"}}</p>
 {{end}}

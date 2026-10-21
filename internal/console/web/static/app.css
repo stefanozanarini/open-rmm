@@ -133,3 +133,5 @@ table.patches td:first-child, table.patches th:first-child { width:1.5em; }
 .ctxmenu a, .ctxmenu button { display:block; width:100%; text-align:left; padding:7px 14px; background:none; border:0; border-radius:0; color:inherit; font:inherit; cursor:pointer; text-decoration:none; }
 .ctxmenu a:hover, .ctxmenu button:hover, .ctxmenu a:focus, .ctxmenu button:focus { background:var(--line); outline:none; }
 .ctxmenu hr { border:0; border-top:1px solid var(--line); margin:4px 0; }
+header img.logo { max-height:40px; max-width:180px; object-fit:contain; margin-left:auto; order:99; }
+img.logo-preview { max-height:80px; max-width:320px; background:var(--card); padding:6px; border:1px solid var(--line); border-radius:4px; }
