@@ -557,6 +557,8 @@ type updatesData struct {
 	Releases []store.Release
 	Problems []store.Agent
 	Publish  publishView
+	// AutoPilot: new releases become the pilot ring's target at once.
+	AutoPilot bool
 }
 
 func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
@@ -581,6 +583,9 @@ func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := updatesData{Releases: rels, Publish: s.publishData(r, releasesKind)}
+	if st, err := s.store.GetSettings(r.Context(), t); err == nil {
+		d.AutoPilot = !st.PilotManual
+	}
 	for _, tg := range targets {
 		v := targetView{ReleaseTarget: tg}
 		for _, a := range agents {
@@ -665,4 +670,26 @@ func (s *Server) handleSetTarget(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r.Context(), t, op, "release.target_set", ring, map[string]any{"platform": platform, "version": version})
 	s.flash(w, r, s.Tf(r, "Gli agenti dell'anello %s su %s si aggiorneranno alla %s.", ring, platform, version), "/updates")
+}
+
+// handleAutoPilot turns the automatic pilot target on or off.
+func (s *Server) handleAutoPilot(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
+		return
+	}
+	cur, err := s.store.GetSettings(r.Context(), t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	cur.PilotManual = r.PostFormValue("auto") != "1"
+	op := sessionFrom(r.Context()).data.Operator
+	if err := s.store.PutSettings(r.Context(), t, cur, "operator:"+op.Username); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.audit(r.Context(), t, op, "settings.auto_pilot", "", map[string]any{"auto": !cur.PilotManual})
+	s.flash(w, r, s.T(r, "Impostazione salvata."), "/updates")
 }

@@ -688,7 +688,42 @@ func (s *Server) publishRelease(r *http.Request, op *Operator, version, platform
 		detail[f.Name] = f.SHA256
 	}
 	s.auditAll(ctx, op, "release.published", detail)
+	s.autoTargetPilot(ctx, op, version, platform)
 	return "", nil
+}
+
+// autoTargetPilot makes a new release the pilot ring's target in every
+// tenant that keeps the default, unless the ring already targets a newer
+// version. The broad ring is always the operator's decision.
+func (s *Server) autoTargetPilot(ctx context.Context, op *Operator, version, platform string) {
+	tenants, err := s.store.ListTenants(ctx)
+	if err != nil {
+		s.log.Error("pilot target", "err", err)
+		return
+	}
+	for _, t := range tenants {
+		st, err := s.store.GetSettings(ctx, t.ID)
+		if err != nil || st.PilotManual {
+			continue
+		}
+		targets, err := s.store.ListReleaseTargets(ctx, t.ID)
+		if err != nil {
+			continue
+		}
+		newer := false
+		for _, cur := range targets {
+			newer = newer || (cur.Ring == store.RingPilot && cur.Platform == platform && compareVersions(cur.Version, version) >= 0)
+		}
+		if newer {
+			continue
+		}
+		if err := s.store.SetReleaseTarget(ctx, store.ReleaseTarget{TenantID: t.ID, Ring: store.RingPilot, Platform: platform,
+			Version: version, UpdatedBy: "console (automatic pilot)"}); err != nil {
+			s.log.Error("pilot target", "tenant", t.ID, "err", err)
+			continue
+		}
+		s.audit(ctx, t.ID, op, "release.target_set", store.RingPilot, map[string]any{"platform": platform, "version": version, "automatic": true})
+	}
 }
 
 // Params returns the params.json shipped for a module: for the same

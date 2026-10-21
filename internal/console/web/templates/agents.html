@@ -5,7 +5,7 @@
 {{range .Rows}}<tr data-agent="{{.ID}}" data-name="{{.Host.Hostname}}" data-status="{{.Status}}"{{if .Current}} class="current"{{end}}>
   {{if $.Select}}<td><input type="checkbox" name="agent" value="{{.ID}}"{{if .Checked}} checked{{end}} aria-label="{{tf "seleziona %s" .Host.Hostname}}"></td>{{end}}
   <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}}
-    <a href="{{rowLink $.View .ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}
+    <a href="{{rowLink $.View .ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}{{if eq .UpdateRing "pilot"}} <span class="badge pending" title="{{t "Anello aggiornamenti"}}">pilot</span>{{end}}
     <a class="open" href="/agents/{{.ID}}" title="{{t "apri la pagina dell'agente"}}">↗</a></td>
   <td class="icons">{{with .Alerts}}<span class="badge sev-critical" title="{{t "avvisi aperti"}}">{{tf "%d avvisi" .}}</span>{{end}}
     {{with .Checks}}{{if ne . "ok"}}<span class="badge chk-{{.}}" title="{{t "controlli"}}">{{label .}}</span>{{end}}{{end}}

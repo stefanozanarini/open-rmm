@@ -79,12 +79,7 @@ func (p *Process) start(argv, env []string, dir string) error {
 			return err
 		}
 	}
-	block := ""
-	for _, e := range env {
-		block += e + "\x00"
-	}
-	block += "\x00"
-	envp, err := windows.UTF16FromString(block)
+	envp, err := envBlock(env)
 	if err != nil {
 		return err
 	}

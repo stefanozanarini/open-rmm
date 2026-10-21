@@ -1037,4 +1037,6 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"legge Active Directory ogni 24 ore":           "reads Active Directory every 24 hours",
 	"locale":                                       "local",
 	"non ancora raccolti (modulo inventory 1.1.0)": "not collected yet (inventory module 1.1.0)",
+	"Impostazione salvata.":                        "Setting saved.",
+	"Ogni nuova release diventa subito l'obiettivo dell'anello pilot (broad resta manuale)": "Every new release becomes the pilot ring's target at once (broad stays manual)",
 }

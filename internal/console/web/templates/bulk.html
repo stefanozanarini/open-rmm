@@ -14,6 +14,15 @@
   <button>{{t "Sposta"}}</button>
 </form>
 {{end}}
+{{if $.IsAdmin}}
+<h2>{{t "Anello aggiornamenti"}}</h2>
+<form method="post" action="/agents/ring" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <select name="ring" aria-label="{{t "Anello aggiornamenti"}}"><option value="pilot">pilot</option><option value="broad">broad</option></select>
+  <button>{{t "Salva"}}</button>
+</form>
+{{end}}
 {{if .Commands}}
 <h2>{{t "Esegui un comando"}}</h2>
 {{range .Commands}}

@@ -59,7 +59,12 @@
 </table>
 {{end}}
 <h2>{{t "Release pubblicate"}}</h2>
-{{if $.IsAdmin}}<p class="muted">{{t "Impostando una versione obiettivo, gli agenti di quell'anello si aggiornano da soli, con ritorno automatico alla versione precedente se la nuova non si collega. Prova prima sull'anello pilot."}}</p>{{end}}
+{{if $.IsAdmin}}<p class="muted">{{t "Impostando una versione obiettivo, gli agenti di quell'anello si aggiornano da soli, con ritorno automatico alla versione precedente se la nuova non si collega. Prova prima sull'anello pilot."}}</p>
+<form method="post" action="/updates/auto-pilot" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label class="check"><input type="checkbox" name="auto" value="1"{{if .AutoPilot}} checked{{end}}> {{t "Ogni nuova release diventa subito l'obiettivo dell'anello pilot (broad resta manuale)"}}</label>
+  <button>{{t "Salva"}}</button>
+</form>{{end}}
 <table>
 <thead><tr><th>{{t "Versione"}}</th><th>{{t "Piattaforma"}}</th><th>{{t "Chiave"}}</th><th>{{t "Pubblicata"}}</th><th>{{t "Note"}}</th>{{if $.IsAdmin}}<th>{{t "Aggiorna gli agenti"}}</th>{{end}}</tr></thead>
 <tbody>

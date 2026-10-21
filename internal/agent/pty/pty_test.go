@@ -4,9 +4,11 @@ package pty
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 )
 
 func TestShellOnPTY(t *testing.T) {
@@ -45,5 +47,24 @@ func TestShellOnPTY(t *testing.T) {
 	p.Close()
 	if _, err := p.Read(make([]byte, 10)); err == nil {
 		t.Fatal("read after close")
+	}
+}
+
+func TestEnvBlock(t *testing.T) {
+	b, err := envBlock([]string{"A=1", "PATH=C:\\Windows", "È=ü"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := append(append(append(utf16.Encode([]rune("A=1")), 0), append(utf16.Encode([]rune("PATH=C:\\Windows")), 0)...), append(utf16.Encode([]rune("È=ü")), 0, 0)...)
+	if !slices.Equal(b, want) {
+		t.Fatalf("block = %v", b)
+	}
+	if b, _ := envBlock(nil); !slices.Equal(b, []uint16{0, 0}) {
+		t.Fatalf("empty block = %v", b)
+	}
+	for _, bad := range []string{"A=1\x00B=2", "NOEQUALS"} {
+		if _, err := envBlock([]string{bad}); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
 	}
 }

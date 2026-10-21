@@ -34,6 +34,9 @@ type Settings struct {
 	// WebP, at most 256 KB), with its media type.
 	Logo     []byte `json:"logo,omitempty"`
 	LogoType string `json:"logo_type,omitempty"`
+	// PilotManual turns off the default: every newly published agent
+	// release becomes the target of the pilot ring at once.
+	PilotManual bool `json:"pilot_manual,omitempty"`
 }
 
 // Check statuses.

@@ -200,24 +200,36 @@ func (s *Server) handleADReader(w http.ResponseWriter, r *http.Request) {
 	s.flash(w, r, s.T(r, "Questo server non legge più Active Directory."), back)
 }
 
-// handleSetRing moves an agent to the pilot or broad update ring.
+// handleSetRing moves agents to the pilot or broad update ring: the one in
+// the path, or the "agent" values of a selection.
 func (s *Server) handleSetRing(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
-	id := r.PathValue("id")
 	ring := r.PostFormValue("ring")
-	if !ok || !ids.IsUUID(id) || !store.ValidRing(ring) {
+	agents := r.PostForm["agent"]
+	if id := r.PathValue("id"); id != "" {
+		agents = []string{id}
+	}
+	if !ok || !store.ValidRing(ring) || len(agents) == 0 || len(agents) > 1000 {
 		http.NotFound(w, r)
 		return
 	}
 	back := r.PostFormValue("return")
 	if !strings.HasPrefix(back, "/agents") {
-		back = "/agents/" + id
-	}
-	if err := s.store.SetAgentRing(r.Context(), t, id, ring); err != nil {
-		s.fail(w, r, err)
-		return
+		back = "/agents"
+		if len(agents) == 1 {
+			back += "/" + agents[0]
+		}
 	}
 	op := sessionFrom(r.Context()).data.Operator
-	s.audit(r.Context(), t, op, "agent.ring_set", id, map[string]any{"ring": ring})
+	for _, id := range agents {
+		if !ids.IsUUID(id) {
+			continue
+		}
+		if err := s.store.SetAgentRing(r.Context(), t, id, ring); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.audit(r.Context(), t, op, "agent.ring_set", id, map[string]any{"ring": ring})
+	}
 	s.flash(w, r, s.Tf(r, "Anello aggiornamenti: %s.", ring), back)
 }

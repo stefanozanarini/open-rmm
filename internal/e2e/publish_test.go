@@ -162,13 +162,19 @@ func TestConsolePublishWithBuilderKeys(t *testing.T) {
 		t.Fatal("approval reused")
 	}
 
-	// Release.
+	// Release, with the automatic pilot target turned off.
+	if _, body, _ := post(t, c, e.console.URL+"/updates/auto-pilot", url.Values{"csrf": {csrf}}); !strings.Contains(body, "Impostazione salvata") {
+		t.Fatal("auto-pilot setting")
+	}
 	approvePublish(t, e, c, csrf, "/updates/publish", "release")
 	rf := [][2]string{{"csrf", csrf}, {"version", "1.2.4"}, {"platform", "windows/amd64"}, {"notes", "test"}, {"passphrase", installerPass}}
 	_, body = postMultipart(t, c, e.console.URL+"/updates/publish/upload", rf,
 		map[string][]byte{"agent": []byte("MZ agent 1.2.4"), "watchdog": []byte("MZ watchdog 1.2.4")})
 	if !strings.Contains(body, "Release 1.2.4 per windows/amd64 firmata e pubblicata") {
 		t.Fatalf("publish release: %s", body)
+	}
+	if targets, _ := e.store.ListReleaseTargets(ctx, e.tenant); len(targets) != 0 {
+		t.Fatalf("pilot targeted although turned off: %+v", targets)
 	}
 	rel, err := e.store.GetRelease(ctx, "1.2.4", "windows/amd64")
 	if err != nil {
@@ -264,6 +270,11 @@ func TestConsoleInstallerFromBundledAgent(t *testing.T) {
 	rel, err := e.store.GetRelease(ctx, "2.0.0", "windows/amd64")
 	if err != nil || rel.PublishedBy != "operator:"+admin.Username {
 		t.Fatalf("bundled release: %+v, %v", rel.PublishedBy, err)
+	}
+	// The new release is the pilot ring's target at once; broad is untouched.
+	targets, _ := e.store.ListReleaseTargets(ctx, e.tenant)
+	if len(targets) != 1 || targets[0].Ring != "pilot" || targets[0].Version != "2.0.0" {
+		t.Fatalf("targets = %+v", targets)
 	}
 	// Published: no longer offered as bundled.
 	if _, body := get(t, c, e.console.URL+"/updates"); strings.Contains(body, `name="bundled"`) || strings.Contains(html.UnescapeString(body), "non è ancora pubblicata") {
