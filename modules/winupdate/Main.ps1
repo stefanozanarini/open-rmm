@@ -161,6 +161,26 @@ function Get-Checks($Updates, $Pending, [int]$MaxAgeDays) {
     $checks
 }
 
+# Get-History lists the latest installations recorded by Windows Update,
+# newest first: what is already installed, and what failed.
+function Get-History($Searcher) {
+    $out = @()
+    try {
+        $n = $Searcher.GetTotalHistoryCount()
+        if ($n -le 0) { return @() }
+        foreach ($h in $Searcher.QueryHistory(0, [Math]::Min($n, 200))) {
+            if ($h.Operation -ne 1) { continue } # 1 = installation
+            $title = [string]$h.Title
+            $kbs = @([regex]::Matches($title, 'KB\d{6,8}') | ForEach-Object { $_.Value.ToUpper() } | Select-Object -Unique)
+            $date = $null
+            if ($h.Date -is [datetime]) { $date = $h.Date.ToUniversalTime().ToString('o') }
+            $out += @{ title = $title; kbs = $kbs; date = $date; result = $resultCodes[[int]$h.ResultCode] }
+        }
+    }
+    catch { Send-RmmLog "history: $($_.Exception.Message)" 'warn' }
+    $out
+}
+
 function New-Report($Session, $Request, $Params) {
     $mgmt = Get-Management
     $scan = Invoke-Scan $Session
@@ -175,6 +195,7 @@ function New-Report($Session, $Request, $Params) {
         updates        = $updates
         pending_reboot = $pending
         last_success   = Get-LastSuccess $scan.searcher
+        history        = @(Get-History $scan.searcher)
         checks         = @(Get-Checks $updates $pending ([int]$maxAge))
     }
 }

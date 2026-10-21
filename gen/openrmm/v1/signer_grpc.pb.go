@@ -22,6 +22,7 @@ const (
 	SignerService_SignJob_FullMethodName      = "/openrmm.v1.SignerService/SignJob"
 	SignerService_SignPolicy_FullMethodName   = "/openrmm.v1.SignerService/SignPolicy"
 	SignerService_SignBaseline_FullMethodName = "/openrmm.v1.SignerService/SignBaseline"
+	SignerService_SignCollect_FullMethodName  = "/openrmm.v1.SignerService/SignCollect"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -43,6 +44,10 @@ type SignerServiceClient interface {
 	// operator: only fixed read-only collections, at fixed intervals and
 	// without parameters, for a tenant of this console.
 	SignBaseline(ctx context.Context, in *SignBaselineRequest, opts ...grpc.CallOption) (*SignPolicyResponse, error)
+	// SignCollect signs an on-demand run of a standard read-only collection
+	// (the actions of the automatic collection) without an operator: no
+	// parameters, no packages, at most one hour, for a tenant of this console.
+	SignCollect(ctx context.Context, in *SignCollectRequest, opts ...grpc.CallOption) (*SignJobResponse, error)
 }
 
 type signerServiceClient struct {
@@ -83,6 +88,16 @@ func (c *signerServiceClient) SignBaseline(ctx context.Context, in *SignBaseline
 	return out, nil
 }
 
+func (c *signerServiceClient) SignCollect(ctx context.Context, in *SignCollectRequest, opts ...grpc.CallOption) (*SignJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignJobResponse)
+	err := c.cc.Invoke(ctx, SignerService_SignCollect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SignerServiceServer is the server API for SignerService service.
 // All implementations must embed UnimplementedSignerServiceServer
 // for forward compatibility.
@@ -102,6 +117,10 @@ type SignerServiceServer interface {
 	// operator: only fixed read-only collections, at fixed intervals and
 	// without parameters, for a tenant of this console.
 	SignBaseline(context.Context, *SignBaselineRequest) (*SignPolicyResponse, error)
+	// SignCollect signs an on-demand run of a standard read-only collection
+	// (the actions of the automatic collection) without an operator: no
+	// parameters, no packages, at most one hour, for a tenant of this console.
+	SignCollect(context.Context, *SignCollectRequest) (*SignJobResponse, error)
 	mustEmbedUnimplementedSignerServiceServer()
 }
 
@@ -120,6 +139,9 @@ func (UnimplementedSignerServiceServer) SignPolicy(context.Context, *SignPolicyR
 }
 func (UnimplementedSignerServiceServer) SignBaseline(context.Context, *SignBaselineRequest) (*SignPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SignBaseline not implemented")
+}
+func (UnimplementedSignerServiceServer) SignCollect(context.Context, *SignCollectRequest) (*SignJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignCollect not implemented")
 }
 func (UnimplementedSignerServiceServer) mustEmbedUnimplementedSignerServiceServer() {}
 func (UnimplementedSignerServiceServer) testEmbeddedByValue()                       {}
@@ -196,6 +218,24 @@ func _SignerService_SignBaseline_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_SignCollect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignCollectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).SignCollect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_SignCollect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).SignCollect(ctx, req.(*SignCollectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SignerService_ServiceDesc is the grpc.ServiceDesc for SignerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -214,6 +254,10 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SignBaseline",
 			Handler:    _SignerService_SignBaseline_Handler,
+		},
+		{
+			MethodName: "SignCollect",
+			Handler:    _SignerService_SignCollect_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

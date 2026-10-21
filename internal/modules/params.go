@@ -196,10 +196,13 @@ func BuildParams(specs []ParamSpec, get func(name string) []string) (map[string]
 			}
 			out[p.Name] = sel
 		case ParamList:
+			// One text field (a value per line), or several fields.
 			var items []string
-			for _, f := range strings.FieldsFunc(first, func(r rune) bool { return r == '\n' || r == '\r' || r == ',' }) {
-				if f = strings.TrimSpace(f); f != "" {
-					items = append(items, f)
+			for _, v := range vals {
+				for _, f := range strings.FieldsFunc(v, func(r rune) bool { return r == '\n' || r == '\r' || r == ',' }) {
+					if f = strings.TrimSpace(f); f != "" && !slices.Contains(items, f) {
+						items = append(items, f)
+					}
 				}
 			}
 			if len(items) == 0 {

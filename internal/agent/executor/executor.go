@@ -432,6 +432,14 @@ func truncate(s string, n int) string {
 // finish stores a final job update in the outbox and sends it.
 func (e *Executor) finish(u *openrmmv1.JobUpdate) { e.finishMsg(u.GetJobId(), jobMsg(u)) }
 
+// Reject reports an authentic job that cannot be run.
+func (e *Executor) Reject(jobID, reason string) {
+	if !ids.IsUUID(jobID) {
+		return
+	}
+	e.finish(&openrmmv1.JobUpdate{JobId: jobID, State: openrmmv1.JobUpdate_STATE_REJECTED, Error: reason})
+}
+
 func (e *Executor) finishMsg(id string, m *openrmmv1.AgentMessage) {
 	raw, err := proto.Marshal(m)
 	if err == nil {

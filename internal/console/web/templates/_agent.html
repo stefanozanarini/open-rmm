@@ -70,13 +70,37 @@
 {{with .Windows}}
 <p class="muted">{{tf "Windows Update verificato il %s" (fmtTime .ScannedAt)}} · {{tf "gestione: %s" (label .ManagedBy)}}{{if ne .ManagedBy "none"}} ({{t "open-rmm osserva soltanto"}}{{with .WSUSServer}}, {{tf "server %s" .}}{{end}}){{end}}{{with .LastSuccess}} · {{tf "ultima installazione riuscita %s" (isoDate .)}}{{end}}</p>
 {{if .PendingReboot.Required}}<p><span class="badge chk-warning">{{t "riavvio in sospeso"}}</span>{{with .PendingReboot.Since}} {{tf "dal %s" (isoDate .)}}{{end}} <span class="muted">({{range $i, $r := .PendingReboot.Reasons}}{{if $i}}, {{end}}{{label $r}}{{end}})</span></p>{{end}}
-{{if .Updates}}
-<table>
-<thead><tr><th>{{t "Aggiornamento"}}</th><th>KB</th><th>{{t "Tipo"}}</th><th>{{t "Uscito"}}</th></tr></thead>
-<tbody>{{range .Updates}}<tr><td>{{.Title}}</td><td>{{range .KBs}}{{.}} {{end}}</td>
-<td>{{if .Important}}<span class="badge chk-failing">{{if eq .Classification "critical"}}{{t "critico"}}{{else}}{{t "sicurezza"}}{{end}}</span>{{else}}{{label .Classification}}{{end}}{{with .Severity}} <span class="muted">{{.}}</span>{{end}}</td>
-<td>{{isoDate .Released}}</td></tr>{{end}}</tbody>
+{{$u := $.Data.Updates}}
+<div class="toolbar">
+  {{if and $.CanRun $u.WinupdateVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
+    <input type="hidden" name="module" value="winupdate"><input type="hidden" name="action" value="scan">
+    <button>↻ {{t "Cerca aggiornamenti ora"}}</button></form>{{end}}
+  <form method="get" action="{{if $.Data.Panel}}/agents{{else}}/agents/{{$.Data.Agent.ID}}{{end}}" class="inline">
+    {{if $.Data.Panel}}<input type="hidden" name="agent" value="{{$.Data.Agent.ID}}"><input type="hidden" name="tab" value="patches">{{end}}
+    <input type="search" name="pq" value="{{$u.Query}}" placeholder="{{t "Cerca per nome o KB"}}" aria-label="{{t "Cerca"}}"> <button>{{t "Cerca"}}</button></form>
+</div>
+{{if $u.Rows}}
+<form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <input type="hidden" name="target" value="winupdate|{{$u.WinupdateVersion}}|install">
+  <input type="hidden" name="ttl_minutes" value="480">
+  {{range $u.Classifications}}<input type="hidden" name="p.classifications" value="{{.}}">{{end}}
+<table class="patches">
+<thead><tr><th></th><th>{{t "Stato"}}</th><th>{{t "Gravità"}}</th><th>{{t "Aggiornamento"}}</th><th>KB</th><th>{{t "Data"}}</th></tr></thead>
+<tbody>{{range $u.Rows}}<tr>
+  <td>{{if and (eq .State "missing") .KBs $.CanRun}}<input type="checkbox" name="p.include_kbs" value="{{index .KBs 0}}"{{if .Selected}} checked{{end}} aria-label="{{t "seleziona"}}">{{end}}</td>
+  <td>{{if eq .State "missing"}}<span class="badge chk-warning">{{t "da installare"}}</span>{{else if eq .State "succeeded"}}<span class="badge chk-ok">✓ {{t "installato"}}</span>{{else if eq .State "failed"}}<span class="badge chk-failing">✗ {{t "non riuscito"}}</span>{{else}}<span class="badge">{{label .State}}</span>{{end}}</td>
+  <td>{{if or (eq .Severity "Critical") (eq .Severity "critical")}}<span class="badge chk-failing">{{label .Severity}}</span>{{else}}{{label .Severity}}{{end}}</td>
+  <td>{{.Title}}</td>
+  <td>{{range .KBs}}{{.}} {{end}}{{with .Link}}<a href="{{.}}" target="_blank" rel="noopener noreferrer" title="{{t "Informazioni su support.microsoft.com"}}">↗</a>{{end}}</td>
+  <td>{{isoDate .Date}}</td>
+</tr>{{end}}</tbody>
 </table>
+{{if and $.CanRun $u.WinupdateVersion $u.Missing}}<div class="actions"><button class="primary">{{t "Installa i selezionati"}}</button>
+  <span class="muted">{{t "Richiede l'approvazione MFA. Il PC non viene riavviato: il riavvio necessario viene segnalato."}}</span></div>{{end}}
+</form>
+{{else if $u.Query}}<p class="muted">{{t "Nessun aggiornamento corrisponde alla ricerca."}}</p>
 {{else}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento di Windows mancante."}}</p>{{end}}
 {{end}}
 {{with .Winget}}
@@ -219,7 +243,7 @@
 
 {{define "agent-actions"}}
 {{if and .CanRun .Data.Shell}}
-<h2>{{t "Shell interattiva"}}</h2>
+<h2 id="act-shell">{{t "Shell interattiva"}}</h2>
 <form method="post" action="/agents/{{.Data.Agent.ID}}/shell" class="inline">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <label>{{t "Durata"}} <select name="minutes"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">60 min</option></select></label>
@@ -228,7 +252,7 @@
 <p class="muted">{{t "Una sessione PowerShell su questo PC, approvata con MFA. Il PC deve consentirla con la policy locale (GPO) e ogni riga digitata è registrata."}}</p>
 {{end}}
 {{if and .CanRun .Data.Packages (eq .Data.Agent.Status "active")}}
-<h2>{{t "Installa software"}}</h2>
+<h2 id="install-software">{{t "Installa software"}}</h2>
 <form method="post" action="/agents/bulk" class="inline">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <input type="hidden" name="agent" value="{{.Data.Agent.ID}}">
@@ -239,10 +263,10 @@
 {{end}}
 {{if and .CanRun .Data.Actions}}
 {{$csrf := .CSRF}}{{$id := .Data.Agent.ID}}
-<h2>{{t "Esegui un comando"}}</h2>
+<h2 id="commands">{{t "Esegui un comando"}}</h2>
 <p class="muted">{{t "Prima dell'esecuzione ti verrà chiesto di autenticarti di nuovo con Microsoft: l'approvazione vale solo per quel comando."}}</p>
 {{range .Data.Commands}}
-<details class="action">
+<details class="action" id="act-{{.Module}}-{{.Action}}">
 <summary><strong>{{.Module}}</strong> · {{.Action}}{{if .Description}} <span class="muted">— {{.Description}}</span>{{end}}</summary>
 <form method="post" action="/agents/{{$id}}/jobs" class="stack">
   <input type="hidden" name="csrf" value="{{$csrf}}">
@@ -254,7 +278,7 @@
 </details>
 {{end}}
 {{range .Data.Scripts}}
-<h3>{{t "Script PowerShell"}}</h3>
+<h3 id="act-script">{{t "Script PowerShell"}}</h3>
 <form method="post" action="/agents/{{$id}}/jobs" class="stack">
   <input type="hidden" name="csrf" value="{{$csrf}}">
   <input type="hidden" name="target" value="{{.Module}}|{{.Version}}|{{.Action}}">

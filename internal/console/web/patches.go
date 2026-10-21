@@ -197,6 +197,59 @@ type agentUpdates struct {
 	FirmwareVersion string
 	Summary         updates.Summary
 	HasReport       bool
+	// Patch table: missing and installed Windows updates, filtered by
+	// Query; WinupdateVersion is the module version used to install.
+	Rows             []updateRow
+	Missing          int
+	Query            string
+	WinupdateVersion string
+	Classifications  []string
+}
+
+// updateRow is a Windows update in the patch table of an agent.
+type updateRow struct {
+	State    string // missing | succeeded | failed | other result
+	Severity string
+	Title    string
+	KBs      []string
+	Link     string // Microsoft support page of the first KB
+	Date     *time.Time
+	Selected bool
+}
+
+// kbLink is the Microsoft support page of a KB article.
+func kbLink(kbs []string) string {
+	if len(kbs) == 0 {
+		return ""
+	}
+	return "https://support.microsoft.com/help/" + strings.TrimPrefix(kbs[0], "KB")
+}
+
+func updateRows(rep *updates.WindowsReport, q string) ([]updateRow, int) {
+	var out []updateRow
+	missing := 0
+	match := func(title string, kbs []string) bool {
+		return q == "" || contains(title, q) || contains(strings.Join(kbs, " "), q)
+	}
+	for _, u := range rep.Updates {
+		missing++
+		if !match(u.Title, u.KBs) {
+			continue
+		}
+		sev := u.Severity
+		if sev == "" {
+			sev = u.Classification
+		}
+		out = append(out, updateRow{State: "missing", Severity: sev, Title: u.Title, KBs: u.KBs, Link: kbLink(u.KBs),
+			Date: u.Released, Selected: u.Important()})
+	}
+	for _, h := range rep.History {
+		if !match(h.Title, h.KBs) {
+			continue
+		}
+		out = append(out, updateRow{State: h.Result, Title: h.Title, KBs: h.KBs, Link: kbLink(h.KBs), Date: h.Date})
+	}
+	return out, missing
 }
 
 func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdates, error) {
@@ -225,12 +278,18 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 			}
 		}
 	}
+	latest, err := s.latestModules(r)
+	if err != nil {
+		return out, err
+	}
 	if out.Firmware != nil {
-		latest, err := s.latestModules(r)
-		if err != nil {
-			return out, err
-		}
 		out.FirmwareVersion = latest[updates.FirmwareModule]
+	}
+	out.WinupdateVersion = latest["winupdate"]
+	out.Classifications = []string{"security", "critical", "rollup", "update", "definition", "driver", "feature_pack", "service_pack", "tools", "upgrade"}
+	if out.Windows != nil {
+		out.Query = strings.TrimSpace(r.URL.Query().Get("pq"))
+		out.Rows, out.Missing = updateRows(out.Windows, out.Query)
 	}
 	return out, nil
 }

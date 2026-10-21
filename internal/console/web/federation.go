@@ -479,7 +479,7 @@ func (s *Server) fedSession(ctx context.Context, a federation.Operator, op *Oper
 	if slices.Contains(languages, a.Lang) {
 		sess.data.Lang = a.Lang
 	}
-	if a.Theme == "" || a.Theme == "light" || a.Theme == "dark" {
+	if a.Theme == "" || a.Theme == "light" || a.Theme == "dark" || a.Theme == "auto" {
 		sess.data.Theme = a.Theme
 	}
 	return sess, nil

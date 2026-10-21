@@ -82,6 +82,14 @@ func (s *Server) jobParams(r *http.Request, mod store.Module, man *modules.Manif
 			return p, ""
 		}
 	}
+	// Form fields without a description to read them: refusing is safer
+	// than running the action with its defaults (e.g. every update instead
+	// of the selected ones).
+	for k := range r.PostForm {
+		if strings.HasPrefix(k, "p.") {
+			return nil, s.T(r, "Questo modulo non descrive i suoi parametri: impossibile eseguire l'azione con i valori scelti.")
+		}
+	}
 	params := map[string]any{}
 	if raw := strings.TrimSpace(r.PostFormValue("params")); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &params); err != nil {

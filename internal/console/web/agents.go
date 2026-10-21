@@ -428,7 +428,7 @@ func (s *Server) handleSaveSite(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTheme(w http.ResponseWriter, r *http.Request) {
 	sess := sessionFrom(r.Context())
 	switch th := r.PostFormValue("theme"); th {
-	case "light", "dark", "":
+	case "light", "dark", "auto", "":
 		sess.data.Theme = th
 	}
 	if err := s.save(r.Context(), w, sess); err != nil {

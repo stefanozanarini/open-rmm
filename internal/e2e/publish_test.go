@@ -289,12 +289,12 @@ func TestConsolePublishBundledModules(t *testing.T) {
 	}
 	approvePublish(t, e, c, csrf, "/modules/publish", "module")
 	_, body, _ := post(t, c, e.console.URL+"/modules/publish/bundled", url.Values{"csrf": {csrf}, "passphrase": {installerPass},
-		"module": {"inventory@1.0.0", "winupdate@1.0.0"}})
-	if !strings.Contains(body, "Moduli firmati e pubblicati: inventory 1.0.0, winupdate 1.0.0") {
+		"module": {"inventory@1.0.0", "winupdate@1.1.0"}})
+	if !strings.Contains(body, "Moduli firmati e pubblicati: inventory 1.0.0, winupdate 1.1.0") {
 		t.Fatalf("publish: %s", body)
 	}
-	for _, id := range []string{"inventory", "winupdate"} {
-		if _, err := e.store.GetModule(ctx, id, "1.0.0"); err != nil {
+	for id, v := range map[string]string{"inventory": "1.0.0", "winupdate": "1.1.0"} {
+		if _, err := e.store.GetModule(ctx, id, v); err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
 	}
@@ -320,7 +320,7 @@ func TestConsolePublishBundledModules(t *testing.T) {
 	for _, r := range p.Rules {
 		modules = append(modules, r.Module+"@"+r.ModuleVersion)
 	}
-	if strings.Join(modules, ",") != "inventory@1.0.0,winupdate@1.0.0" {
+	if strings.Join(modules, ",") != "inventory@1.0.0,winupdate@1.1.0" {
 		t.Fatalf("rules = %v", modules)
 	}
 	// Unchanged modules: no new version. Operators cannot edit it.
@@ -339,7 +339,7 @@ func TestConsolePublishBundledModules(t *testing.T) {
 		!strings.Contains(body, `name="p.allow_managed"`) {
 		t.Fatalf("parameter fields missing: %s", body)
 	}
-	form := url.Values{"csrf": {csrf}, "target": {"winupdate|1.0.0|install"}, "p.classifications": {"security", "critical"},
+	form := url.Values{"csrf": {csrf}, "target": {"winupdate|1.1.0|install"}, "p.classifications": {"security", "critical"},
 		"p.include_kbs": {"KB5034441"}, "ttl_minutes": {"60"}}
 	if code, _, _ := post(t, c, e.console.URL+"/agents/"+pc+"/jobs", form); code != 200 {
 		t.Fatalf("run: %d", code)

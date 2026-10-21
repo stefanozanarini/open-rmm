@@ -1,11 +1,12 @@
 <!doctype html>
-<html lang="{{.Lang}}"{{with .Theme}} data-theme="{{.}}"{{end}}>
+<html lang="{{.Lang}}"{{if eq .Theme "light"}} data-theme="light"{{else if ne .Theme "auto"}} data-theme="dark"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 {{if .Refresh}}<meta http-equiv="refresh" content="{{.Refresh}}">{{end}}
 <title>{{.Title}} · open-rmm</title>
 <link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
 </head>
 <body>
 <header>
@@ -38,7 +39,7 @@
     {{else}}<span class="tenant">{{.Tenant.Name}}</span>{{end}}
     <form method="post" action="/theme" class="inline theme">
       <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="return" value="{{.Path}}">
-      <select name="theme" aria-label="{{t "Tema"}}"><option value="" {{if not .Theme}}selected{{end}}>{{t "Tema automatico"}}</option><option value="light" {{if eq .Theme "light"}}selected{{end}}>{{t "Chiaro"}}</option><option value="dark" {{if eq .Theme "dark"}}selected{{end}}>{{t "Scuro"}}</option></select>
+      <select name="theme" aria-label="{{t "Tema"}}"><option value="dark" {{if or (eq .Theme "dark") (not .Theme)}}selected{{end}}>{{t "Scuro"}}</option><option value="light" {{if eq .Theme "light"}}selected{{end}}>{{t "Chiaro"}}</option><option value="auto" {{if eq .Theme "auto"}}selected{{end}}>{{t "Tema automatico"}}</option></select>
       <button>{{t "Applica"}}</button>
     </form>
     <span>{{.Operator.Username}}</span>

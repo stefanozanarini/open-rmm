@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/open-rmm/internal/agent/jobs"
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
 	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
 	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
@@ -629,5 +630,31 @@ func TestRefusedStepUpShowsMessage(t *testing.T) {
 		url.Values{"csrf": {csrf}, "target": {"sysinfo|1.0.0|info"}, "ttl_minutes": {"60"}})
 	if code != 200 || final.Path != "/agents/"+e.agentID || !strings.Contains(html.UnescapeString(body), "rifiutato") {
 		t.Fatalf("refused step-up: %d at %s", code, final)
+	}
+}
+
+// A job approved for the longest validity is still accepted by agents,
+// which refuse windows over jobs.MaxLifetime (the signer starts the window a
+// minute early for clock skew).
+func TestLongestJobAcceptedByAgents(t *testing.T) {
+	e := startConsole(t)
+	ctx := context.Background()
+	req := &openrmmv1.JobRequest{TenantId: e.tenant, AgentId: e.agentID, Module: "sysinfo", ModuleVersion: "1.0.0",
+		ModuleSha256: e.module.ManifestHash, Action: "info", ParamsJson: []byte("{}"), TtlSeconds: int64(jobreq.MaxTTL / time.Second),
+		RequestNonce: jobreq.NewRequestNonce()}
+	resp, err := e.signer.SignJob(ctx, &openrmmv1.SignJobRequest{Request: req, IdToken: e.tokenFor(t, admin, jobreq.AuthNonce(req))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env openrmmv1.SignedEnvelope
+	if err := proto.Unmarshal(resp.GetEnvelope(), &env); err != nil {
+		t.Fatal(err)
+	}
+	v, err := jobs.NewVerifier(e.jobKeys, e.tenant, e.agentID, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.Verify(&env, time.Now()); err != nil {
+		t.Fatalf("agent refused a 24-hour job: %v", err)
 	}
 }

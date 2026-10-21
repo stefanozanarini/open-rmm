@@ -2,7 +2,7 @@
 <table class="agents">
 <thead><tr>{{if .Select}}<th></th>{{end}}<th>{{t "Nome"}}</th><th>{{t "Stato"}}</th><th>{{t "Sede"}}</th><th>{{t "Utente"}}</th><th>{{t "Modello"}}</th><th>{{t "Sistema"}}</th><th>Supremo</th><th>{{t "Ultimo contatto"}}</th></tr></thead>
 <tbody>
-{{range .Rows}}<tr{{if .Current}} class="current"{{end}}>
+{{range .Rows}}<tr data-agent="{{.ID}}" data-name="{{.Host.Hostname}}" data-status="{{.Status}}"{{if .Current}} class="current"{{end}}>
   {{if $.Select}}<td><input type="checkbox" name="agent" value="{{.ID}}"{{if .Checked}} checked{{end}} aria-label="{{tf "seleziona %s" .Host.Hostname}}"></td>{{end}}
   <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}}
     <a href="{{rowLink $.View .ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}
@@ -23,6 +23,27 @@
 </table>
 {{end}}
 {{define "content"}}
+<template id="agent-menu" data-csrf="{{.CSRF}}">
+<div class="ctxmenu" role="menu">
+  <p class="ctx-title"></p>
+  <a role="menuitem" data-page>{{t "Apri la pagina dell'agente"}}</a>
+  <a role="menuitem" data-tab="summary">{{t "Riepilogo"}}</a>
+  {{if .CanRun}}
+  <hr>
+  <a role="menuitem" data-only-active data-tab="commands" data-hash="act-reboot-reboot">⏻ {{t "Riavvia…"}}</a>
+  <a role="menuitem" data-only-active data-tab="commands" data-hash="commands">›_ {{t "Esegui un comando…"}}</a>
+  <a role="menuitem" data-only-active data-tab="commands" data-hash="act-script">{{t "Esegui uno script…"}}</a>
+  <a role="menuitem" data-only-active data-tab="commands" data-hash="act-shell">{{t "Shell interattiva…"}}</a>
+  <a role="menuitem" data-only-active data-tab="commands" data-hash="install-software">{{t "Installa software…"}}</a>
+  <hr>
+  <a role="menuitem" data-only-active data-tab="patches">{{t "Gestione patch"}}</a>
+  <button type="button" role="menuitem" data-only-active data-post="/agents/{id}/collect" data-module="winupdate" data-action="scan">↻ {{t "Cerca aggiornamenti ora"}}</button>
+  <button type="button" role="menuitem" data-only-active data-post="/agents/{id}/collect" data-module="inventory" data-action="collect">↻ {{t "Aggiorna inventario"}}</button>
+  <hr>
+  <a role="menuitem" data-only-active data-href="/agents/bulk?agent={id}">{{t "Sposta nella sede…"}}</a>
+  {{end}}
+</div>
+</template>
 {{with .Data}}
 <div class="workspace">
 <aside class="tree" aria-label="{{t "Sedi"}}">

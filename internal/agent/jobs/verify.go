@@ -33,6 +33,11 @@ const (
 
 var ErrReplay = errors.New("job already received")
 
+// ErrInvalid marks an authentic job addressed to this agent that cannot be
+// run (validity window, expiry, missing fields): Verify returns the job too,
+// so the agent can tell the console why instead of dropping it silently.
+var ErrInvalid = errors.New("invalid job")
+
 // Verifier checks job envelopes.
 type Verifier struct {
 	keys     *signing.Keyring
@@ -81,26 +86,26 @@ func (v *Verifier) Verify(env *openrmmv1.SignedEnvelope, now time.Time) (*openrm
 		return nil, errors.New("job addressed to another agent")
 	}
 	if !ids.IsUUID(job.GetJobId()) || job.GetModule() == "" || job.GetAction() == "" {
-		return nil, errors.New("job is missing required fields")
+		return job, fmt.Errorf("%w: %s", ErrInvalid, "job is missing required fields")
 	}
 	if len(job.GetModuleSha256()) != 32 {
-		return nil, errors.New("job must pin the module hash")
+		return job, fmt.Errorf("%w: %s", ErrInvalid, "job must pin the module hash")
 	}
 	if err := pkgref.Validate(job.GetPackages()); err != nil {
-		return nil, err
+		return job, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	if n := len(job.GetNonce()); n < 16 || n > 64 {
-		return nil, errors.New("job nonce must be 16-64 bytes")
+		return job, fmt.Errorf("%w: %s", ErrInvalid, "job nonce must be 16-64 bytes")
 	}
 	nb, exp := time.Unix(job.GetNotBeforeUnix(), 0), time.Unix(job.GetExpiresUnix(), 0)
 	if !exp.After(nb) || exp.Sub(nb) > MaxLifetime {
-		return nil, errors.New("job validity window invalid")
+		return job, fmt.Errorf("%w: %s", ErrInvalid, "job validity window invalid")
 	}
 	if now.Add(clockSkew).Before(nb) {
-		return nil, errors.New("job not yet valid")
+		return job, fmt.Errorf("%w: %s", ErrInvalid, "job not yet valid")
 	}
 	if now.Add(-clockSkew).After(exp) {
-		return nil, errors.New("job expired")
+		return job, fmt.Errorf("%w: %s", ErrInvalid, "job expired")
 	}
 	if err := v.remember(job.GetNonce(), exp.Add(clockSkew), now); err != nil {
 		if errors.Is(err, ErrReplay) {

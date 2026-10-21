@@ -106,15 +106,21 @@ func (s *Server) SignJob(ctx context.Context, req *openrmmv1.SignJobRequest) (*o
 		return deny("authentication already used", err)
 	}
 
+	return s.issue(r, operatorOf(claims, v), now)
+}
+
+// issue signs one job per target of r.
+func (s *Server) issue(r *openrmmv1.JobRequest, op string, now time.Time) (*openrmmv1.SignJobResponse, error) {
 	ttl := time.Duration(r.GetTtlSeconds()) * time.Second
-	op := operatorOf(claims, v)
 	resp := &openrmmv1.SignJobResponse{Operator: op}
 	for _, agent := range jobreq.Targets(r) {
 		job := &openrmmv1.Job{
 			JobId: ids.NewUUID(), TenantId: r.GetTenantId(), AgentId: agent,
 			Module: r.GetModule(), ModuleVersion: r.GetModuleVersion(), ModuleSha256: r.GetModuleSha256(),
 			Action: r.GetAction(), ParamsJson: r.GetParamsJson(), Packages: r.GetPackages(),
-			NotBeforeUnix: now.Add(-time.Minute).Unix(), ExpiresUnix: now.Add(ttl).Unix(),
+			// The window starts a minute early for clock skew and lasts
+			// exactly ttl: agents refuse windows longer than 24 hours.
+			NotBeforeUnix: now.Add(-time.Minute).Unix(), ExpiresUnix: now.Add(-time.Minute).Add(ttl).Unix(),
 			Nonce: ids.Random(16),
 		}
 		payload, err := proto.Marshal(job)
@@ -137,6 +143,38 @@ func (s *Server) SignJob(ctx context.Context, req *openrmmv1.SignJobRequest) (*o
 		resp.JobId, resp.Envelope = resp.Jobs[0].GetJobId(), resp.Jobs[0].GetEnvelope()
 	}
 	return resp, nil
+}
+
+// MaxCollectTTL bounds an on-demand collection.
+const MaxCollectTTL = time.Hour
+
+// SignCollect signs an on-demand run of a standard collection (inventory,
+// update scans, protection status...) without an operator, like the
+// automatic collection: only the read-only actions of policy.BaselineRules,
+// without parameters or packages, for at most an hour, in a tenant of this
+// console. What runs is still pinned to a module signed with the module key.
+func (s *Server) SignCollect(_ context.Context, req *openrmmv1.SignCollectRequest) (*openrmmv1.SignJobResponse, error) {
+	r := req.GetRequest()
+	if err := jobreq.Validate(r); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	deny := func(reason string) (*openrmmv1.SignJobResponse, error) {
+		s.log.Warn("collection refused", "reason", reason, "tenant", r.GetTenantId(), "module", r.GetModule(), "action", r.GetAction())
+		return nil, status.Error(codes.PermissionDenied, reason)
+	}
+	if !s.ownTenant(r.GetTenantId()) {
+		return deny("tenant not managed by this console")
+	}
+	if !policy.IsCollection(r.GetModule(), r.GetAction()) {
+		return deny("not a standard collection")
+	}
+	if p := string(r.GetParamsJson()); p != "" && p != "{}" {
+		return deny("collections take no parameters")
+	}
+	if len(r.GetPackages()) > 0 || time.Duration(r.GetTtlSeconds())*time.Second > MaxCollectTTL {
+		return deny("collections carry no packages and last at most an hour")
+	}
+	return s.issue(r, "automatic (collection)", s.now())
 }
 
 // usedTokens remembers consumed step-up nonces until their tokens expire.

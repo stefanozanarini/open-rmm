@@ -278,6 +278,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agents/{id}/approve", s.role(authn.RoleAdmin, s.handleApprove))
 	mux.Handle("POST /agents/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevoke))
 	mux.Handle("POST /agents/{id}/jobs", s.role(authn.RoleOperator, s.handleRunJob))
+	mux.Handle("POST /agents/{id}/collect", s.role(authn.RoleOperator, s.handleCollect))
 	mux.Handle("POST /agents/{id}/firmware", s.role(authn.RoleOperator, s.handleFirmwareInstall))
 	mux.Handle("POST /agents/{id}/shell", s.role(authn.RoleOperator, s.handleOpenShell))
 	mux.Handle("GET /shell/{id}", s.role(authn.RoleOperator, s.handleShellPage))
@@ -351,7 +352,8 @@ func (s *Server) Handler() http.Handler {
 
 // secure sets the security headers on every response.
 func (s *Server) secure(next http.Handler) http.Handler {
-	csp := "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self' " + s.idpHost +
+	// Scripts only from the console's own static files, never inline.
+	csp := "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self' " + s.idpHost +
 		"; frame-ancestors 'none'; base-uri 'none'"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -455,9 +457,11 @@ type page struct {
 	Refresh  int
 	// OpenAlerts is shown in the navigation.
 	OpenAlerts int
-	Theme      string
-	Lang       string
-	Path       string
+	// Theme is the operator's choice: "" (the default, dark), light, dark
+	// or auto (follows the browser).
+	Theme string
+	Lang  string
+	Path  string
 	// Federation: Federated when a central console's operator works on
 	// this console; ShowLinks shows the linked consoles page in the menu.
 	Federated bool

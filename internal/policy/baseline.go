@@ -39,6 +39,16 @@ var BaselineRules = []BaselineRule{
 	{"adinventory", "collect", 24 * time.Hour, &Condition{ServiceExists: "NTDS"}},
 }
 
+// IsCollection tells whether module/action is one of the collections.
+func IsCollection(module, action string) bool {
+	for _, b := range BaselineRules {
+		if b.Module == module && b.Action == action {
+			return true
+		}
+	}
+	return false
+}
+
 // ModuleRef is a published module version, pinned by its manifest hash.
 type ModuleRef struct {
 	Version string

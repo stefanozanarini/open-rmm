@@ -691,14 +691,20 @@ func (s *Server) publishRelease(r *http.Request, op *Operator, version, platform
 	return "", nil
 }
 
-// Params returns the params.json shipped for a module version, if any.
+// Params returns the params.json shipped for a module: for the same
+// version, or else for the shipped version of the same module (versions
+// published before params.json existed). The caller checks it against the
+// published manifest.
 func (mb ModuleBundle) Params(id, version string) []byte {
 	list, err := mb.List()
 	if err != nil {
 		return nil
 	}
-	for _, b := range list {
-		if b.Manifest.ID == id && b.Manifest.Version == version {
+	for _, exact := range []bool{true, false} {
+		for _, b := range list {
+			if b.Manifest.ID != id || (exact && b.Manifest.Version != version) {
+				continue
+			}
 			raw, err := os.ReadFile(filepath.Join(b.Dir, modules.ParamsFile))
 			if err == nil {
 				return raw

@@ -415,6 +415,9 @@ func (c *Client) handleJob(v *jobs.Verifier, exec *executor.Executor, env *openr
 	switch {
 	case errors.Is(err, jobs.ErrReplay):
 		exec.Replayed(job.GetJobId())
+	case errors.Is(err, jobs.ErrInvalid) && job != nil:
+		c.log.Warn("job rejected", "job", job.GetJobId(), "err", err)
+		exec.Reject(job.GetJobId(), err.Error())
 	case err != nil:
 		c.log.Warn("job rejected: verification failed", "err", err)
 	default:

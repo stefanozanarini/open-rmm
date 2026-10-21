@@ -21,6 +21,14 @@ service SignerService {
   // operator: only fixed read-only collections, at fixed intervals and
   // without parameters, for a tenant of this console.
   rpc SignBaseline(SignBaselineRequest) returns (SignPolicyResponse);
+  // SignCollect signs an on-demand run of a standard read-only collection
+  // (the actions of the automatic collection) without an operator: no
+  // parameters, no packages, at most one hour, for a tenant of this console.
+  rpc SignCollect(SignCollectRequest) returns (SignJobResponse);
+}
+
+message SignCollectRequest {
+  JobRequest request = 1;
 }
 
 message SignBaselineRequest {

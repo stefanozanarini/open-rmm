@@ -107,3 +107,21 @@ func TestVerifyRejects(t *testing.T) {
 		t.Errorf("untrusted key: %v", err)
 	}
 }
+
+// An authentic job that cannot run is returned with ErrInvalid, so the agent
+// reports it; a forged one is not.
+func TestVerifyReturnsInvalidAuthenticJob(t *testing.T) {
+	f := newFixture(t)
+	v := f.verifier(t)
+	j := f.job()
+	j.ExpiresUnix = j.GetNotBeforeUnix() + int64(MaxLifetime/time.Second) + 60
+	got, err := v.Verify(f.seal(j), time.Now())
+	if !errors.Is(err, ErrInvalid) || got.GetJobId() != j.GetJobId() {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	env := f.seal(f.job())
+	env.Signature[0] ^= 1
+	if got, err := v.Verify(env, time.Now()); err == nil || got != nil {
+		t.Fatalf("forged job returned: %v, %v", got, err)
+	}
+}

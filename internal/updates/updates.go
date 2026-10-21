@@ -64,6 +64,14 @@ type PendingReboot struct {
 	Since    *time.Time `json:"since,omitempty"`
 }
 
+// WindowsHistory is an installation recorded by Windows Update.
+type WindowsHistory struct {
+	Title  string     `json:"title"`
+	KBs    []string   `json:"kbs,omitempty"`
+	Date   *time.Time `json:"date,omitempty"`
+	Result string     `json:"result,omitempty"` // succeeded | failed | ...
+}
+
 // WindowsReport is a normalized winupdate result.
 type WindowsReport struct {
 	ManagedBy     string          `json:"managed_by"` // none | wsus | intune
@@ -72,6 +80,8 @@ type WindowsReport struct {
 	Updates       []WindowsUpdate `json:"updates"`
 	PendingReboot PendingReboot   `json:"pending_reboot"`
 	LastSuccess   *time.Time      `json:"last_success,omitempty"`
+	// History: latest installations, newest first (winupdate 1.1.0).
+	History []WindowsHistory `json:"history,omitempty"`
 }
 
 // App is a third-party application with an available upgrade.
@@ -168,6 +178,25 @@ func ParseWindows(raw []byte, now time.Time) (*WindowsReport, error) {
 		}
 	}
 	r.PendingReboot.Reasons = reasons
+	if len(r.History) > maxItems {
+		r.History = r.History[:maxItems]
+	}
+	hist := r.History[:0]
+	for _, h := range r.History {
+		if h.Title = clip(h.Title); h.Title == "" {
+			continue
+		}
+		h.Result = clip(h.Result)
+		var kbs []string
+		for _, k := range h.KBs {
+			if k = strings.ToUpper(clip(k)); kbRe.MatchString(k) {
+				kbs = append(kbs, k)
+			}
+		}
+		h.KBs = kbs
+		hist = append(hist, h)
+	}
+	r.History = hist
 	return r, nil
 }
 
