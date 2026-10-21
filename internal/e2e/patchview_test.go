@@ -15,6 +15,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/signer"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/console/web"
+	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/updates"
 )
 
@@ -33,7 +34,7 @@ func TestConsolePatchView(t *testing.T) {
 	             {"id":"b","title":"Update for Microsoft Defender (KB2267602)","kbs":["KB2267602"],"classification":"definition"}],
 	  "pending_reboot":{"required":false},
 	  "history":[{"title":"2026-09 Cumulative Update (KB5065428)","kbs":["KB5065428"],"date":"2026-09-20T10:00:00Z","result":"succeeded"},
-	             {"title":"Broken update (KB5000001)","kbs":["KB5000001"],"date":"2026-09-10T10:00:00Z","result":"failed"}]}`)
+	             {"title":"Broken update (KB5000001)","kbs":["KB5000001"],"date":"2026-09-10T10:00:00Z","result":"failed","hresult":"0x80070643"}]}`)
 	rep, err := updates.ParseWindows(raw, now)
 	if err != nil || len(rep.History) != 2 {
 		t.Fatalf("report: %+v %v", rep, err)
@@ -54,6 +55,25 @@ func TestConsolePatchView(t *testing.T) {
 	}
 	if _, body = get(t, c, e.console.URL+"/agents/"+pc+"?pq=defender"); strings.Contains(body, "KB5066586") || !strings.Contains(body, "KB2267602") {
 		t.Fatal("search ignored")
+	}
+
+	// Failed installs: the code and what it means, beside the missing update.
+	_, body = get(t, c, e.console.URL+"/agents/"+pc)
+	body = html.UnescapeString(body)
+	if !strings.Contains(body, "0x80070643") || !strings.Contains(body, "errore irreversibile dell'installer") {
+		t.Fatalf("history failure without code: %s", body)
+	}
+	failed := store.Job{TenantID: e.tenant, ID: ids.NewUUID(), AgentID: pc, Module: "winupdate", ModuleVersion: mod.Manifest.Version, Action: "install",
+		Params: []byte("{}"), Envelope: []byte("x"), CreatedBy: "operator:admin", ExpiresAt: now.Add(time.Hour)}
+	if err := e.store.CreateJob(ctx, failed); err != nil {
+		t.Fatal(err)
+	}
+	e.store.UpdateJob(ctx, e.tenant, pc, failed.ID, store.JobUpdate{State: store.JobSucceeded,
+		Result: []byte(`{"installed":[{"title":"Defender","kbs":["KB2267602"],"result":"download_failed","hresult":"0x80246007"}]}`)}, now)
+	_, body = get(t, c, e.console.URL+"/agents/"+pc)
+	body = html.UnescapeString(body)
+	if !strings.Contains(body, "✗ 0x80246007") || !strings.Contains(body, "download non completato") || !strings.Contains(body, `href="/jobs/`+failed.ID+`"`) {
+		t.Fatalf("missing update without its last failure: %s", body)
 	}
 
 	// Past installations: only the 10 most recent, unless searching.
@@ -90,6 +110,16 @@ func TestConsolePatchView(t *testing.T) {
 		t.Fatalf("upgrade job: %+v", jobs)
 	}
 
+	// A failing check leads to where it is fixed.
+	e.store.PutCheck(ctx, store.Check{TenantID: e.tenant, AgentID: busy, CheckID: "firmware/firmware", Status: store.CheckWarning,
+		Summary: "3 aggiornamenti firmware/driver, BIOS da aggiornare", UpdatedAt: now})
+	if _, body = get(t, c, e.console.URL+"/agents/"+busy); !strings.Contains(body, `href="/agents/`+busy+`#firmware"`) {
+		t.Fatalf("firmware check without action: %s", body)
+	}
+	if _, body = get(t, c, e.console.URL+"/agents?agent="+busy+"&tab=checks"); !strings.Contains(body, `href="/agents?agent=`+busy+`&amp;tab=patches#firmware"`) {
+		t.Fatalf("panel firmware check without action: %s", body)
+	}
+
 	// On-demand scan: signed at once, no step-up.
 	e.idp.mu.Lock()
 	before := e.idp.lastAuth
@@ -104,8 +134,8 @@ func TestConsolePatchView(t *testing.T) {
 	if after.Encode() != before.Encode() {
 		t.Fatal("collection asked for a sign-in")
 	}
-	jobs, _ := e.store.ListJobs(ctx, e.tenant, pc, 5)
-	if len(jobs) != 1 || jobs[0].Module != "winupdate" || jobs[0].Action != "scan" || jobs[0].ModuleVersion != mod.Manifest.Version {
+	jobs, _ := e.store.ListJobs(ctx, e.tenant, pc, 5) // newest first: the scan, then the failed install above
+	if len(jobs) != 2 || jobs[0].Module != "winupdate" || jobs[0].Action != "scan" || jobs[0].ModuleVersion != mod.Manifest.Version {
 		t.Fatalf("jobs = %+v", jobs)
 	}
 	// The signer signs only standard collections without an operator.
@@ -130,8 +160,12 @@ func TestConsolePatchView(t *testing.T) {
 		t.Fatalf("install: %d", code)
 	}
 	jobs, _ = e.store.ListJobs(ctx, e.tenant, pc, 5)
-	if len(jobs) != 2 || !strings.Contains(string(jobs[0].Params)+string(jobs[1].Params), `"include_kbs":["KB5066586","KB2267602"]`) {
-		t.Fatalf("install params: %s / %s", jobs[0].Params, jobs[1].Params)
+	all := ""
+	for _, j := range jobs {
+		all += string(j.Params) + " "
+	}
+	if len(jobs) != 3 || !strings.Contains(all, `"include_kbs":["KB5066586","KB2267602"]`) {
+		t.Fatalf("install params: %s", all)
 	}
 
 	// Without a parameter description, chosen values are refused rather

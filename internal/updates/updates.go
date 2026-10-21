@@ -70,7 +70,13 @@ type WindowsHistory struct {
 	KBs    []string   `json:"kbs,omitempty"`
 	Date   *time.Time `json:"date,omitempty"`
 	Result string     `json:"result,omitempty"` // succeeded | failed | ...
+	// HResult is the Windows Update error code of a failed installation,
+	// e.g. 0x80240022 (winupdate 1.1.2 and later).
+	HResult string `json:"hresult,omitempty"`
 }
+
+// HResultRe matches an HRESULT as the module reports it.
+var HResultRe = regexp.MustCompile(`^0x[0-9A-F]{8}$`)
 
 // WindowsReport is a normalized winupdate result.
 type WindowsReport struct {
@@ -192,6 +198,12 @@ func ParseWindows(raw []byte, now time.Time) (*WindowsReport, error) {
 			continue
 		}
 		h.Result = clip(h.Result)
+		if h.HResult = strings.ToUpper(strings.Replace(h.HResult, "0x", "", 1)); h.HResult != "" {
+			h.HResult = "0x" + h.HResult
+		}
+		if !HResultRe.MatchString(h.HResult) || h.HResult == "0x00000000" {
+			h.HResult = ""
+		}
 		var kbs []string
 		for _, k := range h.KBs {
 			if k = strings.ToUpper(clip(k)); kbRe.MatchString(k) {

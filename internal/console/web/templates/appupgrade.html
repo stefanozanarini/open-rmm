@@ -1,0 +1,34 @@
+{{define "content"}}
+{{with .Data}}
+<p><code>{{.ID}}</code>{{with .Available}} · {{tf "ultima versione %s" .}}{{end}}</p>
+<form method="get" action="/patches/app" class="inline">
+  <input type="hidden" name="id" value="{{.ID}}">
+  <label>{{t "Dove"}} <select name="site">
+    <option value="">{{t "Tutte le sedi"}}</option>
+    {{range .Sites}}<option value="{{.ID}}"{{if eq $.Data.Site .ID}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="none"{{if eq .Site "none"}} selected{{end}}>{{t "Senza sede"}}</option>
+  </select></label>
+  <button>{{t "Mostra"}}</button>
+</form>
+{{if .Targets}}
+<form method="post" action="/agents/bulk" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <input type="hidden" name="target" value="winget|{{.Version}}|upgrade">
+  <input type="hidden" name="p.ids" value="{{.ID}}">
+  <input type="hidden" name="ttl_minutes" value="1440">
+<table>
+<thead><tr><th><input type="checkbox" data-check-all checked aria-label="{{t "seleziona tutti"}}"></th><th>{{t "Computer"}}</th><th>{{t "Sede"}}</th><th>{{t "Installata"}}</th><th>{{t "Disponibile"}}</th></tr></thead>
+<tbody>{{range .Targets}}<tr>
+  <td><input type="checkbox" name="agent" value="{{.Agent.ID}}" checked aria-label="{{tf "seleziona %s" .Agent.Host.Hostname}}"></td>
+  <td>{{if .Online}}<span class="dot online"></span>{{else}}<span class="dot"></span>{{end}} <a href="/agents/{{.Agent.ID}}#apps">{{.Agent.Host.Hostname}}</a></td>
+  <td>{{.Site}}</td><td>{{.Version}}</td><td>{{.Available}}</td>
+</tr>{{end}}</tbody>
+</table>
+{{if and $.CanRun .Version}}<div class="actions">
+  <button class="primary">{{tf "Approva e aggiorna su %d computer" (len .Targets)}}</button>
+  <span class="muted">{{t "Una sola approvazione MFA per tutti i computer selezionati. I computer offline lo ricevono entro 24 ore, quando si ricollegano. Le applicazioni in uso potrebbero essere chiuse."}}</span>
+</div>{{else if not .Version}}<p class="muted">{{th "Pubblica il modulo <code>winget</code> per aggiornare le applicazioni."}}</p>{{end}}
+</form>
+{{else}}<p class="muted">{{t "Nessun computer di questa selezione ha questa applicazione da aggiornare."}}</p>{{end}}
+{{end}}
+{{end}}

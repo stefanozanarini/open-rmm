@@ -42,7 +42,9 @@ func TestConsoleDashboard(t *testing.T) {
 		e.store.PutUpdateStatus(ctx, store.UpdateStatus{TenantID: e.tenant, AgentID: id, Source: updates.SourceWindows, ScannedAt: now, Data: rep,
 			ManagedBy: "none", Important: important})
 		e.store.PutUpdateStatus(ctx, store.UpdateStatus{TenantID: e.tenant, AgentID: id, Source: updates.SourceWinget, ScannedAt: now,
-			Data: []byte(`{"scanned_at":"` + now.UTC().Format(time.RFC3339) + `","upgrades":[]}`), ThirdParty: i})
+			Data: []byte(`{"scanned_at":"` + now.UTC().Format(time.RFC3339) + `","upgrades":[` +
+				[]string{``, `{"name":"PuTTY","id":"PuTTY.PuTTY","version":"0.81","available":"0.85"}`,
+					`{"name":"PuTTY","id":"PuTTY.PuTTY","version":"0.80","available":"0.85"},{"name":"OBS Studio","id":"OBSProject.OBSStudio","version":"32.0","available":"32.2"}`}[i] + `]}`), ThirdParty: i})
 		status := store.CheckOK
 		if i == 2 {
 			status = store.CheckFailing
@@ -56,10 +58,23 @@ func TestConsoleDashboard(t *testing.T) {
 	}
 	for _, want := range []string{`class="donut"`, "Tipi di dispositivo", "Portatili", "Windows 11 Pro 24H2", "30–60 giorni", "Libero: meno del 10%",
 		"Non cifrato", "Assente o disattivato", `href="/patches?show=missing"`, "1.0.2",
-		"Computer più indietro con gli aggiornamenti", `href="/reports?software=Java&amp;tab=computers"`, "2 versioni", "Software più installati"} {
+		"Computer più indietro con gli aggiornamenti", `href="/reports?software=Java&amp;tab=computers"`, "2 versioni", "Software più installati",
+		"Applicazioni da aggiornare", `href="/patches/app?id=PuTTY.PuTTY"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("dashboard lacks %q: %s", want, body)
 		}
+	}
+	// The upgrade page of an application: the computers that need it.
+	_, page := get(t, c, e.console.URL+"/patches/app?id=PuTTY.PuTTY")
+	if !strings.Contains(page, ">PC-02<") || !strings.Contains(page, ">PC-03<") || strings.Contains(page, ">PC-01<") ||
+		!strings.Contains(page, `name="p.ids" value="PuTTY.PuTTY"`) || !strings.Contains(page, `action="/agents/bulk"`) {
+		t.Fatalf("app upgrade page: %s", page)
+	}
+	if _, page = get(t, c, e.console.URL+"/patches/app?id=PuTTY.PuTTY&site=none"); !strings.Contains(page, ">PC-02<") {
+		t.Fatalf("site filter: %s", page)
+	}
+	if code, _ := get(t, c, e.console.URL+"/patches/app?id=bad%20id"); code != 404 {
+		t.Fatalf("invalid id: %d", code)
 	}
 	if strings.Contains(body, "Visual C++") {
 		t.Fatal("runtime listed among the popular software")

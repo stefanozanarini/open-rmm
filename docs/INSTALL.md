@@ -119,7 +119,7 @@ Tokens can also be created from the web console (**Token** page, administrators 
 
 ## 6. Managing agents
 
-From the web console (**Agenti** page) administrators approve or revoke agents, and operators and administrators run commands; every command requires a fresh Microsoft sign-in. The same operations are available from the command line:
+From the web console (**Agenti** page) operators and administrators approve new agents (one or several at a time) and run commands, and administrators revoke them; every command requires a fresh Microsoft sign-in. The same operations are available from the command line:
 
 ```bash
 docker compose run --rm admin agents list    -tenant <TENANT>

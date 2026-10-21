@@ -231,8 +231,8 @@ type agentUpdates struct {
 	Query            string
 	WinupdateVersion string
 	// WingetVersion is the module version used to upgrade applications.
-	WingetVersion string
-	Classifications  []string
+	WingetVersion   string
+	Classifications []string
 }
 
 // updateRow is a Windows update in the patch table of an agent.
@@ -244,6 +244,16 @@ type updateRow struct {
 	Link     string // Microsoft support page of the first KB
 	Date     *time.Time
 	Selected bool
+	// Failure is the last failed installation of a missing update.
+	Failure *updateFailure
+}
+
+// updateFailure is a failed attempt to install an update.
+type updateFailure struct {
+	Code string // HRESULT, e.g. 0x80240022; empty when unknown
+	Text string // what it means, Italian (translated in the template)
+	At   *time.Time
+	Job  string // the install job, when the failure comes from one
 }
 
 // kbLink is the Microsoft support page of a KB article.
@@ -280,7 +290,11 @@ func updateRows(rep *updates.WindowsReport, q string) (rows []updateRow, missing
 		if !match(h.Title, h.KBs) {
 			continue
 		}
-		past = append(past, updateRow{State: h.Result, Title: h.Title, KBs: h.KBs, Link: kbLink(h.KBs), Date: h.Date})
+		row := updateRow{State: h.Result, Title: h.Title, KBs: h.KBs, Link: kbLink(h.KBs), Date: h.Date}
+		if h.HResult != "" {
+			row.Failure = &updateFailure{Code: h.HResult, Text: hresultText(h.HResult, h.Result)}
+		}
+		past = append(past, row)
 	}
 	sort.SliceStable(past, func(i, j int) bool {
 		a, b := past[i].Date, past[j].Date
@@ -331,8 +345,69 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 	if out.Windows != nil {
 		out.Query = strings.TrimSpace(r.URL.Query().Get("pq"))
 		out.Rows, out.Missing, out.HiddenHistory = updateRows(out.Windows, out.Query)
+		failures := s.updateFailures(r, tenant, agent, out.Windows)
+		for i := range out.Rows {
+			if out.Rows[i].State != "missing" {
+				continue
+			}
+			for _, kb := range out.Rows[i].KBs {
+				if f, ok := failures[kb]; ok {
+					out.Rows[i].Failure = f
+					break
+				}
+			}
+		}
 	}
 	return out, nil
+}
+
+// updateFailures returns the last failed installation of each KB, from the
+// Windows Update history and from the agent's recent install jobs.
+func (s *Server) updateFailures(r *http.Request, tenant, agent string, rep *updates.WindowsReport) map[string]*updateFailure {
+	out := map[string]*updateFailure{}
+	add := func(kbs []string, f *updateFailure) {
+		for _, kb := range kbs {
+			kb = strings.ToUpper(kb)
+			if cur, ok := out[kb]; !ok || (f.At != nil && (cur.At == nil || f.At.After(*cur.At))) {
+				out[kb] = f
+			}
+		}
+	}
+	for _, h := range rep.History {
+		if h.Result == "failed" || h.Result == "aborted" || h.Result == "succeeded_with_errors" {
+			add(h.KBs, &updateFailure{Code: h.HResult, Text: hresultText(h.HResult, h.Result), At: h.Date})
+		}
+	}
+	jobs, err := s.store.ListJobs(r.Context(), tenant, agent, 100)
+	if err != nil {
+		return out
+	}
+	for _, j := range jobs {
+		if j.Module != "winupdate" || j.Action != "install" || j.FinishedAt == nil || len(j.Result) == 0 {
+			continue
+		}
+		var res struct {
+			Installed []struct {
+				KBs     []string `json:"kbs"`
+				Result  string   `json:"result"`
+				HResult string   `json:"hresult"`
+			} `json:"installed"`
+		}
+		if json.Unmarshal(j.Result, &res) != nil {
+			continue
+		}
+		for _, x := range res.Installed {
+			if x.Result == "succeeded" || x.Result == "succeeded_with_errors" {
+				continue
+			}
+			code := strings.ToUpper(x.HResult)
+			if code = strings.Replace(code, "0X", "0x", 1); !updates.HResultRe.MatchString(code) || code == "0x00000000" {
+				code = ""
+			}
+			add(x.KBs, &updateFailure{Code: code, Text: hresultText(code, x.Result), At: j.FinishedAt, Job: j.ID})
+		}
+	}
+	return out
 }
 
 // handleFirmwareInstall installs vendor updates on one agent, with the

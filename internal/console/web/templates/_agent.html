@@ -42,7 +42,7 @@
   <button>{{t "Sposta"}}</button>
 </form>
 {{end}}
-{{if .IsAdmin}}
+{{if .CanRun}}
 <div class="actions">
 {{if eq .Data.Agent.Status "pending"}}
 <form method="post" action="/agents/{{.Data.Agent.ID}}/approve" class="inline">
@@ -50,7 +50,7 @@
   <button class="primary">{{t "Approva"}}</button>
 </form>
 {{end}}
-{{if ne .Data.Agent.Status "revoked"}}
+{{if and $.IsAdmin (ne .Data.Agent.Status "revoked")}}
 <form method="post" action="/agents/{{.Data.Agent.ID}}/revoke" class="inline">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <button class="danger">{{t "Revoca"}}</button>
@@ -71,8 +71,9 @@
 <h2>{{t "Controlli"}}</h2>
 {{if .Data.Checks}}
 <table>
-<thead><tr><th>{{t "Controllo"}}</th><th>{{t "Stato"}}</th><th>{{t "Dettaglio"}}</th><th>{{t "Aggiornato"}}</th></tr></thead>
-<tbody>{{range .Data.Checks}}<tr><td>{{.CheckID}}</td><td><span class="badge chk-{{.Status}}">{{label .Status}}</span></td><td>{{msg .Summary}}</td><td>{{fmtTime .UpdatedAt}}</td></tr>{{end}}</tbody>
+<thead><tr><th>{{t "Controllo"}}</th><th>{{t "Stato"}}</th><th>{{t "Dettaglio"}}</th><th>{{t "Aggiornato"}}</th><th></th></tr></thead>
+<tbody>{{range .Data.Checks}}<tr><td>{{.CheckID}}</td><td><span class="badge chk-{{.Status}}">{{label .Status}}</span></td><td>{{msg .Summary}}</td><td>{{fmtTime .UpdatedAt}}</td>
+  <td>{{if and $.CanRun (ne .Status "ok")}}{{with checkLink $.Data.Agent.ID $.Data.Panel .CheckID}}<a class="button small" href="{{.URL}}">{{.Label}}</a>{{end}}{{end}}</td></tr>{{end}}</tbody>
 </table>
 {{else}}<p class="muted">{{th "Nessun controllo. I controlli arrivano dai moduli eseguiti dalle policy (ad esempio <code>trendmicro</code> e <code>protection-status</code>)."}}</p>{{end}}
 {{end}}
@@ -103,7 +104,9 @@
 <thead><tr><th></th><th>{{t "Stato"}}</th><th>{{t "Gravità"}}</th><th>{{t "Aggiornamento"}}</th><th>KB</th><th>{{t "Data"}}</th></tr></thead>
 <tbody>{{range $u.Rows}}<tr>
   <td>{{if and (eq .State "missing") .KBs $.CanRun}}<input type="checkbox" name="p.include_kbs" value="{{index .KBs 0}}"{{if .Selected}} checked{{end}} aria-label="{{t "seleziona"}}">{{end}}</td>
-  <td>{{if eq .State "missing"}}<span class="badge chk-warning">{{t "da installare"}}</span>{{else if eq .State "succeeded"}}<span class="badge chk-ok">✓ {{t "installato"}}</span>{{else if eq .State "failed"}}<span class="badge chk-failing">✗ {{t "non riuscito"}}</span>{{else}}<span class="badge">{{label .State}}</span>{{end}}</td>
+  <td>{{if eq .State "missing"}}<span class="badge chk-warning">{{t "da installare"}}</span>{{with .Failure}}
+    <div class="failure" title="{{t "ultimo tentativo non riuscito"}}"><span class="badge chk-failing">✗ {{if .Code}}{{.Code}}{{else}}{{t "non riuscito"}}{{end}}</span>
+      <span class="small">{{t .Text}}</span>{{with .At}} <span class="muted small">· {{isoDate .}}</span>{{end}}{{with .Job}} <a class="small" href="/jobs/{{.}}">{{t "apri il job"}}</a>{{end}}</div>{{end}}{{else if eq .State "succeeded"}}<span class="badge chk-ok">✓ {{t "installato"}}</span>{{else if eq .State "failed"}}<span class="badge chk-failing">✗ {{t "non riuscito"}}</span>{{with .Failure}}<div class="failure"><code>{{.Code}}</code> <span class="small">{{t .Text}}</span></div>{{end}}{{else}}<span class="badge">{{label .State}}</span>{{end}}</td>
   <td>{{if or (eq .Severity "Critical") (eq .Severity "critical")}}<span class="badge chk-failing">{{label .Severity}}</span>{{else}}{{label .Severity}}{{end}}</td>
   <td>{{.Title}}</td>
   <td>{{range .KBs}}{{.}} {{end}}{{with .Link}}<a href="{{.}}" target="_blank" rel="noopener noreferrer" title="{{t "Informazioni su support.microsoft.com"}}">↗</a>{{end}}</td>
@@ -118,7 +121,7 @@
 {{else}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento di Windows mancante."}}</p>{{end}}
 {{end}}
 {{with .Winget}}
-<h3>{{t "Applicazioni da aggiornare (winget)"}}</h3>
+<h3 id="apps">{{t "Applicazioni da aggiornare (winget)"}}</h3>
 {{if .Missing}}<p><span class="badge chk-warning">{{t "winget assente"}}</span> {{t "winget non è installato su questo endpoint: le applicazioni si confrontano solo con il catalogo della console"}}</p>
 {{else if .Upgrades}}
 <table>
@@ -149,7 +152,7 @@
 {{else}}<p class="muted">{{tf "Nessuna applicazione da aggiornare (verificato il %s)." (fmtTime .ScannedAt)}}</p>{{end}}
 {{end}}
 {{with .Firmware}}
-<h3>{{t "BIOS, firmware e driver"}}</h3>
+<h3 id="firmware">{{t "BIOS, firmware e driver"}}</h3>
 {{if .Supported}}
 <p class="muted">{{tf "%s · verificato il %s" .Tool (fmtTime .ScannedAt)}}</p>
 {{if .Updates}}
@@ -359,7 +362,7 @@
   <td>{{.RuleID}}</td>
   <td><span class="badge {{.State}}">{{label .State}}</span></td>
   <td>{{fmtTime .FinishedAt}}</td>
-  <td>{{if .Error}}<span class="muted">{{.Error}}</span>{{end}}{{if .Pretty}}<details><summary>{{t "risultato"}}</summary><pre>{{.Pretty}}</pre></details>{{end}}</td>
+  <td>{{if .Error}}<span class="muted">{{.Error}}</span>{{end}}{{if .Pretty}}<details><summary>{{t "risultato"}}</summary><div class="result">{{.View}}</div><details class="raw"><summary>JSON</summary><pre>{{.Pretty}}</pre></details></details>{{end}}</td>
 </tr>{{end}}
 </tbody>
 </table>

@@ -532,3 +532,26 @@ func (s *Server) handleMoveAgents(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, s.Tf(r, "%d agenti spostati.", n), back)
 	}
 }
+
+// actionLink leads from a check to what fixes it.
+type actionLink struct{ URL, Label string }
+
+// checkActions: the tab and section of the agent where a check is acted on.
+var checkActions = map[string]struct{ tab, hash, label string }{
+	"winupdate/updates": {"patches", "patches", "Installa gli aggiornamenti"},
+	"winupdate/reboot":  {"commands", "act-reboot-reboot", "Riavvia…"},
+	"winget/thirdparty": {"patches", "apps", "Aggiorna le applicazioni"},
+	"firmware/firmware": {"patches", "firmware", "Aggiorna BIOS, firmware e driver"},
+}
+
+func checkAction(lang, agentID string, panel bool, checkID string) *actionLink {
+	a, ok := checkActions[checkID]
+	if !ok {
+		return nil
+	}
+	u := "/agents/" + url.PathEscape(agentID) + "#" + a.hash
+	if panel {
+		u = "/agents?" + url.Values{"agent": {agentID}, "tab": {a.tab}}.Encode() + "#" + a.hash
+	}
+	return &actionLink{URL: u, Label: tr(lang, a.label)}
+}

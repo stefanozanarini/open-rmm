@@ -1,10 +1,10 @@
 package web
 
 import (
-	"html/template"
 	"encoding/json"
 	"errors"
 	"github.com/stefanozanarini/open-rmm/internal/adinv"
+	"html/template"
 	"net/http"
 	"slices"
 	"sort"
@@ -19,6 +19,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/inventory"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
+	"github.com/stefanozanarini/open-rmm/internal/policy"
 )
 
 // tenant returns the session's current tenant, checked against the tenants
@@ -689,7 +690,8 @@ func (s *Server) handleUpdates(w http.ResponseWriter, r *http.Request) {
 type resultView struct {
 	store.PolicyResult
 	Policy string
-	Pretty string
+	Pretty string        // JSON, folded
+	View   template.HTML // the result as labelled values and tables
 }
 
 func (s *Server) policyResults(r *http.Request, tenant, agent string) ([]resultView, error) {
@@ -708,9 +710,12 @@ func (s *Server) policyResults(r *http.Request, tenant, agent string) ([]resultV
 		v := resultView{PolicyResult: x, Policy: names[x.PolicyID]}
 		if v.Policy == "" {
 			v.Policy = s.T(r, "(eliminata)")
+		} else if v.Policy == policy.BaselineName {
+			v.Policy = s.T(r, "Raccolta automatica")
 		}
 		if len(x.Result) > 0 {
 			v.Pretty = pretty(x.Result)
+			v.View = renderResult(s.lang(r), x.Result)
 		}
 		out = append(out, v)
 	}

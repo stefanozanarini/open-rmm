@@ -76,7 +76,7 @@
 <section class="warn">
 <h2>{{tf "In attesa di approvazione (%d)" (len .Pending)}}</h2>
 <p>{{t "Questi agenti sono connessi ma non ricevono comandi finché non vengono approvati. Verifica che siano PC dell'azienda prima di approvarli."}}</p>
-{{if $.IsAdmin}}<form method="post" action="/agents/approve">
+{{if $.CanRun}}<form method="post" action="/agents/approve">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
 {{template "agentrows" (rowsCtx . .Pending true)}}
 <div class="actions">

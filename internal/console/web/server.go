@@ -153,6 +153,9 @@ func funcs(lang string) template.FuncMap {
 		"tf":  func(key string, args ...any) string { return trf(lang, key, args...) },
 		"th":  func(key string) template.HTML { return trHTML(lang, key) },
 		"msg": func(s string) string { return trMessage(lang, s) },
+		"checkLink": func(agentID string, panel bool, checkID string) *actionLink {
+			return checkAction(lang, agentID, panel, checkID)
+		},
 		"fmtTime": func(t any) string {
 			switch v := t.(type) {
 			case time.Time:
@@ -282,8 +285,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /tenant", s.auth(s.handleSelectTenant))
 	mux.Handle("GET /agents", s.auth(s.handleAgents))
 	mux.Handle("GET /agents/{id}", s.auth(s.handleAgent))
-	mux.Handle("POST /agents/{id}/approve", s.role(authn.RoleAdmin, s.handleApprove))
-	mux.Handle("POST /agents/approve", s.role(authn.RoleAdmin, s.handleApproveMany))
+	// Operators approve new endpoints too (and turn down pending ones);
+	// revoking an approved endpoint stays with admins.
+	mux.Handle("POST /agents/{id}/approve", s.role(authn.RoleOperator, s.handleApprove))
+	mux.Handle("POST /agents/approve", s.role(authn.RoleOperator, s.handleApproveMany))
 	mux.Handle("POST /agents/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevoke))
 	mux.Handle("POST /agents/{id}/jobs", s.role(authn.RoleOperator, s.handleRunJob))
 	mux.Handle("POST /agents/{id}/collect", s.role(authn.RoleOperator, s.handleCollect))
@@ -321,6 +326,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agents/{id}/site", s.role(authn.RoleOperator, s.handleMoveAgents))
 	mux.Handle("POST /agents/site", s.role(authn.RoleOperator, s.handleMoveAgents))
 	mux.Handle("GET /agents/bulk", s.role(authn.RoleOperator, s.handleBulkForm))
+	mux.Handle("GET /patches/app", s.auth(s.handleAppUpgrade))
 	mux.Handle("POST /agents/bulk", s.role(authn.RoleOperator, s.handleBulkJobs))
 	mux.Handle("GET /sites", s.auth(s.handleSites))
 	mux.Handle("POST /sites", s.role(authn.RoleAdmin, s.handleSaveSite))

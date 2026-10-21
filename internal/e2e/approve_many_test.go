@@ -40,13 +40,25 @@ func TestApproveSelectedAgents(t *testing.T) {
 			t.Errorf("%s: %s, want %s", got.Host.Hostname, got.Status, want)
 		}
 	}
-	// Operators who are not admins cannot approve.
+	// Operators approve too; readers cannot.
 	op := opIdentity{OID: ids.NewUUID(), Name: "Op", Username: "op@cliente.it", Roles: []string{authn.RoleOperator}, AMR: []string{"pwd", "mfa"}}
 	oc, ocsrf := e.login(t, op)
-	if code, _, _ := post(t, oc, e.console.URL+"/agents/approve", url.Values{"csrf": {ocsrf}, "do": {"approve"}, "agent": {d}}); code != 403 {
-		t.Errorf("operator approval: %d", code)
+	if _, body := get(t, oc, e.console.URL+"/agents"); !strings.Contains(body, `action="/agents/approve"`) {
+		t.Fatal("operator cannot select pending agents")
 	}
-	if got, _ := e.store.GetAgent(ctx, e.tenant, d); got.Status != store.AgentPending {
-		t.Error("operator approved an agent")
+	if _, body, _ := post(t, oc, e.console.URL+"/agents/approve", url.Values{"csrf": {ocsrf}, "do": {"approve"}, "agent": {d}}); !strings.Contains(body, "1 agenti approvati.") {
+		t.Fatalf("operator approval: %s", body)
+	}
+	if code, _, _ := post(t, oc, e.console.URL+"/agents/"+a+"/revoke", url.Values{"csrf": {ocsrf}}); code != 403 {
+		t.Errorf("operator revoked an approved agent: %d", code)
+	}
+	e2 := pending("SRV-E")
+	rd := opIdentity{OID: ids.NewUUID(), Name: "Reader", Username: "rd@cliente.it", Roles: []string{authn.RoleReader}, AMR: []string{"pwd", "mfa"}}
+	rc, rcsrf := e.login(t, rd)
+	if code, _, _ := post(t, rc, e.console.URL+"/agents/approve", url.Values{"csrf": {rcsrf}, "do": {"approve"}, "agent": {e2}}); code != 403 {
+		t.Errorf("reader approval: %d", code)
+	}
+	if got, _ := e.store.GetAgent(ctx, e.tenant, e2); got.Status != store.AgentPending {
+		t.Error("reader approved an agent")
 	}
 }

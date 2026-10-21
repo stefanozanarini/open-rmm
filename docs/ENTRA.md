@@ -46,8 +46,8 @@ Then `deploy/setup-secrets.sh ~/client-secret.txt` and delete the file. Set a re
 
 | Display name | Value | Allows |
 |---|---|---|
-| open-rmm Administrator | `OpenRMM.Admin` | Everything: approve and revoke agents, tokens, settings, commands |
-| open-rmm Operator | `OpenRMM.Operator` | View everything and run commands |
+| open-rmm Administrator | `OpenRMM.Admin` | Everything: revoke agents, tokens, settings, publishing, commands |
+| open-rmm Operator | `OpenRMM.Operator` | View everything, approve new agents and run commands |
 | open-rmm Reader | `OpenRMM.Reader` | Read only |
 
 The **Value** must be exactly as above. An app created from *Enterprise applications* may also list `User` and `msiam_access`: leave them, but never assign them (they give no access to the console).

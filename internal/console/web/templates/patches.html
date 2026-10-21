@@ -44,8 +44,9 @@
 <h2>{{t "Applicazioni più diffuse da aggiornare"}}</h2>
 {{if .Apps}}
 <table>
-<thead><tr><th>{{t "Applicazione"}}</th><th>{{t "Id winget"}}</th><th>{{t "Ultima versione"}}</th><th>Endpoint</th></tr></thead>
-<tbody>{{range .Apps}}<tr><td>{{.Name}}</td><td><code>{{.ID}}</code></td><td>{{.Available}}</td><td>{{.Agents}}</td></tr>{{end}}</tbody>
+<thead><tr><th>{{t "Applicazione"}}</th><th>{{t "Id winget"}}</th><th>{{t "Ultima versione"}}</th><th>Endpoint</th><th></th></tr></thead>
+<tbody>{{range .Apps}}<tr><td>{{.Name}}</td><td><code>{{.ID}}</code></td><td>{{.Available}}</td><td>{{.Agents}}</td>
+  <td>{{if $.CanRun}}<a class="button small" href="/patches/app{{qs "id" .ID}}">↑ {{t "Aggiorna…"}}</a>{{end}}</td></tr>{{end}}</tbody>
 </table>
 {{else}}<p class="muted">{{th "Nessun dato da winget: pubblica il modulo <code>winget</code>, la raccolta automatica lo esegue ogni 24 ore."}}</p>{{end}}
 {{end}}

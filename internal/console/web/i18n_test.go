@@ -91,6 +91,15 @@ func usedKeys(t *testing.T) map[string]bool {
 	for _, l := range resultKeys {
 		keys[l] = keys[l] || false
 	}
+	for _, a := range checkActions {
+		keys[a.label] = keys[a.label] || false
+	}
+	for _, l := range hresultTexts {
+		keys[l] = keys[l] || false
+	}
+	for _, l := range []string{"download non riuscito", "installazione interrotta", "installato con errori", "installazione non riuscita"} {
+		keys[l] = keys[l] || false
+	}
 	for _, tb := range tabs {
 		keys[tb.Label] = keys[tb.Label] || false
 	}

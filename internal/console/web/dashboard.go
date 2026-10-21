@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/url"
@@ -244,12 +245,17 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 	}
 	win := map[string]store.UpdateStatus{}
 	third := map[string]int{}
+	wingetApps := map[string][]updates.App{} // agent -> applications to update
 	for _, st := range statuses {
 		switch st.Source {
 		case updates.SourceWindows:
 			win[st.AgentID] = st
 		case updates.SourceWinget:
 			third[st.AgentID] = st.ThirdParty
+			var rep updates.WingetReport
+			if json.Unmarshal(st.Data, &rep) == nil {
+				wingetApps[st.AgentID] = rep.Upgrades
+			}
 		}
 	}
 	now := s.now()
@@ -269,6 +275,7 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 		versions map[string]bool
 	}
 	software := map[string]*swFamily{}
+	toUpdate := map[string]*bar{} // winget id -> computers with an update
 	for _, a := range agents {
 		switch a.Status {
 		case store.AgentRevoked:
@@ -396,6 +403,14 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 					{Label: tr(lang, "Windows Update"), Class: "cat-1", Count: st.Important + st.Other},
 					{Label: tr(lang, "Applicazioni"), Class: "cat-2", Count: third[a.ID]},
 				}})
+		}
+		for _, app := range wingetApps[a.ID] {
+			x := toUpdate[app.ID]
+			if x == nil {
+				x = &bar{Label: app.Name, Link: "/patches/app?" + url.Values{"id": {app.ID}}.Encode()}
+				toUpdate[app.ID] = x
+			}
+			x.Count++
 		}
 		// Installed applications, each family counted once per computer.
 		if inv != nil {
@@ -547,6 +562,21 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 	pop := newBars(tr(lang, "Software più installati"),
 		tr(lang, "computer per applicazione, senza distinguere le versioni; esclusi i componenti di sistema"), popular)
 	pop.Wide, pop.Empty = true, tr(lang, "Nessun inventario ricevuto.")
-	d.Bars = append(d.Bars, old, pop)
+	var apps []bar
+	for _, b := range toUpdate {
+		apps = append(apps, *b)
+	}
+	sort.Slice(apps, func(i, j int) bool {
+		if apps[i].Count != apps[j].Count {
+			return apps[i].Count > apps[j].Count
+		}
+		return strings.ToLower(apps[i].Label) < strings.ToLower(apps[j].Label)
+	})
+	if len(apps) > maxOutdated {
+		apps = apps[:maxOutdated]
+	}
+	upd := newBars(tr(lang, "Applicazioni da aggiornare"), tr(lang, "computer con un aggiornamento disponibile (winget); clicca per aggiornare"), apps)
+	upd.Wide, upd.Empty = true, tr(lang, "Nessuna applicazione da aggiornare.")
+	d.Bars = append(d.Bars, old, upd, pop)
 	return d, nil
 }

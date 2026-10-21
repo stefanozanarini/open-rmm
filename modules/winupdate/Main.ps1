@@ -174,7 +174,9 @@ function Get-History($Searcher) {
             $kbs = @([regex]::Matches($title, 'KB\d{6,8}') | ForEach-Object { $_.Value.ToUpper() } | Select-Object -Unique)
             $date = $null
             if ($h.Date -is [datetime]) { $date = $h.Date.ToUniversalTime().ToString('o') }
-            $out += @{ title = $title; kbs = $kbs; date = $date; result = $resultCodes[[int]$h.ResultCode] }
+            $entry = @{ title = $title; kbs = $kbs; date = $date; result = $resultCodes[[int]$h.ResultCode] }
+            if ([int]$h.ResultCode -ge 3) { $entry.hresult = ('0x{0:X8}' -f $h.HResult) }
+            $out += $entry
         }
     }
     catch { Send-RmmLog "history: $($_.Exception.Message)" 'warn' }
@@ -247,7 +249,7 @@ Invoke-RmmModule @{
             Send-RmmProgress 15 "download di $($coll.Count) aggiornamenti"
             $dl = $session.CreateUpdateDownloader()
             $dl.Updates = $coll
-            [void]$dl.Download()
+            $dlres = $dl.Download()
             $ready = New-Object -ComObject Microsoft.Update.UpdateColl
             foreach ($u in $coll) { if ($u.IsDownloaded) { [void]$ready.Add($u) } }
             if ($ready.Count -gt 0) {
@@ -267,8 +269,12 @@ Invoke-RmmModule @{
                     }
                 }
             }
-            foreach ($u in $coll) {
-                if (-not $u.IsDownloaded) { $results += @{ title = [string]$u.Title; result = 'download_failed' } }
+            for ($i = 0; $i -lt $coll.Count; $i++) {
+                $u = $coll.Item($i)
+                if ($u.IsDownloaded) { continue }
+                $code = ''
+                try { $code = ('0x{0:X8}' -f $dlres.GetUpdateResult($i).HResult) } catch { }
+                $results += @{ title = [string]$u.Title; kbs = @(foreach ($k in $u.KBArticleIDs) { "KB$k" }); result = 'download_failed'; hresult = $code }
             }
         }
         Send-RmmProgress 90 'verifica'
