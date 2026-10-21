@@ -24,7 +24,8 @@
 </form>
 {{end}}
 {{if .Commands}}
-<h2>{{t "Esegui un comando"}}</h2>
+<details class="group" id="commands">
+<summary><h2>{{t "Esegui un comando"}} <span class="muted">({{len .Commands}})</span></h2></summary>
 {{range .Commands}}
 <details class="action">
 <summary><strong>{{.Module}}</strong> · {{.Action}}{{if .Description}} <span class="muted">— {{.Description}}</span>{{end}}</summary>
@@ -38,6 +39,7 @@
 </form>
 </details>
 {{end}}
+</details>
 {{end}}
 {{range .Scripts}}
 <h2>{{t "Script PowerShell"}}</h2>

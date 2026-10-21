@@ -97,7 +97,12 @@ type App struct {
 type WingetReport struct {
 	ScannedAt time.Time `json:"scanned_at"`
 	Upgrades  []App     `json:"upgrades"`
+	// Available is false where winget is not installed (winget 1.1.0).
+	Available *bool `json:"available,omitempty"`
 }
+
+// Missing tells whether the endpoint has no winget.
+func (r *WingetReport) Missing() bool { return r != nil && r.Available != nil && !*r.Available }
 
 var (
 	kbRe       = regexp.MustCompile(`^KB\d{4,8}$`)

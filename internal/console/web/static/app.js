@@ -10,11 +10,25 @@
     if (!location.hash) return;
     var el = document.getElementById(location.hash.slice(1));
     if (!el) return;
-    if (el.tagName === "DETAILS") el.open = true;
+    // Open the element and every <details> around it.
+    for (var d = el; d; d = d.parentElement) {
+      if (d.tagName === "DETAILS") d.open = true;
+    }
     el.scrollIntoView({ block: "start" });
   }
   window.addEventListener("hashchange", openTarget);
   openTarget();
+
+  // Navigation drop-downs: one open at a time, closed by a click elsewhere.
+  var menus = document.querySelectorAll("nav details.menu");
+  menus.forEach(function (d) {
+    d.addEventListener("toggle", function () {
+      if (d.open) menus.forEach(function (o) { if (o !== d) o.open = false; });
+    });
+  });
+  document.addEventListener("click", function (e) {
+    menus.forEach(function (d) { if (d.open && !d.contains(e.target)) d.open = false; });
+  });
 
   var tpl = document.getElementById("agent-menu");
   if (!tpl) return;

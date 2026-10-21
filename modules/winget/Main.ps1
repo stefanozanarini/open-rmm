@@ -100,7 +100,15 @@ function New-Report([string]$Exe) {
 Invoke-RmmModule @{
     scan    = {
         param($Params, $Request)
-        New-Report (Find-Winget)
+        # Without winget (e.g. Windows Server 2019) the scan reports it as a
+        # warning instead of failing: the console still compares the
+        # inventory with its own catalog.
+        try { $exe = Find-Winget }
+        catch {
+            return @{ scanned_at = (Get-Date).ToUniversalTime().ToString('o'); available = $false; upgrades = @()
+                checks = @(@{ id = 'thirdparty'; status = 'warning'; summary = 'winget non disponibile su questo endpoint: aggiornamenti delle applicazioni solo dal catalogo della console' }) }
+        }
+        New-Report $exe
     }
     upgrade = {
         param($Params, $Request)

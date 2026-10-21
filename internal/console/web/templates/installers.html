@@ -132,12 +132,15 @@
 <thead><tr><th>{{t "Versione"}}</th><th>{{t "Creato"}}</th><th>{{t "Firmato da"}}</th><th>{{t "Token"}}</th><th>SHA-256</th><th></th></tr></thead>
 <tbody>{{range .List}}<tr>
   <td>{{.Version}}</td><td>{{fmtTime .CreatedAt}}<br><span class="muted">{{.CreatedBy}}</span></td><td>{{.Signer}}</td>
-  <td>{{with .Token}}{{if .RevokedAt}}<span class="badge revoked">{{t "revocato"}}</span>{{else}}{{tf "valido fino al %s" (fmtTime .ExpiresAt)}} · {{tf "%d registrazioni" .Uses}}{{end}}{{end}}</td>
+  <td>{{with .Token}}{{if .RevokedAt}}<span class="badge revoked">{{t "revocato"}}</span>{{else}}{{tf "valido fino al %s" (fmtTime .ExpiresAt)}} · {{tf "%d registrazioni" .Uses}}
+    {{if $.IsAdmin}}<form method="post" action="/tokens/{{.ID}}/revoke" class="inline">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="/agent-installer">
+      <button class="link danger" title="{{t "Nessun nuovo PC potrà registrarsi con questo MSI; i PC già registrati non ne risentono."}}">{{t "Revoca"}}</button></form>{{end}}{{end}}{{end}}</td>
   <td><code class="small">{{.SHA256}}</code></td>
   <td><a href="/agent-installer/{{.ID}}/msi">{{t "Scarica"}}</a></td>
 </tr>{{end}}</tbody>
 </table>
-<p class="muted">{{th "Se un installer finisce in mani sbagliate, revoca il suo token nella pagina <a href=\"/tokens\">Token</a>: i PC già registrati non ne risentono."}}</p>
+<p class="muted">{{t "Ogni MSI contiene un proprio token di registrazione. Se un installer finisce in mani sbagliate, revocalo qui: i PC già registrati non ne risentono."}}{{if $.IsAdmin}} <a href="/tokens">{{t "Token per installazioni manuali"}}</a>{{end}}</p>
 {{end}}
 {{end}}
 {{end}}

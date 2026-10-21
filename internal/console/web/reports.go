@@ -23,7 +23,9 @@ const (
 )
 
 type reportsData struct {
-	Tab string // computers | os | logons
+	Tab string // dashboard | computers | os | logons
+	// Dashboard.
+	Dash *dashData
 	// Computers.
 	Software, Version, OSFilter, User, Model, Site string
 	Sites                                          []store.Site
@@ -94,15 +96,26 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		d.Days = n
 	}
 	switch d.Tab {
-	case "os", "logons":
+	case "computers", "os", "logons":
 	default:
-		d.Tab = "computers"
+		d.Tab = "dashboard"
 	}
 	csvOut := q.Get("format") == "csv"
 	qq := q
 	qq.Del("format")
 	d.Query = qq.Encode()
 	ctx := r.Context()
+
+	if d.Tab == "dashboard" {
+		dash, err := s.dashboard(ctx, s.lang(r), t)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		d.Dash = dash
+		s.render(w, r, "reports", s.T(r, "Reporting"), d)
+		return
+	}
 
 	if d.Tab == "logons" {
 		agents, err := s.store.ListAgents(ctx, t)

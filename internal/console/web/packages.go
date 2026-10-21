@@ -664,3 +664,29 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 	}
 	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
 }
+
+// handleSetUnsigned allows or forbids installing a library package whose
+// file has no valid Authenticode signature (its SHA-256 is still checked).
+func (s *Server) handleSetUnsigned(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	sha := r.PathValue("sha")
+	if !ok || len(sha) != 64 {
+		http.NotFound(w, r)
+		return
+	}
+	allow := r.PostFormValue("allow") == "1"
+	if err := s.store.SetPackageUnsigned(r.Context(), t, sha, allow); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		s.fail(w, r, err)
+		return
+	}
+	s.audit(r.Context(), t, sessionFrom(r.Context()).data.Operator, "package.unsigned_set", sha, map[string]any{"allow_unsigned": allow})
+	if allow {
+		s.flash(w, r, s.T(r, "Il pacchetto si può installare anche senza firma Authenticode."), "/packages")
+	} else {
+		s.flash(w, r, s.T(r, "Il pacchetto richiede di nuovo una firma Authenticode valida."), "/packages")
+	}
+}

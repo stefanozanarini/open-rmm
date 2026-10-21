@@ -56,6 +56,31 @@ type PackageStore interface {
 	PutPackage(ctx context.Context, p Package) error
 	GetPackage(ctx context.Context, tenantID, sha256 string) (Package, error)
 	ListPackages(ctx context.Context, tenantID string) ([]Package, error)
+	// SetPackageUnsigned allows or forbids installing a package whose file
+	// has no valid Authenticode signature.
+	SetPackageUnsigned(ctx context.Context, tenantID, sha256 string, allow bool) error
+}
+
+func (m *Memory) SetPackageUnsigned(_ context.Context, tenantID, sha string, allow bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	p, ok := m.packages[tenantID+"/"+sha]
+	if !ok {
+		return ErrNotFound
+	}
+	p.AllowUnsigned = allow
+	m.packages[tenantID+"/"+sha] = p
+	return nil
+}
+
+func (p *Postgres) SetPackageUnsigned(ctx context.Context, tenantID, sha string, allow bool) error {
+	return p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE packages SET allow_unsigned = $1 WHERE sha256 = $2`, allow, sha)
+		if err == nil && tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return err
+	})
 }
 
 // ---- memory ----

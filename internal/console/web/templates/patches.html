@@ -8,15 +8,16 @@
   </nav>
 </div>
 <div class="cards">
-  <div class="card"><span class="num">{{.ComplianceRate}}%</span>{{t "in regola"}}<br><span class="muted">{{tf "%d su %d" .Compliant .Total}}</span></div>
-  <div class="card {{if .MissingSec}}bad{{end}}"><span class="num">{{.MissingSec}}</span>{{t "con aggiornamenti di sicurezza mancanti"}}</div>
-  <div class="card {{if .Behind}}bad{{end}}"><span class="num">{{.Behind}}</span>{{t "indietro di più di un Patch Tuesday"}}</div>
-  <div class="card {{if .RebootPending}}warn{{end}}"><span class="num">{{.RebootPending}}</span>{{t "con riavvio in sospeso"}}</div>
-  <div class="card {{if .ThirdParty}}warn{{end}}"><span class="num">{{.ThirdParty}}</span>{{t "con applicazioni da aggiornare"}}</div>
-  <div class="card {{if .Firmware}}warn{{end}}"><span class="num">{{.Firmware}}</span>{{t "con BIOS, firmware o driver da aggiornare"}}{{if .BIOS}}<br><span class="muted">{{tf "BIOS: %d" .BIOS}}</span>{{end}}</div>
-  <div class="card"><span class="num">{{.NotScanned}}</span>{{t "senza verifica negli ultimi 7 giorni"}}</div>
+  <a class="card{{if eq .Show "compliant"}} current{{end}}" href="/patches{{qs "family" .Family "show" "compliant"}}"><span class="num">{{.ComplianceRate}}%</span>{{t "in regola"}}<br><span class="muted">{{tf "%d su %d" .Compliant .Total}}</span></a>
+  <a class="card {{if .MissingSec}}bad{{end}}{{if eq .Show "missing"}} current{{end}}" href="/patches{{qs "family" .Family "show" "missing"}}"><span class="num">{{.MissingSec}}</span>{{t "con aggiornamenti di sicurezza mancanti"}}</a>
+  <a class="card {{if .Behind}}bad{{end}}{{if eq .Show "behind"}} current{{end}}" href="/patches{{qs "family" .Family "show" "behind"}}"><span class="num">{{.Behind}}</span>{{t "indietro di più di un Patch Tuesday"}}</a>
+  <a class="card {{if .RebootPending}}warn{{end}}{{if eq .Show "reboot"}} current{{end}}" href="/patches{{qs "family" .Family "show" "reboot"}}"><span class="num">{{.RebootPending}}</span>{{t "con riavvio in sospeso"}}</a>
+  <a class="card {{if .ThirdParty}}warn{{end}}{{if eq .Show "apps"}} current{{end}}" href="/patches{{qs "family" .Family "show" "apps"}}"><span class="num">{{.ThirdParty}}</span>{{t "con applicazioni da aggiornare"}}</a>
+  <a class="card {{if .Firmware}}warn{{end}}{{if eq .Show "firmware"}} current{{end}}" href="/patches{{qs "family" .Family "show" "firmware"}}"><span class="num">{{.Firmware}}</span>{{t "con BIOS, firmware o driver da aggiornare"}}{{if .BIOS}}<br><span class="muted">{{tf "BIOS: %d" .BIOS}}</span>{{end}}</a>
+  <a class="card{{if eq .Show "stale"}} current{{end}}" href="/patches{{qs "family" .Family "show" "stale"}}"><span class="num">{{.NotScanned}}</span>{{t "senza verifica negli ultimi 7 giorni"}}</a>
   {{if .Managed}}<div class="card"><span class="num">{{.Managed}}</span>{{t "gestiti da WSUS o Intune (solo osservazione)"}}</div>{{end}}
 </div>
+{{if .Show}}<p><a href="/patches{{qs "family" .Family}}">{{t "mostra tutti gli endpoint"}}</a></p>{{end}}
 
 <h2>{{t "Endpoint, dal più indietro"}}</h2>
 {{if .Rows}}
@@ -26,12 +27,12 @@
 {{range .Rows}}{{$days := .RebootDays}}<tr>
   <td>{{if .Online}}<span class="dot online"></span>{{else}}<span class="dot"></span>{{end}} <a href="/agents/{{.Agent.ID}}">{{.Agent.Host.Hostname}}</a>{{if eq .Agent.Host.OSFamily "server"}} <span class="badge">server</span>{{end}}</td>
   {{with .Windows}}
-  <td>{{if .Important}}<span class="badge chk-failing">{{.Important}}</span>{{else}}<span class="badge chk-ok">0</span>{{end}}</td>
+  <td>{{if .Important}}<a class="badge chk-failing" href="/agents/{{.AgentID}}#patches" title="{{t "apri l'elenco delle patch"}}">{{.Important}}</a>{{else}}<span class="badge chk-ok">0</span>{{end}}</td>
   <td>{{if .Important}}{{tf "%d giorni" .OldestDays}}{{if .Behind}} <span class="muted">({{.Behind}} Patch Tuesday)</span>{{end}}{{else}}-{{end}}</td>
   <td>{{.Other}}</td>
   <td>{{if .Reboot}}<span class="badge chk-warning">{{tf "da %d gg" $days}}</span>{{else}}-{{end}}</td>
   {{else}}<td colspan="4" class="muted">{{t "nessuna verifica di Windows Update"}}</td>{{end}}
-  <td>{{with .Winget}}{{if .ThirdParty}}<span class="badge chk-warning">{{.ThirdParty}}</span>{{else}}0{{end}}{{else}}-{{end}}</td>
+  <td>{{if .WingetMissing}}<span class="badge chk-warning" title="{{t "winget non è installato su questo endpoint: le applicazioni si confrontano solo con il catalogo della console"}}">{{t "winget assente"}}</span>{{else}}{{with .Winget}}{{if .ThirdParty}}<a class="badge chk-warning" href="/agents/{{.AgentID}}#patches">{{.ThirdParty}}</a>{{else}}0{{end}}{{else}}-{{end}}{{end}}</td>
   <td>{{with .Firmware}}{{if .Important}}<span class="badge chk-failing">{{.Important}}</span> {{end}}{{if .Other}}{{.Other}}{{end}}{{if and (not .Important) (not .Other)}}0{{end}}{{else}}-{{end}}{{if .BIOS}} <span class="badge chk-warning">BIOS</span>{{end}}</td>
   <td>{{with .Windows}}{{if eq .ManagedBy "none"}}open-rmm{{else}}{{.ManagedBy}} <span class="muted">({{t "osservazione"}})</span>{{end}}{{end}}</td>
   <td>{{with .Windows}}{{fmtTime .ScannedAt}}{{end}}{{if .Stale}} <span class="badge chk-warning">{{t "vecchia"}}</span>{{end}}</td>
@@ -46,6 +47,6 @@
 <thead><tr><th>{{t "Applicazione"}}</th><th>{{t "Id winget"}}</th><th>{{t "Ultima versione"}}</th><th>Endpoint</th></tr></thead>
 <tbody>{{range .Apps}}<tr><td>{{.Name}}</td><td><code>{{.ID}}</code></td><td>{{.Available}}</td><td>{{.Agents}}</td></tr>{{end}}</tbody>
 </table>
-{{else}}<p class="muted">{{th "Nessun dato da winget. Crea una policy con il modulo <code>winget</code> (azione <code>scan</code>)."}}</p>{{end}}
+{{else}}<p class="muted">{{th "Nessun dato da winget: pubblica il modulo <code>winget</code>, la raccolta automatica lo esegue ogni 24 ore."}}</p>{{end}}
 {{end}}
 {{end}}

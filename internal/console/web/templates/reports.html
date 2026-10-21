@@ -1,10 +1,50 @@
 {{define "content"}}
 {{with .Data}}
 <nav class="tabs" aria-label="{{t "Report"}}">
+  <a href="/reports" {{if eq .Tab "dashboard"}}class="current"{{end}}>Dashboard</a>
   <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Computer"}}</a>
   <a href="/reports{{qs "tab" "os"}}" {{if eq .Tab "os"}}class="current"{{end}}>{{t "Sistemi operativi"}}</a>
   <a href="/reports{{qs "tab" "logons"}}" {{if eq .Tab "logons"}}class="current"{{end}}>{{t "Accessi"}}</a>
 </nav>
+
+{{if eq .Tab "dashboard"}}{{with .Dash}}
+<div class="cards">
+  <a class="card" href="/agents"><span class="num">{{.Total}}</span>{{t "agenti approvati"}}</a>
+  <a class="card" href="/agents"><span class="num">{{.Online}}</span>{{t "online ora"}}</a>
+  <a class="card {{if .Problems}}bad{{end}}" href="/agents"><span class="num">{{.Problems}}</span>{{t "con controlli falliti"}}</a>
+  <a class="card {{if .Pending}}warn{{end}}" href="/agents"><span class="num">{{.Pending}}</span>{{t "in attesa di approvazione"}}</a>
+  <a class="card" href="/agents"><span class="num">{{.Unseen}}</span>{{t "non visti da 7 giorni"}}</a>
+</div>
+<div class="viz-grid">
+{{range .Donuts}}
+<section class="viz">
+  <h3>{{.Title}}</h3><p class="muted small">{{.Sub}}</p>
+  {{if .Total}}
+  <div class="donut-row">
+    <svg viewBox="0 0 100 100" class="donut" role="img" aria-label="{{.Title}}: {{range $i, $s := .Segs}}{{if $i}}, {{end}}{{$s.Label}} {{$s.Count}}{{end}}">
+      <circle cx="50" cy="50" r="42" class="donut-track"></circle>
+      {{range .Segs}}<a href="{{or .Link "#"}}"{{if not .Link}} tabindex="-1"{{end}}><circle cx="50" cy="50" r="42" class="seg {{.Class}}" stroke-dasharray="{{.Dash}} {{.Gap}}" stroke-dashoffset="{{.Offset}}" transform="rotate(-90 50 50)"><title>{{.Label}}: {{.Count}} ({{.Pct}}%)</title></circle></a>{{end}}
+      <text x="50" y="50" class="donut-total">{{.Total}}</text>
+    </svg>
+    <ul class="legend">{{range .Segs}}<li>{{if .Link}}<a href="{{.Link}}">{{end}}<span class="swatch {{.Class}}"></span><span class="lv">{{.Count}}</span> {{.Label}}{{if .Link}}</a>{{end}}</li>{{end}}</ul>
+  </div>
+  {{else}}<p class="muted">{{t "Nessun dato."}}</p>{{end}}
+</section>
+{{end}}
+{{range .Bars}}
+<section class="viz{{if .Wide}} wide{{end}}">
+  <h3>{{.Title}}</h3><p class="muted small">{{.Sub}}</p>
+  {{if .Bars}}
+  {{if .Legend}}<ul class="legend inline">{{range .Legend}}<li><span class="swatch {{.Class}}"></span>{{.Label}}</li>{{end}}</ul>{{end}}
+  <table class="hbars">
+  {{range .Bars}}<tr><th scope="row" title="{{.Label}}{{with .Note}} · {{.}}{{end}}">{{if .Link}}<a href="{{.Link}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}{{with .Note}} <span class="muted">{{.}}</span>{{end}}</th>
+    <td><svg class="hbar" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">{{if .Parts}}{{range .Parts}}<rect class="{{.Class}}" x="{{.X}}" y="0" height="10" width="{{.W}}"><title>{{.Label}}: {{.Count}}</title></rect>{{end}}{{else}}<rect x="0" y="0" height="10" width="{{.Width}}"><title>{{.Label}}: {{.Count}}</title></rect>{{end}}</svg></td><td class="lv">{{.Count}}</td></tr>{{end}}
+  </table>
+  {{else}}<p class="muted">{{.Empty}}</p>{{end}}
+</section>
+{{end}}
+</div>
+{{end}}{{end}}
 
 {{if eq .Tab "computers"}}
 <p class="muted">{{t "Trova i computer per software installato, sistema operativo, utente, modello o sede, dai dati dell'ultimo inventario. I filtri si combinano; ogni campo cerca il testo contenuto, senza distinguere maiuscole e minuscole."}}</p>

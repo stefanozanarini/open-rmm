@@ -29,6 +29,8 @@ type patchRow struct {
 	Score      int
 	Stale      bool
 	RebootDays int
+	// WingetMissing: winget is not installed on the endpoint.
+	WingetMissing bool
 }
 
 // appRow is a third-party application outdated on several agents.
@@ -38,7 +40,10 @@ type appRow struct {
 }
 
 type patchesData struct {
-	Family         string
+	Family string
+	// Show filters the table: missing, behind, reboot, apps, firmware,
+	// stale (empty: every endpoint).
+	Show           string
 	Rows           []patchRow
 	Apps           []appRow
 	Total          int
@@ -77,7 +82,7 @@ func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 		}
 		byAgent[st.AgentID][st.Source] = st
 	}
-	d := patchesData{Family: r.URL.Query().Get("family")}
+	d := patchesData{Family: r.URL.Query().Get("family"), Show: r.URL.Query().Get("show")}
 	if d.Family != "client" && d.Family != "server" {
 		d.Family = ""
 	}
@@ -103,6 +108,7 @@ func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 			third = st.ThirdParty
 			var rep updates.WingetReport
 			if json.Unmarshal(st.Data, &rep) == nil {
+				row.WingetMissing = rep.Missing()
 				for _, app := range rep.Upgrades {
 					x := apps[app.ID]
 					if x == nil {
@@ -155,7 +161,27 @@ func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 		if row.Windows != nil && row.Windows.ManagedBy != "none" {
 			d.Managed++
 		}
-		d.Rows = append(d.Rows, row)
+		// The cards filter the table.
+		keep := true
+		switch d.Show {
+		case "missing":
+			keep = sum.Important > 0
+		case "behind":
+			keep = sum.Behind > 1
+		case "reboot":
+			keep = sum.Reboot
+		case "apps":
+			keep = third > 0
+		case "firmware":
+			keep = row.Firmware != nil && row.Firmware.Important+row.Firmware.Other > 0
+		case "stale":
+			keep = row.Stale
+		case "compliant":
+			keep = !row.Stale && sum.Important == 0
+		}
+		if keep {
+			d.Rows = append(d.Rows, row)
+		}
 	}
 	if d.Total > 0 {
 		d.ComplianceRate = 100 * d.Compliant / d.Total

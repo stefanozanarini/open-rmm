@@ -21,7 +21,7 @@
 </form>
 <h2>{{t "Token esistenti"}}</h2>
 <table>
-<thead><tr><th>{{t "Descrizione"}}</th><th>{{t "Utilizzi"}}</th><th>{{t "Scadenza"}}</th><th>{{t "Approvazione"}}</th><th>{{t "Stato"}}</th></tr></thead>
+<thead><tr><th>{{t "Descrizione"}}</th><th>{{t "Utilizzi"}}</th><th>{{t "Scadenza"}}</th><th>{{t "Approvazione"}}</th><th>{{t "Stato"}}</th><th></th></tr></thead>
 <tbody>
 {{range .Data.Tokens}}<tr>
   <td>{{.Description}}</td>
@@ -29,6 +29,9 @@
   <td>{{fmtTime .ExpiresAt}}</td>
   <td>{{if .AutoApprove}}{{t "automatica"}}{{else}}{{t "manuale"}}{{end}}</td>
   <td>{{if .RevokedAt}}{{t "revocato"}}{{else if .ExpiresAt.Before $.Data.Now}}{{t "scaduto"}}{{else if ge .Uses .MaxUses}}{{t "esaurito"}}{{else}}{{t "valido"}}{{end}}</td>
+  <td>{{if not .RevokedAt}}<form method="post" action="/tokens/{{.ID}}/revoke" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}">
+    <button class="danger" title="{{t "Gli agenti già registrati con questo token non ne risentono."}}">{{t "Revoca"}}</button></form>{{end}}</td>
 </tr>{{end}}
 </tbody>
 </table>

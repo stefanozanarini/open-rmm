@@ -78,7 +78,7 @@
 {{end}}
 
 {{define "agent-updates"}}
-<h2>{{t "Aggiornamenti"}}</h2>
+<h2 id="patches">{{t "Aggiornamenti"}}</h2>
 {{with .Data.Updates}}
 {{with .Windows}}
 <p class="muted">{{tf "Windows Update verificato il %s" (fmtTime .ScannedAt)}} · {{tf "gestione: %s" (label .ManagedBy)}}{{if ne .ManagedBy "none"}} ({{t "open-rmm osserva soltanto"}}{{with .WSUSServer}}, {{tf "server %s" .}}{{end}}){{end}}{{with .LastSuccess}} · {{tf "ultima installazione riuscita %s" (isoDate .)}}{{end}}</p>
@@ -118,7 +118,8 @@
 {{end}}
 {{with .Winget}}
 <h3>{{t "Applicazioni da aggiornare (winget)"}}</h3>
-{{if .Upgrades}}
+{{if .Missing}}<p><span class="badge chk-warning">{{t "winget assente"}}</span> {{t "winget non è installato su questo endpoint: le applicazioni si confrontano solo con il catalogo della console"}}</p>
+{{else if .Upgrades}}
 <table>
 <thead><tr><th>{{t "Applicazione"}}</th><th>Id</th><th>{{t "Installata"}}</th><th>{{t "Disponibile"}}</th></tr></thead>
 <tbody>{{range .Upgrades}}<tr><td>{{.Name}}</td><td><code>{{.ID}}</code></td><td>{{.Version}}</td><td>{{.Available}}</td></tr>{{end}}</tbody>
@@ -153,7 +154,7 @@
 {{else if .ToolMissing}}<p><span class="badge chk-warning">{{t "strumento mancante"}}</span> {{tf "%s non è installato: distribuiscilo dalla pagina Software." .ToolMissing}}</p>
 {{else}}<p class="muted">{{tf "Produttore %s non supportato per gli aggiornamenti firmware." .Vendor}}</p>{{end}}
 {{end}}
-{{if not .HasReport}}<p class="muted">{{th "Nessuna verifica. Crea una policy con i moduli <code>winupdate</code> (azione <code>scan</code>) e <code>winget</code> (azione <code>scan</code>)."}}</p>{{end}}
+{{if not .HasReport}}<p class="muted">{{th "Nessuna verifica ancora: pubblica i moduli <code>winupdate</code> e <code>winget</code>, la raccolta automatica li esegue ogni 24 ore, oppure usa «Cerca aggiornamenti ora»."}}</p>{{end}}
 {{end}}
 {{end}}
 
@@ -276,7 +277,9 @@
 {{end}}
 {{if and .CanRun .Data.Actions}}
 {{$csrf := .CSRF}}{{$id := .Data.Agent.ID}}
-<h2 id="commands">{{t "Esegui un comando"}}</h2>
+{{if .Data.Commands}}
+<details class="group" id="commands">
+<summary><h2>{{t "Esegui un comando"}} <span class="muted">({{len .Data.Commands}})</span></h2></summary>
 <p class="muted">{{t "Prima dell'esecuzione ti verrà chiesto di autenticarti di nuovo con Microsoft: l'approvazione vale solo per quel comando."}}</p>
 {{range .Data.Commands}}
 <details class="action" id="act-{{.Module}}-{{.Action}}">
@@ -288,6 +291,8 @@
   {{template "ttl"}}
   <button class="primary">{{t "Approva ed esegui"}}</button>
 </form>
+</details>
+{{end}}
 </details>
 {{end}}
 {{range .Data.Scripts}}

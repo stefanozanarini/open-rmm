@@ -206,8 +206,19 @@ func (s *Server) runnableOn(r *http.Request, a store.Agent) ([]runnable, error) 
 		return nil, err
 	}
 	platform := a.Host.OS + "/" + a.Host.Arch
+	// Only the newest version of each module: older ones stay published
+	// for the agents that still pin them, but are not offered.
+	newest := map[string]string{}
+	for _, m := range mods {
+		if cur, ok := newest[m.ID]; !ok || wingetcat.CompareVersions(m.Version, cur) > 0 {
+			newest[m.ID] = m.Version
+		}
+	}
 	var out []runnable
 	for _, m := range mods {
+		if m.Version != newest[m.ID] {
+			continue
+		}
 		man, err := modules.ParseManifest(m.Manifest)
 		if err != nil {
 			continue
@@ -692,4 +703,30 @@ func (s *Server) handleAutoPilot(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r.Context(), t, op, "settings.auto_pilot", "", map[string]any{"auto": !cur.PilotManual})
 	s.flash(w, r, s.T(r, "Impostazione salvata."), "/updates")
+}
+
+// handleRevokeToken revokes an enrollment token of the tenant: no new agent
+// can enroll with it; agents already enrolled are not affected.
+func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	id := r.PathValue("id")
+	if !ok || !ids.IsUUID(id) {
+		http.NotFound(w, r)
+		return
+	}
+	tokens, err := s.store.ListEnrollmentTokens(r.Context(), t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !slices.ContainsFunc(tokens, func(k store.EnrollmentToken) bool { return k.ID == id }) {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.store.RevokeEnrollmentToken(r.Context(), id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.audit(r.Context(), t, sessionFrom(r.Context()).data.Operator, "token.revoked", id, nil)
+	s.flash(w, r, s.T(r, "Token revocato: nessun nuovo agente può registrarsi con esso."), safeReturn(r.PostFormValue("return"), "/tokens"))
 }

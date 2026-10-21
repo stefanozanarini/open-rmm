@@ -43,7 +43,10 @@
   <td>{{.Kind}}{{with .SilentArgs}}<br><code class="muted">{{.}}</code>{{end}}{{if .AllowUnsigned}}<br><span class="badge chk-warning">{{t "non firmato ammesso"}}</span>{{end}}</td>
   <td>{{if eq .Source "winget"}}winget <code class="muted">{{.WingetID}}</code>{{else}}{{t "caricato"}}{{end}}</td>
   <td>{{fmtTime .CreatedAt}}<br><span class="muted">{{.CreatedBy}}</span></td>
-  <td>{{if $.CanRun}}<a class="button" href="/packages/{{.SHA256}}/deploy">{{t "Distribuisci"}}</a>{{end}}</td>
+  <td>{{if $.CanRun}}<a class="button" href="/packages/{{.SHA256}}/deploy">{{t "Distribuisci"}}</a>{{end}}
+    {{if $.IsAdmin}}<form method="post" action="/packages/{{.SHA256}}/unsigned" class="inline">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="allow" value="{{if .AllowUnsigned}}0{{else}}1{{end}}">
+      <button class="link" title="{{t "Alcuni installer, come quello di 7-Zip, non hanno una firma Authenticode: l'integrità è comunque verificata con lo SHA-256 del pacchetto."}}">{{if .AllowUnsigned}}{{t "richiedi la firma"}}{{else}}{{t "ammetti senza firma"}}{{end}}</button></form>{{end}}</td>
 </tr>{{end}}
 </tbody>
 </table>

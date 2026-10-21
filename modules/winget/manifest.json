@@ -1,6 +1,6 @@
 {
   "id": "winget",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Third-party application updates with winget, run as the system account.",
   "protocol_version": 1,
   "entrypoints": {
