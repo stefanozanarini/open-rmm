@@ -297,7 +297,7 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"Salute":                        "Health",
 	"Capacità (attuale / progetto)": "Capacity (full charge / design)",
 	"Cicli":                         "Cycles",
-	"Carica":                        "Charge",
+	"Carica":                        "Upload",
 	"Rete":                          "Network",
 	"Scheda":                        "Adapter",
 	"Indirizzi":                     "Addresses",

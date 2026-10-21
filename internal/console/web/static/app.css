@@ -1,12 +1,14 @@
 :root { --fg:#1d2330; --muted:#667085; --bg:#f6f7f9; --card:#fff; --line:#e3e6eb; --accent:#2457c5; --warn:#fff6e0; --danger:#b42318; --ok:#067647; }
 * { box-sizing: border-box; }
 body { margin:0; font:15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--fg); background:var(--bg); }
-header { display:flex; gap:24px; align-items:center; padding:10px 24px; background:var(--card); border-bottom:1px solid var(--line); flex-wrap:wrap; }
-.brand { font-weight:700; color:var(--fg); text-decoration:none; }
-nav { display:flex; gap:16px; flex:1; align-items:center; }
+header { display:flex; gap:10px 24px; align-items:center; padding:10px 24px; background:var(--card); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.brand { font-weight:700; color:var(--fg); text-decoration:none; display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+nav { display:flex; gap:6px 16px; flex:1 1 auto; flex-wrap:wrap; align-items:center; }
+nav > a, nav > details { white-space:nowrap; }
 nav a { color:var(--fg); text-decoration:none; }
 nav a:hover { color:var(--accent); }
-.who { display:flex; gap:12px; align-items:center; color:var(--muted); }
+.who { display:flex; gap:8px 12px; align-items:center; flex-wrap:wrap; justify-content:flex-end; margin-left:auto; color:var(--muted); }
+.who > * { white-space:nowrap; }
 main { max-width:1200px; margin:0 auto; padding:16px 24px 48px; }
 h1 { font-size:22px; }
 h2 { font-size:17px; margin-top:28px; }
@@ -133,7 +135,7 @@ table.patches td:first-child, table.patches th:first-child { width:1.5em; }
 .ctxmenu a, .ctxmenu button { display:block; width:100%; text-align:left; padding:7px 14px; background:none; border:0; border-radius:0; color:inherit; font:inherit; cursor:pointer; text-decoration:none; }
 .ctxmenu a:hover, .ctxmenu button:hover, .ctxmenu a:focus, .ctxmenu button:focus { background:var(--line); outline:none; }
 .ctxmenu hr { border:0; border-top:1px solid var(--line); margin:4px 0; }
-header img.logo { max-height:40px; max-width:180px; object-fit:contain; margin-left:auto; order:99; }
+header img.logo { display:block; max-height:48px; max-width:160px; object-fit:contain; }
 img.logo-preview { max-height:80px; max-width:320px; background:var(--card); padding:6px; border:1px solid var(--line); border-radius:4px; }
 nav details.menu { position:relative; }
 nav details.menu > summary { cursor:pointer; list-style:none; color:var(--fg); }

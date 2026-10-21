@@ -10,7 +10,7 @@
 </head>
 <body>
 <header>
-  <a class="brand" href="/agents">open-rmm</a>
+  <a class="brand" href="/agents">{{if .HasLogo}}<img class="logo" src="/logo" alt="">{{end}}<span>open-rmm</span></a>
   {{if .Operator}}
   <nav class="main">
     <details class="menu"><summary>{{t "Agenti"}}</summary><div>
@@ -52,7 +52,6 @@
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <button class="link">{{t "Esci"}}</button>
     </form>
-    {{if .HasLogo}}<img class="logo" src="/logo" alt="">{{end}}
     <form method="post" action="/lang" class="inline lang">
       <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="return" value="{{.Path}}">
       <select name="lang" aria-label="{{t "Lingua"}}" title="{{t "Lingua"}}"><option value="it" lang="it" {{if eq .Lang "it"}}selected{{end}}>Italiano</option><option value="en" lang="en" {{if eq .Lang "en"}}selected{{end}}>English</option></select>

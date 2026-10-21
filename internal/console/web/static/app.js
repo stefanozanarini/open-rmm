@@ -19,6 +19,15 @@
   window.addEventListener("hashchange", openTarget);
   openTarget();
 
+  // Theme and language apply as soon as they are chosen; the Apply buttons
+  // stay for browsers without scripts.
+  document.querySelectorAll("header form.theme, header form.lang").forEach(function (f) {
+    var sel = f.querySelector("select"), btn = f.querySelector("button");
+    if (!sel || !btn) return;
+    btn.hidden = true;
+    sel.addEventListener("change", function () { f.submit(); });
+  });
+
   // Navigation drop-downs: one open at a time, closed by a click elsewhere.
   var menus = document.querySelectorAll("nav details.menu");
   menus.forEach(function (d) {
