@@ -88,6 +88,39 @@ type WindowsReport struct {
 	LastSuccess   *time.Time      `json:"last_success,omitempty"`
 	// History: latest installations, newest first (winupdate 1.1.0).
 	History []WindowsHistory `json:"history,omitempty"`
+	// Blockers: settings that keep updates from being offered or installed
+	// (winupdate 1.2.0).
+	Blockers []Blocker `json:"blockers,omitempty"`
+}
+
+// Blocker is a setting that keeps updates from being offered or installed,
+// e.g. a pinned TargetReleaseVersion or a disabled service.
+type Blocker struct {
+	ID       string `json:"id"`
+	Severity string `json:"severity"` // block | limit | info
+	Summary  string `json:"summary"`
+	Path     string `json:"path,omitempty"` // registry value or drive
+	Value    string `json:"value,omitempty"`
+}
+
+// Blocked tells whether a setting stops updates altogether.
+func (r *WindowsReport) Blocked() bool {
+	for _, b := range r.Blockers {
+		if b.Severity == "block" {
+			return true
+		}
+	}
+	return false
+}
+
+// Limited tells whether a setting holds some updates back.
+func (r *WindowsReport) Limited() bool {
+	for _, b := range r.Blockers {
+		if b.Severity == "limit" {
+			return true
+		}
+	}
+	return false
 }
 
 // App is a third-party application with an available upgrade.
@@ -182,6 +215,25 @@ func ParseWindows(raw []byte, now time.Time) (*WindowsReport, error) {
 		return released(out[i]).Before(released(out[j]))
 	})
 	r.Updates = out
+	if len(r.Blockers) > 50 {
+		r.Blockers = r.Blockers[:50]
+	}
+	blockers := r.Blockers[:0]
+	for _, b := range r.Blockers {
+		b.ID, b.Summary, b.Path, b.Value = clip(b.ID), clip(b.Summary), clip(b.Path), clip(b.Value)
+		switch b.Severity {
+		case "block", "limit", "info":
+		default:
+			b.Severity = "info"
+		}
+		if b.Summary != "" {
+			blockers = append(blockers, b)
+		}
+	}
+	// Blocking first.
+	rank := map[string]int{"block": 0, "limit": 1, "info": 2}
+	sort.SliceStable(blockers, func(i, j int) bool { return rank[blockers[i].Severity] < rank[blockers[j].Severity] })
+	r.Blockers = blockers
 	var reasons []string
 	for _, x := range r.PendingReboot.Reasons {
 		if x = clip(x); x != "" && len(reasons) < 10 {

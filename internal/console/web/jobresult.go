@@ -34,6 +34,12 @@ var resultKeys = map[string]string{
 	"download_failed": "download non riuscito", "aborted": "interrotto", "not_started": "non avviato", "in_progress": "in corso",
 	"quiet_uninstall_string": "comando di disinstallazione silenziosa", "uninstall_string_with_args": "comando di disinstallazione con argomenti",
 	"removed": "rimosso", "upgraded": "aggiornate", "package": "pacchetto", "silent_args": "argomenti silenziosi", "uninstall_args": "argomenti di disinstallazione",
+	"blockers": "impostazioni che limitano gli aggiornamenti", "value": "valore", "events": "eventi", "time": "ora",
+	"level": "livello", "log": "registro", "provider": "origine", "cbs_log": "CBS.log (errori recenti)",
+	"windowsupdate_log": "WindowsUpdate.log (errori recenti)", "services": "servizi", "start_type": "avvio",
+	"disk_free_gb": "spazio libero (GB)", "pending_xml": "operazioni in sospeso (pending.xml)", "windows": "Windows",
+	"failed_installations": "installazioni non riuscite", "diagnostics": "diagnostica", "hresult": "codice di errore",
+	"block": "blocca", "limit": "limita", "info": "informazione", "warning": "avviso", "critical": "critico",
 	"classifications": "classificazioni", "include_kbs": "KB da includere", "exclude_kbs": "KB da escludere", "allow_managed": "anche se gestito da WSUS o Intune", "pending_reboot": "riavvio in sospeso", "searcher": "ricerca",
 }
 
@@ -108,6 +114,11 @@ func jobOutcome(lang, module, action string, res map[string]any) string {
 			}
 		}
 		return trf(lang, "%d applicazioni aggiornate su %d.", ok, len(list))
+	case "winupdate/logs":
+		ev, _ := res["events"].([]any)
+		cbs, _ := res["cbs_log"].([]any)
+		bl, _ := res["blockers"].([]any)
+		return trf(lang, "Log di Windows Update raccolti: %d eventi di errore o avviso, %d righe di errore in CBS.log, %d impostazioni che limitano gli aggiornamenti.", len(ev), len(cbs), len(bl))
 	case "winupdate/install":
 		list, _ := res["installed"].([]any)
 		ok := 0
@@ -120,6 +131,9 @@ func jobOutcome(lang, module, action string, res map[string]any) string {
 			return tr(lang, "Nessun aggiornamento da installare.")
 		}
 		s := trf(lang, "%d aggiornamenti installati su %d.", ok, len(list))
+		if _, has := res["diagnostics"]; has && ok < len(list) {
+			s += " · " + tr(lang, "diagnostica allegata qui sotto")
+		}
 		if p, _ := res["pending_reboot"].(map[string]any); p != nil && p["required"] == true {
 			s += " · " + tr(lang, "riavvio richiesto per completarla")
 		}
@@ -183,7 +197,7 @@ func scalar(lang, key string, v any) string {
 			return "-"
 		}
 		switch key {
-		case "result", "status", "action", "state", "method", "reason", "reasons", "managed_by", "classification", "severity", "classifications":
+		case "result", "status", "action", "state", "method", "reason", "reasons", "managed_by", "classification", "severity", "classifications", "level":
 			if _, ok := resultKeys[x]; ok {
 				return esc(resultLabel(lang, x))
 			}
@@ -232,6 +246,15 @@ func writeValue(b *strings.Builder, lang, key string, v any, depth int) {
 		allScalar := true
 		for _, e := range x {
 			allScalar = allScalar && isScalar(e)
+		}
+		if allScalar && strings.HasSuffix(key, "_log") {
+			// Log lines: as they are, in a block.
+			lines := make([]string, len(x))
+			for i, e := range x {
+				lines[i] = esc(fmt.Sprint(e))
+			}
+			b.WriteString(`<pre class="log">` + strings.Join(lines, "\n") + `</pre>`)
+			return
 		}
 		if allScalar {
 			parts := make([]string, len(x))

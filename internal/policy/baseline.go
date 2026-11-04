@@ -39,10 +39,21 @@ var BaselineRules = []BaselineRule{
 	{"adinventory", "collect", 24 * time.Hour, &Condition{ServiceExists: "NTDS"}},
 }
 
+// OnDemand lists read-only actions run only on request, never scheduled:
+// they are collections too (signed without a new sign-in, no parameters).
+var OnDemand = []struct{ Module, Action string }{
+	{"winupdate", "logs"}, // Windows Update events and CBS.log errors
+}
+
 // IsCollection tells whether module/action is one of the collections.
 func IsCollection(module, action string) bool {
 	for _, b := range BaselineRules {
 		if b.Module == module && b.Action == action {
+			return true
+		}
+	}
+	for _, o := range OnDemand {
+		if o.Module == module && o.Action == action {
 			return true
 		}
 	}

@@ -5,7 +5,17 @@
 # install  downloads and installs the selected updates. It never reboots:
 #          the reboot module does, according to the reboot policy. On an
 #          endpoint managed by WSUS or Intune it refuses to install unless
-#          allow_managed is set (observation mode).
+#          allow_managed is set (observation mode). When updates fail, the
+#          result carries a short diagnosis (recent errors, blockers).
+# logs     collects what explains failed updates: Windows Update events,
+#          the errors in CBS.log (and optionally WindowsUpdate.log), the
+#          services, free space, pending operations, failed installations.
+#
+# Every report lists the settings that keep updates from being offered or
+# installed ("blockers"): a pinned release (TargetReleaseVersion, also when
+# only left over in UpdatePolicy\PolicyState), Windows Update access turned
+# off, an unreachable WSUS server, pauses and deferrals, disabled services,
+# low disk space.
 #
 # Parameters (install):
 #   { "classifications": ["security","critical","rollup","update","definition"],
@@ -183,6 +193,197 @@ function Get-History($Searcher) {
     $out
 }
 
+# ---- blockers ----
+
+function Read-Reg([string]$Path, [string]$Name) {
+    $v = Get-ItemProperty -Path ("Registry::" + $Path) -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $v) { return $null }
+    return $v.$Name
+}
+
+function Test-TcpPort([string]$HostName, [int]$Port) {
+    $c = New-Object System.Net.Sockets.TcpClient
+    try {
+        $t = $c.ConnectAsync($HostName, $Port)
+        return ($t.Wait(3000) -and $c.Connected)
+    }
+    catch { return $false }
+    finally { $c.Dispose() }
+}
+
+# Get-Blockers lists the settings that keep updates from being offered or
+# installed. severity: block (no updates), limit (some updates held back),
+# info (worth knowing).
+function Get-Blockers {
+    $pol = 'HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
+    $state = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsUpdate\UpdatePolicy\PolicyState'
+    $mdm = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PolicyManager\current\device\Update'
+    $ux = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings'
+    $out = New-Object System.Collections.ArrayList
+    $add = { param($Id, $Severity, $Summary, $Path, $Value)
+        [void]$out.Add(@{ id = $Id; severity = $Severity; summary = $Summary; path = $Path; value = [string]$Value }) }
+
+    # Pinned Windows release: by policy, by MDM, or left over in the
+    # effective policy state after the policy was removed.
+    $current = [string](Read-Reg 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion' 'DisplayVersion')
+    $pinned = $false
+    if ((Read-Reg $pol 'TargetReleaseVersion') -eq 1) {
+        $info = [string](Read-Reg $pol 'TargetReleaseVersionInfo')
+        $prod = [string](Read-Reg $pol 'ProductVersion')
+        & $add 'target_release' 'limit' ("Versione di Windows bloccata a " + (("$prod $info").Trim()) + " da policy (attuale: $current): le versioni successive non vengono offerte") "$pol\TargetReleaseVersion" "$prod $info"
+        $pinned = $true
+    }
+    $mdmTarget = [string](Read-Reg $mdm 'TargetReleaseVersion')
+    if ($mdmTarget -and -not $pinned) {
+        & $add 'target_release' 'limit' "Versione di Windows bloccata a $mdmTarget da Intune/MDM (attuale: $current): le versioni successive non vengono offerte" "$mdm\TargetReleaseVersion" $mdmTarget
+        $pinned = $true
+    }
+    foreach ($name in 'TargetReleaseVersion', 'TargetReleaseVersionInfo', 'TargetProductVersion', 'ProductVersion') {
+        $v = Read-Reg $state $name
+        if ($null -ne $v -and "$v" -ne '' -and "$v" -ne '0' -and -not $pinned) {
+            & $add 'target_release_state' 'limit' "Versione di Windows bloccata in UpdatePolicy\PolicyState ($name = $v) senza una policy che la imposti: probabilmente un residuo da rimuovere" "$state\$name" $v
+            $pinned = $true
+        }
+    }
+
+    if ((Read-Reg $pol 'DisableWindowsUpdateAccess') -eq 1) {
+        & $add 'access_disabled' 'block' 'Accesso a Windows Update disattivato da policy (DisableWindowsUpdateAccess)' "$pol\DisableWindowsUpdateAccess" 1
+    }
+    $useWsus = (Read-Reg "$pol\AU" 'UseWUServer') -eq 1
+    $wsus = [string](Read-Reg $pol 'WUServer')
+    if ($useWsus -and $wsus) {
+        try {
+            $u = [Uri]$wsus
+            if (-not (Test-TcpPort $u.Host $u.Port)) {
+                & $add 'wsus_unreachable' 'block' "Server WSUS $wsus non raggiungibile" "$pol\WUServer" $wsus
+            }
+        }
+        catch { & $add 'wsus_invalid' 'block' "Indirizzo del server WSUS non valido: $wsus" "$pol\WUServer" $wsus }
+    }
+    elseif ((Read-Reg $pol 'DoNotConnectToWindowsUpdateInternetLocations') -eq 1) {
+        & $add 'no_internet_wu' 'block' 'Connessione a Windows Update su internet disattivata (DoNotConnectToWindowsUpdateInternetLocations) senza un server WSUS' "$pol\DoNotConnectToWindowsUpdateInternetLocations" 1
+    }
+    if ((Read-Reg "$pol\AU" 'NoAutoUpdate') -eq 1) {
+        & $add 'no_auto_update' 'info' 'Aggiornamenti automatici disattivati da policy (NoAutoUpdate): li installa open-rmm' "$pol\AU\NoAutoUpdate" 1
+    }
+    $q = Read-Reg $pol 'DeferQualityUpdatesPeriodInDays'
+    if ((Read-Reg $pol 'DeferQualityUpdates') -eq 1 -and $q -gt 0) {
+        & $add 'defer_quality' 'limit' "Aggiornamenti di qualità differiti di $q giorni da policy" "$pol\DeferQualityUpdatesPeriodInDays" $q
+    }
+    $f = Read-Reg $pol 'DeferFeatureUpdatesPeriodInDays'
+    if ((Read-Reg $pol 'DeferFeatureUpdates') -eq 1 -and $f -gt 0) {
+        & $add 'defer_feature' 'info' "Aggiornamenti di funzionalità differiti di $f giorni da policy" "$pol\DeferFeatureUpdatesPeriodInDays" $f
+    }
+    $now = (Get-Date).ToUniversalTime()
+    foreach ($p in @(@($ux, 'PauseUpdatesExpiryTime'), @($ux, 'PauseQualityUpdatesEndTime'), @($pol, 'PauseQualityUpdatesStartTime'))) {
+        $v = [string](Read-Reg $p[0] $p[1])
+        if (-not $v) { continue }
+        $t = [datetime]::MinValue
+        if ([datetime]::TryParse($v, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal, [ref]$t)) {
+            if ($p[1] -eq 'PauseQualityUpdatesStartTime') { $t = $t.AddDays(35) }
+            if ($t -gt $now) {
+                & $add 'paused' 'limit' ("Aggiornamenti in pausa fino al " + $t.ToString('yyyy-MM-dd')) "$($p[0])\$($p[1])" $v
+                break
+            }
+        }
+    }
+    if ((Read-Reg $pol 'ExcludeWUDriversInQualityUpdate') -eq 1) {
+        & $add 'no_drivers' 'info' 'Driver esclusi dagli aggiornamenti di qualità da policy (ExcludeWUDriversInQualityUpdate)' "$pol\ExcludeWUDriversInQualityUpdate" 1
+    }
+    foreach ($svc in 'wuauserv', 'bits', 'UsoSvc', 'TrustedInstaller', 'CryptSvc') {
+        $s = Get-CimInstance Win32_Service -Filter "Name='$svc'" -ErrorAction SilentlyContinue
+        if ($s -and $s.StartMode -eq 'Disabled') {
+            & $add "service_$($svc.ToLowerInvariant())" 'block' "Servizio $svc disabilitato" "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\$svc\Start" 4
+        }
+    }
+    $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction SilentlyContinue
+    if ($drive) {
+        $gb = [Math]::Round($drive.FreeSpace / 1GB, 1)
+        if ($gb -lt 5) { & $add 'disk_space' 'block' "Spazio libero insufficiente su $($env:SystemDrive) ($gb GB)" $env:SystemDrive $gb }
+        elseif ($gb -lt 10) { & $add 'disk_space' 'limit' "Poco spazio libero su $($env:SystemDrive) ($gb GB)" $env:SystemDrive $gb }
+    }
+    $out
+}
+
+function Get-BlockerCheck($Blockers) {
+    $b = @($Blockers | Where-Object { $_.severity -eq 'block' })
+    $l = @($Blockers | Where-Object { $_.severity -eq 'limit' })
+    if ($b.Count) { return @{ id = 'policy'; status = 'failing'; summary = "Aggiornamenti bloccati: $(($b | ForEach-Object { $_.summary }) -join '; ')" } }
+    if ($l.Count) { return @{ id = 'policy'; status = 'warning'; summary = "Aggiornamenti limitati: $(($l | ForEach-Object { $_.summary }) -join '; ')" } }
+    @{ id = 'policy'; status = 'ok'; summary = 'Nessuna impostazione blocca gli aggiornamenti' }
+}
+
+# ---- logs ----
+
+function Get-WuEvents([int]$Days, [int]$Max) {
+    $since = (Get-Date).AddDays(-$Days)
+    $out = @()
+    $queries = @(
+        @{ LogName = 'Microsoft-Windows-WindowsUpdateClient/Operational'; StartTime = $since; Level = 1, 2, 3 },
+        @{ LogName = 'System'; ProviderName = 'Microsoft-Windows-WindowsUpdateClient', 'Microsoft-Windows-Servicing', 'Microsoft-Windows-WUSA'; StartTime = $since; Level = 1, 2, 3 },
+        @{ LogName = 'Setup'; StartTime = $since; Level = 1, 2, 3 }
+    )
+    foreach ($q in $queries) {
+        $events = @(Get-WinEvent -FilterHashtable $q -MaxEvents $Max -ErrorAction SilentlyContinue)
+        foreach ($e in $events) {
+            $m = [string]$e.Message
+            if ($m.Length -gt 600) { $m = $m.Substring(0, 600) + '…' }
+            $out += @{ time = $e.TimeCreated.ToUniversalTime().ToString('o'); log = $q.LogName; id = $e.Id
+                level = @{ 1 = 'critical'; 2 = 'error'; 3 = 'warning' }[[int]$e.Level]; provider = [string]$e.ProviderName; message = $m.Trim() }
+        }
+    }
+    @($out | Sort-Object { $_.time } -Descending | Select-Object -First $Max)
+}
+
+# Read-LogTail returns the last lines of a log matching a pattern; the file
+# is read shared, it may be open for writing.
+function Read-LogTail([string]$Path, [string]$Pattern, [int]$Lines, [int]$TailBytes) {
+    if (-not (Test-Path -LiteralPath $Path)) { return @() }
+    $fs = [System.IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
+    try {
+        $start = [Math]::Max(0, $fs.Length - $TailBytes)
+        [void]$fs.Seek($start, 'Begin')
+        $text = (New-Object System.IO.StreamReader($fs)).ReadToEnd()
+    }
+    finally { $fs.Dispose() }
+    @($text -split "`r?`n" | Where-Object { $_ -match $Pattern } | ForEach-Object { if ($_.Length -gt 400) { $_.Substring(0, 400) } else { $_ } } | Select-Object -Last $Lines)
+}
+
+function Get-Diagnostics($Params, [bool]$Short) {
+    $days = 7
+    $d = Get-Prop $Params 'days'
+    if ($d) { $days = [Math]::Max(1, [Math]::Min(30, [int]$d)) }
+    if ($Short) { $days = 1 }
+    $errPattern = ', Error|Failed|FAILED|error 0x|0x8[0-9A-Fa-f]{7}'
+    $cbs = Join-Path $env:SystemRoot 'Logs\CBS\CBS.log'
+    $r = @{
+        events  = @(Get-WuEvents $days $(if ($Short) { 20 } else { 100 }))
+        cbs_log = @(Read-LogTail $cbs $errPattern $(if ($Short) { 40 } else { 200 }) (4MB))
+    }
+    if ($Short) { return $r }
+    $cv = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+    $r.windows = "$(Read-Reg $cv 'ProductName') $(Read-Reg $cv 'DisplayVersion') (build $(Read-Reg $cv 'CurrentBuild').$(Read-Reg $cv 'UBR'))"
+    $r.services = @(foreach ($svc in 'wuauserv', 'bits', 'UsoSvc', 'TrustedInstaller', 'CryptSvc', 'msiserver') {
+            $s = Get-CimInstance Win32_Service -Filter "Name='$svc'" -ErrorAction SilentlyContinue
+            if ($s) { @{ name = $svc; status = [string]$s.State; start_type = [string]$s.StartMode } }
+        })
+    $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction SilentlyContinue
+    if ($drive) { $r.disk_free_gb = [Math]::Round($drive.FreeSpace / 1GB, 1) }
+    $r.pending_xml = Test-Path (Join-Path $env:SystemRoot 'WinSxS\pending.xml')
+    $r.blockers = @(Get-Blockers)
+    if (Get-Prop $Params 'windowsupdate_log') {
+        # Get-WindowsUpdateLog decodes the ETW traces: slow (minutes).
+        $out = Join-Path $env:OPENRMM_WORK_DIR 'WindowsUpdate.log'
+        try {
+            Send-RmmProgress 40 'decodifica WindowsUpdate.log'
+            Get-WindowsUpdateLog -LogPath $out -ErrorAction Stop *> $null
+            $r.windowsupdate_log = @(Read-LogTail $out 'FATAL|[Ee]rror|0x8[0-9A-Fa-f]{7}' 300 (16MB))
+        }
+        catch { $r.windowsupdate_log = @("Get-WindowsUpdateLog: $($_.Exception.Message)") }
+    }
+    $r
+}
+
 function New-Report($Session, $Request, $Params) {
     $mgmt = Get-Management
     $scan = Invoke-Scan $Session
@@ -190,6 +391,7 @@ function New-Report($Session, $Request, $Params) {
     $pending = Get-PendingReboot ([string]$Request.state_dir)
     $maxAge = Get-Prop $Params 'max_age_days'
     if (-not $maxAge) { $maxAge = 30 }
+    $blockers = @(Get-Blockers)
     @{
         managed_by     = $mgmt.managed_by
         wsus_server    = $mgmt.wsus_server
@@ -198,7 +400,8 @@ function New-Report($Session, $Request, $Params) {
         pending_reboot = $pending
         last_success   = Get-LastSuccess $scan.searcher
         history        = @(Get-History $scan.searcher)
-        checks         = @(Get-Checks $updates $pending ([int]$maxAge))
+        blockers       = $blockers
+        checks         = @(Get-Checks $updates $pending ([int]$maxAge)) + @(Get-BlockerCheck $blockers)
     }
 }
 
@@ -282,7 +485,20 @@ Invoke-RmmModule @{
         $report.installed = $results
         $report.reboot_required_by_install = $rebootRequired
         $failed = @($results | Where-Object { $_.result -notin 'succeeded', 'succeeded_with_errors' })
-        if ($failed.Count -gt 0) { Send-RmmLog "$($failed.Count) updates not installed" 'warn' }
+        if ($failed.Count -gt 0) {
+            Send-RmmLog "$($failed.Count) updates not installed" 'warn'
+            try { $report.diagnostics = Get-Diagnostics $Params $true } catch { Send-RmmLog "diagnostics: $($_.Exception.Message)" 'warn' }
+        }
         $report
+    }
+    logs    = {
+        param($Params, $Request)
+        Send-RmmProgress 10 'raccolta dei log di Windows Update'
+        $r = Get-Diagnostics $Params $false
+        $session = New-Session
+        $searcher = $session.CreateUpdateSearcher()
+        $r.failed_installations = @(Get-History $searcher | Where-Object { $_.result -notin 'succeeded', 'succeeded_with_errors', 'in_progress' } | Select-Object -First 20)
+        $r.collected_at = (Get-Date).ToUniversalTime().ToString('o')
+        $r
     }
 }

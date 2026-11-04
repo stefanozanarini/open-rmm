@@ -134,7 +134,7 @@ type page[T any] struct {
 
 // get follows nextLink pages, only on the configured host.
 func getAll[T any](ctx context.Context, c *Client, path string, q url.Values) ([]T, error) {
-	u := c.base.JoinPath(path)
+	u := c.base.JoinPath(path) // #nosec G125 -- fixed API paths of this package
 	u.RawQuery = q.Encode()
 	next := u.String()
 	var out []T

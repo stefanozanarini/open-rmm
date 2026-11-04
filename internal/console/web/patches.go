@@ -31,6 +31,8 @@ type patchRow struct {
 	RebootDays int
 	// WingetMissing: winget is not installed on the endpoint.
 	WingetMissing bool
+	// Blocked: a setting stops Windows updates; Limited: holds some back.
+	Blocked, Limited bool
 }
 
 // appRow is a third-party application outdated on several agents.
@@ -54,6 +56,7 @@ type patchesData struct {
 	Firmware       int // agents with firmware or driver updates
 	BIOS           int // agents with a BIOS update
 	NotScanned     int
+	Blocked        int // a setting stops Windows updates
 	Managed        int // WSUS or Intune: observed only
 	Compliant      int
 	ComplianceRate int
@@ -101,6 +104,13 @@ func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 				Reboot: st.Reboot, RebootSince: st.RebootSince}
 			if st.RebootSince != nil {
 				row.RebootDays = int(now.Sub(*st.RebootSince).Hours() / 24)
+			}
+			var rep updates.WindowsReport
+			if json.Unmarshal(st.Data, &rep) == nil {
+				row.Blocked, row.Limited = rep.Blocked(), rep.Limited()
+			}
+			if row.Blocked {
+				d.Blocked++
 			}
 		}
 		if st, ok := byAgent[a.ID][updates.SourceWinget]; ok {
@@ -176,6 +186,8 @@ func (s *Server) handlePatches(w http.ResponseWriter, r *http.Request) {
 			keep = row.Firmware != nil && row.Firmware.Important+row.Firmware.Other > 0
 		case "stale":
 			keep = row.Stale
+		case "blocked":
+			keep = row.Blocked || row.Limited
 		case "compliant":
 			keep = !row.Stale && sum.Important == 0
 		}
@@ -233,6 +245,8 @@ type agentUpdates struct {
 	// WingetVersion is the module version used to upgrade applications.
 	WingetVersion   string
 	Classifications []string
+	// LogsJob is the latest collection of Windows Update logs.
+	LogsJob *store.Job
 }
 
 // updateRow is a Windows update in the patch table of an agent.
@@ -340,6 +354,14 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 		out.FirmwareVersion = latest[updates.FirmwareModule]
 	}
 	out.WinupdateVersion = latest["winupdate"]
+	if jobs, err := s.store.ListJobs(r.Context(), tenant, agent, 100); err == nil {
+		for i := range jobs {
+			if jobs[i].Module == "winupdate" && jobs[i].Action == "logs" {
+				out.LogsJob = &jobs[i]
+				break
+			}
+		}
+	}
 	out.WingetVersion = latest["winget"]
 	out.Classifications = []string{"security", "critical", "rollup", "update", "definition", "driver", "feature_pack", "service_pack", "tools", "upgrade"}
 	if out.Windows != nil {

@@ -38,6 +38,25 @@ var messages = []message{
 	msg("Nessun aggiornamento di sicurezza mancante ({} altri disponibili)", "No missing security updates (${1} others available)"),
 	msg("Riavvio in sospeso da {} giorni", "Reboot pending for ${1} days"),
 	msg("Nessun riavvio in sospeso", "No reboot pending"),
+	msg("Aggiornamenti bloccati: {}", "Updates blocked: ${1}", 1),
+	msg("Aggiornamenti limitati: {}", "Updates limited: ${1}", 1),
+	msg("Nessuna impostazione blocca gli aggiornamenti", "No setting blocks updates"),
+	// winupdate blockers
+	msg("Versione di Windows bloccata a {} da policy (attuale: {}): le versioni successive non vengono offerte", "Windows version pinned to ${1} by policy (current: ${2}): later versions are not offered"),
+	msg("Versione di Windows bloccata a {} da Intune/MDM (attuale: {}): le versioni successive non vengono offerte", "Windows version pinned to ${1} by Intune/MDM (current: ${2}): later versions are not offered"),
+	msg("Versione di Windows bloccata in UpdatePolicy\\PolicyState ({}) senza una policy che la imposti: probabilmente un residuo da rimuovere", "Windows version pinned in UpdatePolicy\\PolicyState (${1}) with no policy setting it: probably a leftover to remove"),
+	msg("Accesso a Windows Update disattivato da policy (DisableWindowsUpdateAccess)", "Access to Windows Update turned off by policy (DisableWindowsUpdateAccess)"),
+	msg("Server WSUS {} non raggiungibile", "WSUS server ${1} unreachable"),
+	msg("Indirizzo del server WSUS non valido: {}", "Invalid WSUS server address: ${1}"),
+	msg("Connessione a Windows Update su internet disattivata (DoNotConnectToWindowsUpdateInternetLocations) senza un server WSUS", "Connection to Windows Update on the internet turned off (DoNotConnectToWindowsUpdateInternetLocations) without a WSUS server"),
+	msg("Aggiornamenti automatici disattivati da policy (NoAutoUpdate): li installa open-rmm", "Automatic updates turned off by policy (NoAutoUpdate): open-rmm installs them"),
+	msg("Aggiornamenti di qualità differiti di {} giorni da policy", "Quality updates deferred by ${1} days by policy"),
+	msg("Aggiornamenti di funzionalità differiti di {} giorni da policy", "Feature updates deferred by ${1} days by policy"),
+	msg("Aggiornamenti in pausa fino al {}", "Updates paused until ${1}"),
+	msg("Driver esclusi dagli aggiornamenti di qualità da policy (ExcludeWUDriversInQualityUpdate)", "Drivers excluded from quality updates by policy (ExcludeWUDriversInQualityUpdate)"),
+	msg("Servizio {} disabilitato", "Service ${1} disabled"),
+	msg("Spazio libero insufficiente su {} ({} GB)", "Not enough free space on ${1} (${2} GB)"),
+	msg("Poco spazio libero su {} ({} GB)", "Low free space on ${1} (${2} GB)"),
 	// protection-status
 	msg("Nessun antivirus attivo registrato in Sicurezza di Windows", "No active antivirus registered in Windows Security"),
 	msg("Antivirus non aggiornato: {}", "Antivirus out of date: ${1}"),
@@ -107,7 +126,12 @@ func trMessage(lang, s string) string {
 			}
 		}
 		for _, g := range m.inner {
-			groups[g] = trMessage(lang, groups[g])
+			// Inner text may be several sentences joined by "; ".
+			parts := strings.Split(groups[g], "; ")
+			for i := range parts {
+				parts[i] = trMessage(lang, parts[i])
+			}
+			groups[g] = strings.Join(parts, "; ")
 		}
 		return expand(m.en, groups)
 	}

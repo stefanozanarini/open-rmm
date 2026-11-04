@@ -96,3 +96,15 @@ func placeholders(q string) string {
 	}
 	return b.String()
 }
+
+func TestBlockerMessages(t *testing.T) {
+	for it, en := range map[string]string{
+		`Versione di Windows bloccata in UpdatePolicy\PolicyState (TargetReleaseVersion = 22H2) senza una policy che la imposti: probabilmente un residuo da rimuovere`: `Windows version pinned in UpdatePolicy\PolicyState (TargetReleaseVersion = 22H2) with no policy setting it: probably a leftover to remove`,
+		"Aggiornamenti bloccati: Servizio bits disabilitato; Server WSUS http://w:8530 non raggiungibile":                                                               "Updates blocked: Service bits disabled; WSUS server http://w:8530 unreachable",
+		"Poco spazio libero su C: (7 GB)": "Low free space on C: (7 GB)",
+	} {
+		if got := trMessage("en", it); got != en {
+			t.Errorf("%q\n -> %q\nwant %q", it, got, en)
+		}
+	}
+}

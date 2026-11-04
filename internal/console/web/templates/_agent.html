@@ -84,12 +84,28 @@
 {{with .Windows}}
 <p class="muted">{{tf "Windows Update verificato il %s" (fmtTime .ScannedAt)}} · {{tf "gestione: %s" (label .ManagedBy)}}{{if ne .ManagedBy "none"}} ({{t "open-rmm osserva soltanto"}}{{with .WSUSServer}}, {{tf "server %s" .}}{{end}}){{end}}{{with .LastSuccess}} · {{tf "ultima installazione riuscita %s" (isoDate .)}}{{end}}</p>
 {{if .PendingReboot.Required}}<p><span class="badge chk-warning">{{t "riavvio in sospeso"}}</span>{{with .PendingReboot.Since}} {{tf "dal %s" (isoDate .)}}{{end}} <span class="muted">({{range $i, $r := .PendingReboot.Reasons}}{{if $i}}, {{end}}{{label $r}}{{end}})</span>{{if $.CanRun}} <a class="button" href="/agents/{{$.Data.Agent.ID}}#act-reboot-reboot">⏻ {{t "Riavvia…"}}</a>{{end}}</p>{{end}}
+{{with .Blockers}}
+<h3 id="update-blockers">{{t "Impostazioni che limitano gli aggiornamenti"}}</h3>
+<table>
+<thead><tr><th>{{t "Effetto"}}</th><th>{{t "Dettaglio"}}</th><th>{{t "Dove"}}</th></tr></thead>
+<tbody>{{range .}}<tr>
+  <td>{{if eq .Severity "block"}}<span class="badge chk-failing">{{t "blocca"}}</span>{{else if eq .Severity "limit"}}<span class="badge chk-warning">{{t "limita"}}</span>{{else}}<span class="badge">{{t "informazione"}}</span>{{end}}</td>
+  <td>{{msg .Summary}}</td>
+  <td>{{with .Path}}<code class="small">{{.}}</code>{{end}}{{with .Value}} = <code class="small">{{.}}</code>{{end}}</td>
+</tr>{{end}}</tbody>
+</table>
+{{end}}
 {{$u := $.Data.Updates}}
 <div class="toolbar">
   {{if and $.CanRun $u.WinupdateVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
     <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
     <input type="hidden" name="module" value="winupdate"><input type="hidden" name="action" value="scan">
-    <button>↻ {{t "Cerca aggiornamenti ora"}}</button></form>{{end}}
+    <button>↻ {{t "Cerca aggiornamenti ora"}}</button></form>
+  <form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
+    <input type="hidden" name="module" value="winupdate"><input type="hidden" name="action" value="logs">
+    <button title="{{t "Eventi di Windows Update ed errori di CBS.log degli ultimi 7 giorni"}}">📄 {{t "Raccogli i log di Windows Update"}}</button></form>{{end}}
+  {{with $u.LogsJob}}<a href="/jobs/{{.ID}}">{{tf "log raccolti il %s" (fmtTime .CreatedAt)}}</a>{{if not .State.Final}} <span class="muted">({{label .State}})</span>{{end}}{{end}}
   <form method="get" action="{{if $.Data.Panel}}/agents{{else}}/agents/{{$.Data.Agent.ID}}{{end}}" class="inline">
     {{if $.Data.Panel}}<input type="hidden" name="agent" value="{{$.Data.Agent.ID}}"><input type="hidden" name="tab" value="patches">{{end}}
     <input type="search" name="pq" value="{{$u.Query}}" placeholder="{{t "Cerca per nome o KB"}}" aria-label="{{t "Cerca"}}"> <button>{{t "Cerca"}}</button></form>
