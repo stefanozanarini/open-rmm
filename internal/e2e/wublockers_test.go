@@ -68,3 +68,20 @@ func TestWindowsUpdateBlockersAndLogs(t *testing.T) {
 		t.Fatal("no link to the collected logs on the agent page")
 	}
 }
+
+// A collection the published module does not have yet is refused by the
+// console, not sent for the agent to reject.
+func TestCollectActionMissingFromModule(t *testing.T) {
+	e := startConsole(t)
+	ctx := context.Background()
+	publishTo(t, e.store, resultModule(t, "winupdate", "1.1.2", "scan", `{}`))
+	pc := e.addWindowsAgent(t, "PC-VECCHIO")
+	c, csrf := e.login(t, admin)
+	_, body, _ := post(t, c, e.console.URL+"/agents/"+pc+"/collect", url.Values{"csrf": {csrf}, "module": {"winupdate"}, "action": {"logs"}})
+	if !strings.Contains(html.UnescapeString(body), "Il modulo winupdate 1.1.2 non ha l'azione logs") {
+		t.Fatalf("collect logs: %s", body)
+	}
+	if jobs, _ := e.store.ListJobs(ctx, e.tenant, pc, 10); len(jobs) != 0 {
+		t.Fatalf("jobs = %+v", jobs)
+	}
+}

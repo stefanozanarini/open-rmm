@@ -78,3 +78,32 @@ func TestConsoleFirmwareDashboardAndInstall(t *testing.T) {
 		t.Fatal("empty selection accepted")
 	}
 }
+
+func TestConsoleFirmwareToolInstall(t *testing.T) {
+	e := startConsole(t)
+	ctx := context.Background()
+	publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "firmware"))
+	pc := e.addWindowsAgent(t, "PC-LENOVO")
+	rep, _ := updates.ParseFirmware([]byte(`{"vendor":"lenovo","supported":false,"tool_missing":"Lenovo System Update","updates":[]}`), time.Now())
+	raw, _ := json.Marshal(rep)
+	e.store.PutUpdateStatus(ctx, store.UpdateStatus{TenantID: e.tenant, AgentID: pc, Source: updates.SourceFirmware,
+		ScannedAt: rep.ScannedAt, Data: raw, ManagedBy: "none"})
+	c, csrf := e.login(t, admin)
+
+	_, body := get(t, c, e.console.URL+"/agents/"+pc)
+	if !strings.Contains(body, `action="/agents/`+pc+`/firmware-tool"`) || !strings.Contains(body, "Installa Lenovo System Update") {
+		t.Fatalf("agent page: %s", body)
+	}
+	_, _, final := post(t, c, e.console.URL+"/agents/"+pc+"/firmware-tool", url.Values{"csrf": {csrf}})
+	if !strings.HasPrefix(final.Path, "/jobs/") {
+		t.Fatalf("install-tool: at %s", final)
+	}
+	j, _ := e.store.GetJob(ctx, e.tenant, strings.TrimPrefix(final.Path, "/jobs/"))
+	env := &openrmmv1.SignedEnvelope{}
+	proto.Unmarshal(j.Envelope, env)
+	job := &openrmmv1.Job{}
+	proto.Unmarshal(env.GetPayload(), job)
+	if job.GetModule() != "firmware" || job.GetAction() != "install-tool" || string(job.GetParamsJson()) != "{}" {
+		t.Fatalf("signed job = %s %s %s", job.GetModule(), job.GetAction(), job.GetParamsJson())
+	}
+}

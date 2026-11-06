@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/open-rmm/internal/modules"
 	"github.com/stefanozanarini/open-rmm/internal/updates"
 )
 
@@ -430,6 +431,49 @@ func (s *Server) updateFailures(r *http.Request, tenant, agent string, rep *upda
 		}
 	}
 	return out
+}
+
+// handleFirmwareTool installs the missing vendor tool (Dell Command Update,
+// Lenovo System Update, HP Image Assistant) on one agent, with the
+// operator's MFA approval. A policy rule with the same action does it on
+// every client.
+func (s *Server) handleFirmwareTool(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	id := r.PathValue("id")
+	if !ok || !ids.IsUUID(id) {
+		http.NotFound(w, r)
+		return
+	}
+	back := "/agents/" + id
+	a, err := s.store.GetAgent(r.Context(), t, id)
+	if err != nil || a.Status != store.AgentActive {
+		s.flash(w, r, s.T(r, "Solo gli agenti approvati possono ricevere comandi."), back)
+		return
+	}
+	latest, err := s.latestModules(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	mod, err := s.store.GetModule(r.Context(), updates.FirmwareModule, latest[updates.FirmwareModule])
+	if err != nil {
+		s.flash(w, r, s.T(r, "Modulo non trovato."), back)
+		return
+	}
+	if man, err := modules.ParseManifest(mod.Manifest); err != nil {
+		s.fail(w, r, err)
+		return
+	} else if _, ok := man.Actions[updates.FirmwareToolAction]; !ok {
+		s.flash(w, r, s.T(r, "Pubblica il modulo firmware 1.2.0 o successivo."), back)
+		return
+	}
+	req := &openrmmv1.JobRequest{TenantId: t, AgentId: id, Module: mod.ID, ModuleVersion: mod.Version, ModuleSha256: mod.ManifestSHA256,
+		Action: updates.FirmwareToolAction, ParamsJson: []byte("{}"), TtlSeconds: 4 * 3600, RequestNonce: jobreq.NewRequestNonce()}
+	if err := jobreq.Validate(req); err != nil {
+		s.flash(w, r, s.Tf(r, "Richiesta non valida: %v", err), back)
+		return
+	}
+	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
 }
 
 // handleFirmwareInstall installs vendor updates on one agent, with the

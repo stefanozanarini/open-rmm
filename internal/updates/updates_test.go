@@ -65,7 +65,7 @@ func TestParseFirmware(t *testing.T) {
 	if critical != 1 || other != 2 || !bios || r.ScannedAt.IsZero() {
 		t.Fatalf("counts = %d %d %v", critical, other, bios)
 	}
-	if SourceOf("firmware", "install") != SourceFirmware || SourceOf("firmware", "other") != "" {
+	if SourceOf("firmware", "install") != SourceFirmware || SourceOf("firmware", "install-tool") != SourceFirmware || SourceOf("firmware", "other") != "" {
 		t.Fatal("SourceOf")
 	}
 }

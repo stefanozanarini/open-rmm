@@ -390,7 +390,7 @@ The installation type is also sent by the core on connect (one field), so the co
 
 ### 8.8 Firmware ✅
 
-`firmware` uses the vendor tools, which know the right packages for each model: **Dell Command Update** (`dcu-cli`, report XML), **Lenovo System Update** (`tvsu /CM`, results exported to WMI) and **HP Image Assistant** (`/Operation:Analyze`, JSON report; business models, consumer models reported as not supported). Other vendors (Acer) are reported as not supported; Windows Update drivers remain with `winupdate`. The tools are distributed from the package library.
+`firmware` uses the vendor tools, which know the right packages for each model: **Dell Command Update** (`dcu-cli`, report XML), **Lenovo System Update** (`tvsu /CM`, results exported to WMI) and **HP Image Assistant** (`/Operation:Analyze`, JSON report; business models, consumer models reported as not supported). Other vendors (Acer) are reported as not supported; Windows Update drivers remain with `winupdate`. The `install-tool` action installs the tool with winget, on one agent with MFA approval or on every client through a policy rule approved once; `scan`, signed without MFA as a collection, never installs anything. Without winget the tools are distributed from the package library.
 
 - `scan` runs from the baseline policy; reports go to the Patch dashboard (counts, BIOS pending) and to the agent's Patch tab, with checks.
 - `install` needs an operator's MFA approval (or a signed policy rule), by type (firmware, driver, vendor applications); **BIOS only when explicitly included**, and only on mains power with at least 50% battery; BitLocker is suspended for one reboot before a BIOS update. Never reboots: the reboot is recorded for `reboot` (maintenance windows).

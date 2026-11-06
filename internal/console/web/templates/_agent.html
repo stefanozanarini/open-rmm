@@ -192,7 +192,12 @@
 </form>
 {{end}}
 {{else}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento di BIOS, firmware o driver."}}</p>{{end}}
-{{else if .ToolMissing}}<p><span class="badge chk-warning">{{t "strumento mancante"}}</span> {{tf "%s non è installato: distribuiscilo dalla pagina Software." .ToolMissing}}</p>
+{{else if .ToolMissing}}<p><span class="badge chk-warning">{{t "strumento mancante"}}</span> {{tf "%s non è installato." .ToolMissing}}</p>
+{{if and $.CanRun $.Data.Updates.FirmwareVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/firmware-tool" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <button class="primary">{{tf "Installa %s" .ToolMissing}}</button>
+  <span class="muted">{{t "Con winget, poi verifica gli aggiornamenti. Richiede l'approvazione MFA; per installarlo su tutti i PC aggiungi a una policy l'azione firmware «install-tool»."}}</span>
+</form>{{end}}
 {{else}}<p class="muted">{{tf "Produttore %s non supportato per gli aggiornamenti firmware." .Vendor}}</p>{{end}}
 {{end}}
 {{if not .HasReport}}<p class="muted">{{th "Nessuna verifica ancora: pubblica i moduli <code>winupdate</code> e <code>winget</code>, la raccolta automatica li esegue ogni 24 ore, oppure usa «Cerca aggiornamenti ora»."}}</p>{{end}}

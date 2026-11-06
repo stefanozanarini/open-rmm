@@ -14,6 +14,7 @@ import (
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/open-rmm/internal/modules"
 	"github.com/stefanozanarini/open-rmm/internal/policy"
 	"github.com/stefanozanarini/open-rmm/internal/updates"
 )
@@ -82,6 +83,13 @@ func (s *Server) startCollect(ctx context.Context, t, agent, module, action stri
 	}
 	if !found {
 		return trf("it", "Il modulo %s non è pubblicato.", module), nil
+	}
+	// An action added in a newer version than the one published: the agent
+	// would refuse the job.
+	if man, err := modules.ParseManifest(mod.Manifest); err != nil {
+		return "", err
+	} else if _, ok := man.Actions[action]; !ok {
+		return trf("it", "Il modulo %s %s non ha l'azione %s: pubblica una versione più recente dalla pagina Moduli.", module, mod.Version, action), nil
 	}
 	req := &openrmmv1.JobRequest{TenantId: t, AgentId: agent, Module: mod.ID, ModuleVersion: mod.Version, ModuleSha256: mod.ManifestSHA256,
 		Action: action, ParamsJson: []byte("{}"), TtlSeconds: int64(time.Hour / time.Second), RequestNonce: jobreq.NewRequestNonce()}

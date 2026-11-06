@@ -1,5 +1,6 @@
 {
   "scan": [],
+  "install-tool": [],
   "install": [
     {
       "name": "types",

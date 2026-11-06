@@ -40,6 +40,8 @@ var resultKeys = map[string]string{
 	"disk_free_gb": "spazio libero (GB)", "pending_xml": "operazioni in sospeso (pending.xml)", "windows": "Windows",
 	"failed_installations": "installazioni non riuscite", "diagnostics": "diagnostica", "hresult": "codice di errore",
 	"block": "blocca", "limit": "limita", "info": "informazione", "warning": "avviso", "critical": "critico",
+	"tool": "strumento", "tool_missing": "strumento mancante", "vendor": "produttore", "supported": "supportato",
+	"tool_install": "installazione dello strumento", "present": "già presente", "unsupported_vendor": "produttore non supportato",
 	"classifications": "classificazioni", "include_kbs": "KB da includere", "exclude_kbs": "KB da escludere", "allow_managed": "anche se gestito da WSUS o Intune", "pending_reboot": "riavvio in sospeso", "searcher": "ricerca",
 }
 
@@ -138,6 +140,19 @@ func jobOutcome(lang, module, action string, res map[string]any) string {
 			s += " · " + tr(lang, "riavvio richiesto per completarla")
 		}
 		return s
+	case "firmware/install-tool":
+		ti, _ := res["tool_install"].(map[string]any)
+		tool, _ := ti["tool"].(string)
+		switch ti["action"] {
+		case "installed":
+			return trf(lang, "Strumento del produttore installato: %s.", tool)
+		case "present":
+			return trf(lang, "Strumento del produttore già presente: %s.", tool)
+		}
+		if ti["reason"] == "server" {
+			return tr(lang, "Nessuno strumento da installare: server.")
+		}
+		return trf(lang, "Nessuno strumento da installare: produttore %s non supportato.", fmt.Sprint(ti["vendor"]))
 	}
 	if strings.HasSuffix(action, "scan") || strings.HasSuffix(action, "collect") || strings.HasSuffix(action, "status") {
 		return tr(lang, "Dati raccolti: li trovi nella pagina dell'agente.")

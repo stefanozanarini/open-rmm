@@ -296,6 +296,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agents/{id}/ring", s.role(authn.RoleAdmin, s.handleSetRing))
 	mux.Handle("POST /agents/ring", s.role(authn.RoleAdmin, s.handleSetRing))
 	mux.Handle("POST /agents/{id}/firmware", s.role(authn.RoleOperator, s.handleFirmwareInstall))
+	mux.Handle("POST /agents/{id}/firmware-tool", s.role(authn.RoleOperator, s.handleFirmwareTool))
 	mux.Handle("POST /agents/{id}/shell", s.role(authn.RoleOperator, s.handleOpenShell))
 	mux.Handle("GET /shell/{id}", s.role(authn.RoleOperator, s.handleShellPage))
 	mux.Handle("GET /shell/{id}/ws", s.role(authn.RoleOperator, s.handleShellSocket))

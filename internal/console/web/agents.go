@@ -61,14 +61,31 @@ func (s *Server) online(a store.Agent) bool {
 	return a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) < 10*time.Minute
 }
 
+// matches tells whether every word of q (lower case) appears in one of the
+// row's fields: "fr01 26h2" finds the Windows 11 26H2 PCs named FR01….
 func (r agentRow) matches(q string) bool {
-	for _, f := range []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser,
-		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion, r.Site, r.OU} {
-		if strings.Contains(strings.ToLower(f), q) {
-			return true
+	fields := []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser,
+		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion, r.Host.AgentVersion, r.Site, r.OU, r.ID}
+	fields = append(fields, r.Inv.IPv4...)
+	if r.LastSeenIP != nil {
+		fields = append(fields, r.LastSeenIP.String())
+	}
+	for i := range fields {
+		fields[i] = strings.ToLower(fields[i])
+	}
+	for _, word := range strings.Fields(q) {
+		found := false
+		for _, f := range fields {
+			if strings.Contains(f, word) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 // siteMatcher assigns agents to sites: by hand when an operator moved them,
@@ -186,7 +203,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	}
 	matcher := newSiteMatcher(sites, manual)
 	siteCount := map[string]int{}
-	var ouKeys []string
+	var ouKeys, allOUs []string
 	needle := strings.ToLower(d.Query)
 	for _, a := range agents {
 		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a), Checks: worst[a.ID], Alerts: alerts[a.ID],
@@ -208,7 +225,8 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 				row.ThirdParty = st.ThirdParty
 			}
 		}
-		// Counters follow the site and OU filters; the trees follow the family.
+		// Counters follow the site and OU filters; each tree follows the
+		// family and the other tree's filter, so its numbers match the list.
 		inSite := d.Site == "" || d.Site == siteID || (d.Site == "none" && siteID == "")
 		inUnit := d.OU == "" || inOU(ouKey, d.OU)
 		if inSite && inUnit {
@@ -218,13 +236,18 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if d.Family == "" || a.Host.OSFamily == d.Family {
-			if siteID == "" {
-				d.NoSite++
-			} else {
-				siteCount[siteID]++
+			if inUnit {
+				if siteID == "" {
+					d.NoSite++
+				} else {
+					siteCount[siteID]++
+				}
 			}
 			if ouKey != "" {
-				ouKeys = append(ouKeys, ouKey)
+				allOUs = append(allOUs, ouKey)
+				if inSite {
+					ouKeys = append(ouKeys, ouKey)
+				}
 			}
 		}
 		if (d.Family != "" && a.Host.OSFamily != d.Family) || !inSite || !inUnit || (needle != "" && !row.matches(needle)) {
@@ -243,7 +266,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	for _, st := range sites {
 		d.Sites = append(d.Sites, siteView{Site: st, Count: siteCount[st.ID]})
 	}
-	d.OUs = ouTree(ouKeys)
+	d.OUs = ouTree(allOUs, ouKeys)
 	base := url.Values{}
 	for _, k := range []string{"family", "q", "site", "ou"} {
 		if v := q.Get(k); v != "" {

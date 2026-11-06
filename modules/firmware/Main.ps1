@@ -5,12 +5,13 @@
 #   Lenovo  Lenovo System Update (tvsu.exe), winget id Lenovo.SystemUpdate
 #   HP      HP Image Assistant (HPImageAssistant.exe), business models only
 #
-# The tools are not installed by this module: distribute them from the
-# Software page. Nothing here reboots: a needed reboot is recorded for the
-# reboot module. Before a BIOS update BitLocker is suspended for one reboot,
+# install-tool installs the vendor tool with winget when it is missing (a
+# policy rule runs it on every client); scan never installs anything.
+# Nothing here reboots: a needed reboot is recorded for the reboot module. Before a BIOS update BitLocker is suspended for one reboot,
 # or the next start would ask for the recovery key.
 #
 # scan
+# install-tool  no parameters; workstations only
 # install  { "types": ["firmware", "driver"], "include_bios": false,
 #            "severity": "all" | "recommended" | "critical" }
 #
@@ -179,6 +180,7 @@ function Install-Lenovo([string]$Tvsu, [string[]]$Types, [string]$Severity) {
 function Get-HpiaPath($Params) {
     Find-Tool @((Get-Prop $Params 'hpia_path'),
         (Join-Path $env:ProgramFiles 'HP\HPIA\HPImageAssistant.exe'),
+        (Join-Path $env:SystemDrive 'SWSetup\HPImageAssistant\HPImageAssistant.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'HP\HPIA\HPImageAssistant.exe'),
         (Join-Path $env:ProgramFiles 'HPImageAssistant\HPImageAssistant.exe'),
         (Join-Path $env:SystemDrive 'HPIA\HPImageAssistant.exe'))
@@ -276,7 +278,7 @@ function New-Report($Params) {
             $dcu = Get-DcuPath $Params
             if (-not $dcu) {
                 $report.tool_missing = 'Dell Command Update'
-                $report.checks = @(@{ id = 'firmware'; status = 'warning'; summary = 'Dell Command Update non installato: distribuiscilo dalla pagina Software (Dell.CommandUpdate)' })
+                $report.checks = @(@{ id = 'firmware'; status = 'warning'; summary = 'Dell Command Update non installato' })
                 return $report
             }
             $report.supported, $report.tool = $true, 'Dell Command Update'
@@ -286,7 +288,7 @@ function New-Report($Params) {
             $tvsu = Get-TvsuPath $Params
             if (-not $tvsu) {
                 $report.tool_missing = 'Lenovo System Update'
-                $report.checks = @(@{ id = 'firmware'; status = 'warning'; summary = 'Lenovo System Update non installato: distribuiscilo dalla pagina Software (Lenovo.SystemUpdate)' })
+                $report.checks = @(@{ id = 'firmware'; status = 'warning'; summary = 'Lenovo System Update non installato' })
                 return $report
             }
             $report.supported, $report.tool = $true, 'Lenovo System Update'
@@ -296,7 +298,7 @@ function New-Report($Params) {
             $hpia = Get-HpiaPath $Params
             if (-not $hpia) {
                 $report.tool_missing = 'HP Image Assistant'
-                $report.checks = @(@{ id = 'firmware'; status = 'warning'; summary = 'HP Image Assistant non installato: distribuiscilo dalla pagina Software' })
+                $report.checks = @(@{ id = 'firmware'; status = 'warning'; summary = 'HP Image Assistant non installato' })
                 return $report
             }
             $updates = Get-HpUpdates $hpia
@@ -327,10 +329,76 @@ function New-Report($Params) {
     $report
 }
 
+# Vendor tools: name, winget id, path lookup, install folder (HP Image
+# Assistant only extracts itself: winget's default is C:\SWSetup).
+$VendorTools = @{
+    dell   = @{ name = 'Dell Command Update'; id = 'Dell.CommandUpdate'; find = { param($p) Get-DcuPath $p } }
+    lenovo = @{ name = 'Lenovo System Update'; id = 'Lenovo.SystemUpdate'; find = { param($p) Get-TvsuPath $p } }
+    hp     = @{ name = 'HP Image Assistant'; id = 'HP.ImageAssistant'; find = { param($p) Get-HpiaPath $p }; location = (Join-Path $env:ProgramFiles 'HP\HPIA') }
+}
+
+# winget is not on the PATH of the system account: run the executable of
+# the App Installer package (as the winget module does).
+function Find-Winget {
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+    $found = Get-ChildItem -Path (Join-Path $env:ProgramFiles 'WindowsApps') -Filter "Microsoft.DesktopAppInstaller_*_${arch}__8wekyb3d8bbwe" -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName 'winget.exe') } |
+        Sort-Object { try { [version]($_.Name -split '_')[1] } catch { [version]'0.0' } } -Descending |
+        Select-Object -First 1
+    if ($found) { return (Join-Path $found.FullName 'winget.exe') }
+    $cmd = Get-Command winget.exe -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    return $null
+}
+
+function Install-VendorTool($Params) {
+    $vendor = Get-Vendor
+    $result = @{ vendor = $vendor; action = 'skipped' }
+    if ((Get-CimInstance Win32_OperatingSystem).ProductType -ne 1) {
+        $result.reason = 'server'
+        return $result
+    }
+    $tool = $VendorTools[$vendor]
+    if (-not $tool) {
+        $result.reason = 'unsupported_vendor'
+        return $result
+    }
+    $result.tool = $tool.name
+    if (& $tool.find $Params) {
+        $result.action = 'present'
+        return $result
+    }
+    $winget = Find-Winget
+    if (-not $winget) { throw "winget (App Installer) is not installed: install $($tool.name) from the Software page" }
+    Send-RmmProgress 20 "installing $($tool.name)"
+    $wingetArgs = @('install', '--id', $tool.id, '--exact', '--silent', '--scope', 'machine',
+        '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
+    if ($tool.location) { $wingetArgs += @('--location', $tool.location) }
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $out = & $winget @wingetArgs 2>&1 | ForEach-Object { [string]$_ }
+    $code = $LASTEXITCODE
+    $result.exit_code = '0x{0:X8}' -f $code
+    $result.output = (@($out) | Select-Object -Last 5) -join "`n"
+    if (-not (& $tool.find $Params)) {
+        throw "$($tool.name) installation failed (winget exit code $($result.exit_code)): $($result.output)"
+    }
+    $result.action = 'installed'
+    Send-RmmLog "$($tool.name) installed"
+    $result
+}
+
 Invoke-RmmModule @{
     scan    = {
         param($Params, $Request)
         New-Report $Params
+    }
+    'install-tool' = {
+        param($Params, $Request)
+        $r = Install-VendorTool $Params
+        Send-RmmProgress 60 'scanning'
+        $report = New-Report $Params
+        $report.tool_install = $r
+        $report
     }
     install = {
         param($Params, $Request)

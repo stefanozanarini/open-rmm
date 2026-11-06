@@ -18,9 +18,11 @@ const (
 	WindowsModule  = "winupdate"
 	WingetModule   = "winget"
 	FirmwareModule = "firmware"
-	SourceWindows  = "windows"
-	SourceWinget   = "winget"
-	SourceFirmware = "firmware"
+	// FirmwareToolAction installs the vendor tool the firmware module uses.
+	FirmwareToolAction = "install-tool"
+	SourceWindows      = "windows"
+	SourceWinget       = "winget"
+	SourceFirmware     = "firmware"
 )
 
 const (
@@ -35,7 +37,7 @@ func SourceOf(module, action string) string {
 		return SourceWindows
 	case module == WingetModule && (action == "scan" || action == "upgrade"):
 		return SourceWinget
-	case module == FirmwareModule && (action == "scan" || action == "install"):
+	case module == FirmwareModule && (action == "scan" || action == "install" || action == FirmwareToolAction):
 		return SourceFirmware
 	}
 	return ""

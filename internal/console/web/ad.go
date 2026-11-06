@@ -88,11 +88,18 @@ type ouView struct {
 	Count      int
 }
 
-// ouTree builds the tree of the containers holding agents, with counts that
+// ouTree builds the tree of the containers holding the agents in all, with
+// counts of those in counted (the agents in the current filters) that
 // include sub-containers.
-func ouTree(keys []string) []ouView {
+func ouTree(all, counted []string) []ouView {
 	count := map[string]int{}
-	for _, k := range keys {
+	for _, k := range all {
+		parts := strings.Split(k, "/")
+		for i := range parts {
+			count[strings.Join(parts[:i+1], "/")] += 0 // listed, even when 0
+		}
+	}
+	for _, k := range counted {
 		parts := strings.Split(k, "/")
 		for i := range parts {
 			count[strings.Join(parts[:i+1], "/")]++
