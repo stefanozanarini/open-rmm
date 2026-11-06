@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/modules"
@@ -247,11 +248,40 @@ type agentUpdates struct {
 	WinupdateVersion string
 	OSModule         string
 	OSModuleVersion  string
+	// Installs are the latest osupdate installations (Linux), newest first:
+	// Linux has no update history of its own to show.
+	Installs []osInstall
 	// WingetVersion is the module version used to upgrade applications.
 	WingetVersion   string
 	Classifications []string
 	// LogsJob is the latest collection of Windows Update logs.
 	LogsJob *store.Job
+}
+
+// osInstall is an osupdate install job.
+type osInstall struct {
+	Job          string
+	At           time.Time
+	State        store.JobState
+	Error        string
+	Packages     []string
+	SecurityOnly bool
+}
+
+// maxInstalls is how many osupdate installations the agent page lists.
+const maxInstalls = 10
+
+// lastLines keeps the end of a long error (the package manager's last
+// lines say what went wrong), at most n bytes on a rune boundary.
+func lastLines(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	s = s[len(s)-n:]
+	for len(s) > 0 && !utf8.RuneStart(s[0]) {
+		s = s[1:]
+	}
+	return "…" + s
 }
 
 // updateRow is a Windows update in the patch table of an agent.
@@ -372,9 +402,20 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 	out.OSModuleVersion = latest[out.OSModule]
 	if jobs, err := s.store.ListJobs(r.Context(), tenant, agent, 100); err == nil {
 		for i := range jobs {
-			if jobs[i].Module == "winupdate" && jobs[i].Action == "logs" {
-				out.LogsJob = &jobs[i]
-				break
+			j := &jobs[i]
+			switch {
+			case j.Module == "winupdate" && j.Action == "logs" && out.LogsJob == nil:
+				out.LogsJob = j
+			case j.Module == updates.OSUpdateModule && j.Action == "install" && len(out.Installs) < maxInstalls:
+				in := osInstall{Job: j.ID, At: j.CreatedAt, State: j.State, Error: lastLines(j.Error, 300)}
+				var p struct {
+					Packages     []string `json:"packages"`
+					SecurityOnly bool     `json:"security_only"`
+				}
+				if json.Unmarshal(j.Params, &p) == nil {
+					in.Packages, in.SecurityOnly = p.Packages, p.SecurityOnly
+				}
+				out.Installs = append(out.Installs, in)
 			}
 		}
 	}

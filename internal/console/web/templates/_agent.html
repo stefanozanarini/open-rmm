@@ -109,7 +109,7 @@
   {{with $u.LogsJob}}<a href="/jobs/{{.ID}}">{{tf "log raccolti il %s" (fmtTime .CreatedAt)}}</a>{{if not .State.Final}} <span class="muted">({{label .State}})</span>{{end}}{{end}}
   <form method="get" action="{{if $.Data.Panel}}/agents{{else}}/agents/{{$.Data.Agent.ID}}{{end}}" class="inline">
     {{if $.Data.Panel}}<input type="hidden" name="agent" value="{{$.Data.Agent.ID}}"><input type="hidden" name="tab" value="patches">{{end}}
-    <input type="search" name="pq" value="{{$u.Query}}" placeholder="{{t "Cerca per nome o KB"}}" aria-label="{{t "Cerca"}}"> <button>{{t "Cerca"}}</button></form>
+    <input type="search" name="pq" value="{{$u.Query}}" placeholder="{{if .Manager}}{{t "Cerca per pacchetto"}}{{else}}{{t "Cerca per nome o KB"}}{{end}}" aria-label="{{t "Cerca"}}"> <button>{{t "Cerca"}}</button></form>
 </div>
 {{if $u.Rows}}
 <form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" class="stack">
@@ -118,7 +118,7 @@
   <input type="hidden" name="ttl_minutes" value="480">
   {{if eq $u.OSModule "winupdate"}}{{range $u.Classifications}}<input type="hidden" name="p.classifications" value="{{.}}">{{end}}{{end}}
 <table class="patches">
-<thead><tr><th></th><th>{{t "Stato"}}</th><th>{{t "Gravità"}}</th><th>{{t "Aggiornamento"}}</th><th>{{if .Manager}}{{t "Versione"}}{{else}}KB{{end}}</th><th>{{t "Data"}}</th></tr></thead>
+{{$linux := .Manager}}<thead><tr><th></th><th>{{t "Stato"}}</th><th>{{t "Gravità"}}</th><th>{{t "Aggiornamento"}}</th><th>{{if $linux}}{{t "Versione"}}{{else}}KB{{end}}</th>{{if not $linux}}<th>{{t "Data"}}</th>{{end}}</tr></thead>
 <tbody>{{range $u.Rows}}<tr>
   <td>{{if and (eq .State "missing") $.CanRun}}{{if .Package}}<input type="checkbox" name="p.packages" value="{{.Package}}"{{if .Selected}} checked{{end}} aria-label="{{t "seleziona"}}">{{else if .KBs}}<input type="checkbox" name="p.include_kbs" value="{{index .KBs 0}}"{{if .Selected}} checked{{end}} aria-label="{{t "seleziona"}}">{{end}}{{end}}</td>
   <td>{{if eq .State "missing"}}<span class="badge chk-warning">{{t "da installare"}}</span>{{with .Failure}}
@@ -127,7 +127,7 @@
   <td>{{if or (eq .Severity "Critical") (eq .Severity "critical")}}<span class="badge chk-failing">{{label .Severity}}</span>{{else}}{{label .Severity}}{{end}}</td>
   <td>{{.Title}}</td>
   <td>{{if .Package}}{{with .Installed}}{{.}} → {{end}}{{.Version}}{{end}}{{range .KBs}}{{.}} {{end}}{{with .Link}}<a href="{{.}}" target="_blank" rel="noopener noreferrer" title="{{t "Informazioni su support.microsoft.com"}}">↗</a>{{end}}</td>
-  <td>{{isoDate .Date}}</td>
+  {{if not $linux}}<td>{{isoDate .Date}}</td>{{end}}
 </tr>{{end}}</tbody>
 </table>
 {{with $u.HiddenHistory}}<p class="muted small">{{tf "Mostrate le ultime %d installazioni; altre %d più vecchie: cercale per nome o KB." maxHistory .}}</p>{{end}}
@@ -144,6 +144,18 @@
 {{else if $u.Query}}<p class="muted">{{t "Nessun aggiornamento corrisponde alla ricerca."}}</p>
 {{else if .Manager}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento del sistema mancante."}}</p>
 {{else}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento di Windows mancante."}}</p>{{end}}
+{{with $.Data.Updates.Installs}}
+<h3 id="os-installs">{{t "Ultime installazioni"}}</h3>
+<table>
+<thead><tr><th>{{t "Data"}}</th><th>{{t "Esito"}}</th><th>{{t "Richiesta"}}</th><th></th></tr></thead>
+<tbody>{{range .}}<tr>
+  <td>{{fmtTime .At}}</td>
+  <td>{{if eq .State "succeeded"}}<span class="badge chk-ok">✓ {{t "riuscita"}}</span>{{else if or (eq .State "failed") (eq .State "rejected") (eq .State "expired")}}<span class="badge chk-failing">✗ {{label .State}}</span>{{with .Error}}<div class="failure small">{{.}}</div>{{end}}{{else}}<span class="badge">{{label .State}}</span>{{end}}</td>
+  <td>{{if .Packages}}{{range $i, $p := .Packages}}{{if $i}}, {{end}}{{$p}}{{end}}{{else if .SecurityOnly}}{{t "tutti gli aggiornamenti di sicurezza"}}{{else}}{{t "tutti gli aggiornamenti"}}{{end}}</td>
+  <td><a href="/jobs/{{.Job}}">{{t "apri il job"}}</a></td>
+</tr>{{end}}</tbody>
+</table>
+{{end}}
 {{end}}
 {{with .Winget}}
 <h3 id="apps">{{t "Applicazioni da aggiornare (winget)"}}</h3>
@@ -209,7 +221,12 @@
 </form>{{end}}
 {{else}}<p class="muted">{{tf "Produttore %s non supportato per gli aggiornamenti firmware." .Vendor}}</p>{{end}}
 {{end}}
-{{if not .HasReport}}<p class="muted">{{th "Nessuna verifica ancora: pubblica i moduli <code>winupdate</code> e <code>winget</code>, la raccolta automatica li esegue ogni 24 ore, oppure usa «Cerca aggiornamenti ora»."}}</p>{{end}}
+{{if not .HasReport}}{{if eq .OSModule "osupdate"}}<p class="muted">{{th "Nessuna verifica ancora: pubblica il modulo <code>osupdate</code>, la raccolta automatica lo esegue ogni 24 ore."}}</p>
+{{else}}<p class="muted">{{th "Nessuna verifica ancora: pubblica i moduli <code>winupdate</code> e <code>winget</code>, la raccolta automatica li esegue ogni 24 ore, oppure usa «Cerca aggiornamenti ora»."}}</p>{{end}}
+{{if and $.CanRun .OSModuleVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
+  <input type="hidden" name="module" value="{{.OSModule}}"><input type="hidden" name="action" value="scan">
+  <button>↻ {{t "Cerca aggiornamenti ora"}}</button></form>{{end}}{{end}}
 {{end}}
 {{end}}
 

@@ -563,6 +563,8 @@ type actionLink struct{ URL, Label string }
 var checkActions = map[string]struct{ tab, hash, label string }{
 	"winupdate/updates": {"patches", "patches", "Installa gli aggiornamenti"},
 	"winupdate/reboot":  {"commands", "act-reboot-reboot", "Riavvia…"},
+	"osupdate/updates":  {"patches", "patches", "Installa gli aggiornamenti"},
+	"osupdate/reboot":   {"commands", "act-reboot-reboot", "Riavvia…"},
 	"winget/thirdparty": {"patches", "apps", "Aggiorna le applicazioni"},
 	"firmware/firmware": {"patches", "firmware", "Aggiorna BIOS, firmware e driver"},
 }

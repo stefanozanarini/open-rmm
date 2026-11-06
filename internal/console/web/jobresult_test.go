@@ -37,3 +37,14 @@ func TestJobResultReadable(t *testing.T) {
 		t.Errorf("long table:\n%s", h)
 	}
 }
+
+func TestOSUpdateOutcome(t *testing.T) {
+	res := map[string]any{
+		"updates":        []any{map[string]any{"classification": "security"}, map[string]any{"classification": "update"}},
+		"pending_reboot": map[string]any{"required": true},
+		"installed":      map[string]any{"manager": "apt"},
+	}
+	if got := jobOutcome(langIT, "osupdate", "install", res); got != "Aggiornamenti installati con apt: ne restano 2, di cui 1 di sicurezza. · riavvio richiesto per completarla" {
+		t.Fatalf("outcome = %q", got)
+	}
+}

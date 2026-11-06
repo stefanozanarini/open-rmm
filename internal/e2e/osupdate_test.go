@@ -75,4 +75,17 @@ func TestConsoleLinuxUpdates(t *testing.T) {
 	if len(jobs) != 2 || !strings.Contains(all, `"packages":["openssl"]`) || !strings.Contains(all, `"security_only":true`) {
 		t.Fatalf("install params: %s", all)
 	}
+
+	// The installations are listed on the agent page: Linux has no update
+	// history of its own.
+	_, body = get(t, c, e.console.URL+"/agents/"+pc)
+	body = html.UnescapeString(body)
+	for _, want := range []string{"Ultime installazioni", "tutti gli aggiornamenti di sicurezza", "<td>openssl</td>", "Cerca per pacchetto"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("agent page lacks %q", want)
+		}
+	}
+	if strings.Contains(body, "Cerca per nome o KB") {
+		t.Fatal("Windows search hint on a Linux agent")
+	}
 }

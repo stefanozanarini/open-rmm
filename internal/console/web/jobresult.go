@@ -40,6 +40,7 @@ var resultKeys = map[string]string{
 	"disk_free_gb": "spazio libero (GB)", "pending_xml": "operazioni in sospeso (pending.xml)", "windows": "Windows",
 	"failed_installations": "installazioni non riuscite", "diagnostics": "diagnostica", "hresult": "codice di errore",
 	"block": "blocca", "limit": "limita", "info": "informazione", "warning": "avviso", "critical": "critico",
+	"manager": "gestore pacchetti", "os": "sistema operativo", "output": "output",
 	"tool": "strumento", "tool_missing": "strumento mancante", "vendor": "produttore", "supported": "supportato",
 	"tool_install": "installazione dello strumento", "present": "già presente", "unsupported_vendor": "produttore non supportato",
 	"classifications": "classificazioni", "include_kbs": "KB da includere", "exclude_kbs": "KB da escludere", "allow_managed": "anche se gestito da WSUS o Intune", "pending_reboot": "riavvio in sospeso", "searcher": "ricerca",
@@ -136,6 +137,20 @@ func jobOutcome(lang, module, action string, res map[string]any) string {
 		if _, has := res["diagnostics"]; has && ok < len(list) {
 			s += " · " + tr(lang, "diagnostica allegata qui sotto")
 		}
+		if p, _ := res["pending_reboot"].(map[string]any); p != nil && p["required"] == true {
+			s += " · " + tr(lang, "riavvio richiesto per completarla")
+		}
+		return s
+	case "osupdate/install":
+		ups, _ := res["updates"].([]any)
+		sec := 0
+		for _, u := range ups {
+			if m, _ := u.(map[string]any); m != nil && m["classification"] == "security" {
+				sec++
+			}
+		}
+		inst, _ := res["installed"].(map[string]any)
+		s := trf(lang, "Aggiornamenti installati con %s: ne restano %d, di cui %d di sicurezza.", fmt.Sprint(inst["manager"]), len(ups), sec)
 		if p, _ := res["pending_reboot"].(map[string]any); p != nil && p["required"] == true {
 			s += " · " + tr(lang, "riavvio richiesto per completarla")
 		}
