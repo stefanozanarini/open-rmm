@@ -238,11 +238,15 @@ type agentUpdates struct {
 	HasReport       bool
 	// Patch table: missing and installed Windows updates, filtered by
 	// Query; WinupdateVersion is the module version used to install.
+	// OSModule is the module of the agent's platform (winupdate, or
+	// osupdate on Linux) and OSModuleVersion its newest version.
 	Rows             []updateRow
 	Missing          int
 	HiddenHistory    int // older installations left out (no search)
 	Query            string
 	WinupdateVersion string
+	OSModule         string
+	OSModuleVersion  string
 	// WingetVersion is the module version used to upgrade applications.
 	WingetVersion   string
 	Classifications []string
@@ -256,9 +260,11 @@ type updateRow struct {
 	Severity string
 	Title    string
 	KBs      []string
-	Link     string // Microsoft support page of the first KB
-	Date     *time.Time
-	Selected bool
+	// Package, Installed and Version: a Linux package update.
+	Package, Installed, Version string
+	Link                        string // Microsoft support page of the first KB
+	Date                        *time.Time
+	Selected                    bool
 	// Failure is the last failed installation of a missing update.
 	Failure *updateFailure
 }
@@ -297,8 +303,12 @@ func updateRows(rep *updates.WindowsReport, q string) (rows []updateRow, missing
 		if sev == "" {
 			sev = u.Classification
 		}
-		out = append(out, updateRow{State: "missing", Severity: sev, Title: u.Title, KBs: u.KBs, Link: kbLink(u.KBs),
-			Date: u.Released, Selected: u.Important()})
+		row := updateRow{State: "missing", Severity: sev, Title: u.Title, KBs: u.KBs, Link: kbLink(u.KBs),
+			Date: u.Released, Selected: u.Important()}
+		if rep.Manager != "" {
+			row.Package, row.Installed, row.Version = u.ID, u.Installed, u.Version
+		}
+		out = append(out, row)
 	}
 	var past []updateRow
 	for _, h := range rep.History {
@@ -355,6 +365,11 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 		out.FirmwareVersion = latest[updates.FirmwareModule]
 	}
 	out.WinupdateVersion = latest["winupdate"]
+	out.OSModule = updates.WindowsModule
+	if a, err := s.store.GetAgent(r.Context(), tenant, agent); err == nil && a.Host.OS == "linux" {
+		out.OSModule = updates.OSUpdateModule
+	}
+	out.OSModuleVersion = latest[out.OSModule]
 	if jobs, err := s.store.ListJobs(r.Context(), tenant, agent, 100); err == nil {
 		for i := range jobs {
 			if jobs[i].Module == "winupdate" && jobs[i].Action == "logs" {

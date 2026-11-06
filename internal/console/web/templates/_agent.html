@@ -82,7 +82,8 @@
 <h2 id="patches">{{t "Aggiornamenti"}}</h2>
 {{with .Data.Updates}}
 {{with .Windows}}
-<p class="muted">{{tf "Windows Update verificato il %s" (fmtTime .ScannedAt)}} · {{tf "gestione: %s" (label .ManagedBy)}}{{if ne .ManagedBy "none"}} ({{t "open-rmm osserva soltanto"}}{{with .WSUSServer}}, {{tf "server %s" .}}{{end}}){{end}}{{with .LastSuccess}} · {{tf "ultima installazione riuscita %s" (isoDate .)}}{{end}}</p>
+{{if .Manager}}<p class="muted">{{tf "Aggiornamenti del sistema (%s) verificati il %s" .Manager (fmtTime .ScannedAt)}}</p>
+{{else}}<p class="muted">{{tf "Windows Update verificato il %s" (fmtTime .ScannedAt)}} · {{tf "gestione: %s" (label .ManagedBy)}}{{if ne .ManagedBy "none"}} ({{t "open-rmm osserva soltanto"}}{{with .WSUSServer}}, {{tf "server %s" .}}{{end}}){{end}}{{with .LastSuccess}} · {{tf "ultima installazione riuscita %s" (isoDate .)}}{{end}}</p>{{end}}
 {{if .PendingReboot.Required}}<p><span class="badge chk-warning">{{t "riavvio in sospeso"}}</span>{{with .PendingReboot.Since}} {{tf "dal %s" (isoDate .)}}{{end}} <span class="muted">({{range $i, $r := .PendingReboot.Reasons}}{{if $i}}, {{end}}{{label $r}}{{end}})</span>{{if $.CanRun}} <a class="button" href="/agents/{{$.Data.Agent.ID}}#act-reboot-reboot">⏻ {{t "Riavvia…"}}</a>{{end}}</p>{{end}}
 {{with .Blockers}}
 <h3 id="update-blockers">{{t "Impostazioni che limitano gli aggiornamenti"}}</h3>
@@ -97,11 +98,11 @@
 {{end}}
 {{$u := $.Data.Updates}}
 <div class="toolbar">
-  {{if and $.CanRun $u.WinupdateVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
+  {{if and $.CanRun $u.OSModuleVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
     <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
-    <input type="hidden" name="module" value="winupdate"><input type="hidden" name="action" value="scan">
-    <button>↻ {{t "Cerca aggiornamenti ora"}}</button></form>
-  <form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
+    <input type="hidden" name="module" value="{{$u.OSModule}}"><input type="hidden" name="action" value="scan">
+    <button>↻ {{t "Cerca aggiornamenti ora"}}</button></form>{{end}}
+  {{if and $.CanRun $u.WinupdateVersion (eq $u.OSModule "winupdate")}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
     <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
     <input type="hidden" name="module" value="winupdate"><input type="hidden" name="action" value="logs">
     <button title="{{t "Eventi di Windows Update ed errori di CBS.log degli ultimi 7 giorni"}}">📄 {{t "Raccogli i log di Windows Update"}}</button></form>{{end}}
@@ -113,27 +114,35 @@
 {{if $u.Rows}}
 <form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
-  <input type="hidden" name="target" value="winupdate|{{$u.WinupdateVersion}}|install">
+  <input type="hidden" name="target" value="{{$u.OSModule}}|{{$u.OSModuleVersion}}|install">
   <input type="hidden" name="ttl_minutes" value="480">
-  {{range $u.Classifications}}<input type="hidden" name="p.classifications" value="{{.}}">{{end}}
+  {{if eq $u.OSModule "winupdate"}}{{range $u.Classifications}}<input type="hidden" name="p.classifications" value="{{.}}">{{end}}{{end}}
 <table class="patches">
-<thead><tr><th></th><th>{{t "Stato"}}</th><th>{{t "Gravità"}}</th><th>{{t "Aggiornamento"}}</th><th>KB</th><th>{{t "Data"}}</th></tr></thead>
+<thead><tr><th></th><th>{{t "Stato"}}</th><th>{{t "Gravità"}}</th><th>{{t "Aggiornamento"}}</th><th>{{if .Manager}}{{t "Versione"}}{{else}}KB{{end}}</th><th>{{t "Data"}}</th></tr></thead>
 <tbody>{{range $u.Rows}}<tr>
-  <td>{{if and (eq .State "missing") .KBs $.CanRun}}<input type="checkbox" name="p.include_kbs" value="{{index .KBs 0}}"{{if .Selected}} checked{{end}} aria-label="{{t "seleziona"}}">{{end}}</td>
+  <td>{{if and (eq .State "missing") $.CanRun}}{{if .Package}}<input type="checkbox" name="p.packages" value="{{.Package}}"{{if .Selected}} checked{{end}} aria-label="{{t "seleziona"}}">{{else if .KBs}}<input type="checkbox" name="p.include_kbs" value="{{index .KBs 0}}"{{if .Selected}} checked{{end}} aria-label="{{t "seleziona"}}">{{end}}{{end}}</td>
   <td>{{if eq .State "missing"}}<span class="badge chk-warning">{{t "da installare"}}</span>{{with .Failure}}
     <div class="failure" title="{{t "ultimo tentativo non riuscito"}}"><span class="badge chk-failing">✗ {{if .Code}}{{.Code}}{{else}}{{t "non riuscito"}}{{end}}</span>
       <span class="small">{{t .Text}}</span>{{with .At}} <span class="muted small">· {{isoDate .}}</span>{{end}}{{with .Job}} <a class="small" href="/jobs/{{.}}">{{t "apri il job"}}</a>{{end}}</div>{{end}}{{else if eq .State "succeeded"}}<span class="badge chk-ok">✓ {{t "installato"}}</span>{{else if eq .State "failed"}}<span class="badge chk-failing">✗ {{t "non riuscito"}}</span>{{with .Failure}}<div class="failure"><code>{{.Code}}</code> <span class="small">{{t .Text}}</span></div>{{end}}{{else}}<span class="badge">{{label .State}}</span>{{end}}</td>
   <td>{{if or (eq .Severity "Critical") (eq .Severity "critical")}}<span class="badge chk-failing">{{label .Severity}}</span>{{else}}{{label .Severity}}{{end}}</td>
   <td>{{.Title}}</td>
-  <td>{{range .KBs}}{{.}} {{end}}{{with .Link}}<a href="{{.}}" target="_blank" rel="noopener noreferrer" title="{{t "Informazioni su support.microsoft.com"}}">↗</a>{{end}}</td>
+  <td>{{if .Package}}{{with .Installed}}{{.}} → {{end}}{{.Version}}{{end}}{{range .KBs}}{{.}} {{end}}{{with .Link}}<a href="{{.}}" target="_blank" rel="noopener noreferrer" title="{{t "Informazioni su support.microsoft.com"}}">↗</a>{{end}}</td>
   <td>{{isoDate .Date}}</td>
 </tr>{{end}}</tbody>
 </table>
 {{with $u.HiddenHistory}}<p class="muted small">{{tf "Mostrate le ultime %d installazioni; altre %d più vecchie: cercale per nome o KB." maxHistory .}}</p>{{end}}
-{{if and $.CanRun $u.WinupdateVersion $u.Missing}}<div class="actions"><button class="primary">{{t "Installa i selezionati"}}</button>
+{{if and $.CanRun $u.OSModuleVersion $u.Missing}}<div class="actions"><button class="primary">{{t "Installa i selezionati"}}</button>
+  {{if .Manager}}<button form="os-security">{{t "Installa tutti gli aggiornamenti di sicurezza"}}</button> <button form="os-all">{{t "Installa tutti"}}</button>{{end}}
   <span class="muted">{{t "Richiede l'approvazione MFA. Il PC non viene riavviato: il riavvio necessario viene segnalato."}}</span></div>{{end}}
 </form>
+{{if and .Manager $.CanRun $u.OSModuleVersion $u.Missing}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" id="os-security" hidden>
+  <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="target" value="osupdate|{{$u.OSModuleVersion}}|install">
+  <input type="hidden" name="ttl_minutes" value="480"><input type="hidden" name="p.security_only" value="true"></form>
+<form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" id="os-all" hidden>
+  <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="target" value="osupdate|{{$u.OSModuleVersion}}|install">
+  <input type="hidden" name="ttl_minutes" value="480"></form>{{end}}
 {{else if $u.Query}}<p class="muted">{{t "Nessun aggiornamento corrisponde alla ricerca."}}</p>
+{{else if .Manager}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento del sistema mancante."}}</p>
 {{else}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento di Windows mancante."}}</p>{{end}}
 {{end}}
 {{with .Winget}}

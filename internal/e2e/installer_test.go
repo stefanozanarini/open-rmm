@@ -114,7 +114,7 @@ func TestConsoleInstallerWithDedicatedCA(t *testing.T) {
 
 	// Build: MFA approval first, then the passphrase.
 	code, body, final := post(t, c, e.console.URL+"/agent-installer/build", url.Values{"csrf": {csrf}, "version": {"1.2.3"}})
-	if code != 200 || !strings.Contains(html.UnescapeString(body), "Creazione dell'installer 1.2.3 approvata") {
+	if code != 200 || !strings.Contains(html.UnescapeString(body), "Creazione dell'installer 1.2.3 per Windows (MSI) approvata") {
 		t.Fatalf("approval: %d at %s", code, final)
 	}
 	e.idp.mu.Lock()
@@ -147,6 +147,33 @@ func TestConsoleInstallerWithDedicatedCA(t *testing.T) {
 	if _, body, _ = post(t, c, e.console.URL+"/agent-installer/confirm", url.Values{"csrf": {csrf}, "passphrase": {installerPass}}); !strings.Contains(body, "Approvazione scaduta") {
 		t.Fatal("approval reused")
 	}
+
+	// Linux: the same flow builds the self-extracting installer, not signed.
+	e.store.PutRelease(ctx, store.Release{Version: "1.2.3", Platform: "linux/amd64",
+		Files: map[string][]byte{"openrmm-agent": []byte("ELF agent"), "openrmm-watchdog": []byte("ELF watchdog")}})
+	if _, body, _ = post(t, c, e.console.URL+"/agent-installer/build", url.Values{"csrf": {csrf}, "version": {"1.2.3"}, "platform": {"linux/amd64"}}); !strings.Contains(html.UnescapeString(body), "Creazione dell'installer 1.2.3 per Linux x86_64 approvata") {
+		t.Fatalf("linux approval: %s", body)
+	}
+	if _, body, _ = post(t, c, e.console.URL+"/agent-installer/confirm", url.Values{"csrf": {csrf}, "passphrase": {installerPass}}); !strings.Contains(body, "Installer 1.2.3 per Linux x86_64 creato") {
+		t.Fatalf("linux build: %s", body)
+	}
+	if code, _, _ := post(t, c, e.console.URL+"/agent-installer/build", url.Values{"csrf": {csrf}, "version": {"1.2.3"}, "platform": {"darwin/arm64"}}); code != http.StatusBadRequest {
+		t.Fatalf("unknown platform: %d", code)
+	}
+	list, _ = e.store.ListInstallers(ctx, e.tenant)
+	if len(list) != 2 || list[0].Platform != "linux/amd64" || list[0].Signer != "" {
+		t.Fatalf("installers = %+v", list)
+	}
+	resp, err := c.Get(e.console.URL + "/agent-installer/" + list[0].ID + "/download")
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.HasPrefix(string(run), "#!/bin/sh") || !strings.Contains(resp.Header.Get("Content-Disposition"), "openrmm-agent-1.2.3-linux-amd64.run") {
+		t.Fatalf("linux download: %q %s", resp.Header.Get("Content-Disposition"), run[:40])
+	}
+	list = list[1:]
 
 	// Operators download, but cannot build.
 	op := admin

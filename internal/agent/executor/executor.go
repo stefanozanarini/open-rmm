@@ -268,7 +268,8 @@ func (e *Executor) Start(job *openrmmv1.Job) {
 
 // StartPolicy runs one scheduled policy rule asynchronously. Policy runs are
 // quiet (only the final result is reported) and may never use modules that
-// run ad-hoc code. done is called with the final result.
+// run ad-hoc code. done is called with the final result, or nil when the
+// rule was skipped.
 func (e *Executor) StartPolicy(job *openrmmv1.Job, pr PolicyRun, done func(*openrmmv1.PolicyResult)) {
 	if !ids.IsUUID(job.GetJobId()) {
 		return
@@ -277,6 +278,15 @@ func (e *Executor) StartPolicy(job *openrmmv1.Job, pr PolicyRun, done func(*open
 	go func() {
 		defer e.wg.Done()
 		started := time.Now()
+		// A policy applies to every agent of the tenant: a rule whose module
+		// has no entrypoint for this platform (a Windows module on Linux) is
+		// skipped without a result, not reported as a failure.
+		if !e.supports(job) {
+			if done != nil {
+				done(nil)
+			}
+			return
+		}
 		u := e.run(job, true)
 		res := &openrmmv1.PolicyResult{
 			RunId: job.GetJobId(), PolicyId: pr.PolicyID, PolicyVersion: pr.PolicyVersion, RuleId: pr.RuleID,
@@ -288,6 +298,17 @@ func (e *Executor) StartPolicy(job *openrmmv1.Job, pr PolicyRun, done func(*open
 			done(res)
 		}
 	}()
+}
+
+// supports tells whether the job's module runs on this platform. A module
+// that cannot be obtained counts as supported: run reports why.
+func (e *Executor) supports(job *openrmmv1.Job) bool {
+	inst, err := e.cache.Get(e.ctx, lazyFetcher{e}, job.GetModule(), job.GetModuleVersion(), job.GetModuleSha256())
+	if err != nil {
+		return true
+	}
+	_, ok := inst.Manifest.Entrypoints[e.platform]
+	return ok
 }
 
 func reject(job *openrmmv1.Job, format string, args ...any) *openrmmv1.JobUpdate {

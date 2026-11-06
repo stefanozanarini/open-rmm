@@ -14,6 +14,7 @@ type Installer struct {
 	TenantID  string
 	ID        string
 	Version   string
+	Platform  string // windows/amd64 (MSI), linux/amd64 or linux/arm64 (.run)
 	SHA256    string
 	Size      int64
 	TokenID   string // enrollment token preset in the MSI
@@ -36,6 +37,9 @@ func (m *Memory) AddInstaller(_ context.Context, i Installer) error {
 	defer m.mu.Unlock()
 	if i.CreatedAt.IsZero() {
 		i.CreatedAt = time.Now()
+	}
+	if i.Platform == "" {
+		i.Platform = "windows/amd64"
 	}
 	m.installers = append(m.installers, i)
 	return nil
@@ -69,13 +73,17 @@ func (m *Memory) GetInstaller(_ context.Context, tenantID, id string) (Installer
 
 func (p *Postgres) AddInstaller(ctx context.Context, i Installer) error {
 	return p.inTenant(ctx, i.TenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO agent_installers (tenant_id, id, version, sha256, size, token_id, signer, created_by)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, i.TenantID, i.ID, i.Version, i.SHA256, i.Size, i.TokenID, i.Signer, i.CreatedBy)
+		platform := i.Platform
+		if platform == "" {
+			platform = "windows/amd64"
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO agent_installers (tenant_id, id, version, platform, sha256, size, token_id, signer, created_by)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, i.TenantID, i.ID, i.Version, platform, i.SHA256, i.Size, i.TokenID, i.Signer, i.CreatedBy)
 		return err
 	})
 }
 
-const installerColumns = `id::text, version, sha256, size, token_id::text, signer, created_by, created_at`
+const installerColumns = `id::text, version, platform, sha256, size, token_id::text, signer, created_by, created_at`
 
 func (p *Postgres) ListInstallers(ctx context.Context, tenantID string) ([]Installer, error) {
 	var out []Installer
@@ -87,7 +95,7 @@ func (p *Postgres) ListInstallers(ctx context.Context, tenantID string) ([]Insta
 		defer rows.Close()
 		for rows.Next() {
 			i := Installer{TenantID: tenantID}
-			if err := rows.Scan(&i.ID, &i.Version, &i.SHA256, &i.Size, &i.TokenID, &i.Signer, &i.CreatedBy, &i.CreatedAt); err != nil {
+			if err := rows.Scan(&i.ID, &i.Version, &i.Platform, &i.SHA256, &i.Size, &i.TokenID, &i.Signer, &i.CreatedBy, &i.CreatedAt); err != nil {
 				return err
 			}
 			out = append(out, i)
@@ -101,7 +109,7 @@ func (p *Postgres) GetInstaller(ctx context.Context, tenantID, id string) (Insta
 	i := Installer{TenantID: tenantID}
 	err := p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT `+installerColumns+` FROM agent_installers WHERE id = $1`, id).
-			Scan(&i.ID, &i.Version, &i.SHA256, &i.Size, &i.TokenID, &i.Signer, &i.CreatedBy, &i.CreatedAt)
+			Scan(&i.ID, &i.Version, &i.Platform, &i.SHA256, &i.Size, &i.TokenID, &i.Signer, &i.CreatedBy, &i.CreatedAt)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return i, ErrNotFound

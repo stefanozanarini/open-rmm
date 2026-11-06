@@ -285,7 +285,7 @@ func (s *Server) RunRebootRescans(ctx context.Context) {
 			var lastScan, rebooted time.Time
 			for _, j := range jobs {
 				switch {
-				case j.Module == "winupdate" && j.Action == "scan" && j.CreatedAt.After(lastScan):
+				case (j.Module == updates.WindowsModule || j.Module == updates.OSUpdateModule) && j.Action == "scan" && j.CreatedAt.After(lastScan):
 					lastScan = j.CreatedAt
 				case j.Module == "reboot" && j.State == store.JobSucceeded && j.FinishedAt != nil && j.FinishedAt.After(rebooted):
 					rebooted = *j.FinishedAt
@@ -298,7 +298,11 @@ func (s *Server) RunRebootRescans(ctx context.Context) {
 			if !afterJob && now.Sub(lastScan) < rebootRescanEvery {
 				continue
 			}
-			collections := [][2]string{{"winupdate", "scan"}}
+			scan := updates.WindowsModule
+			if a.Host.OS == "linux" {
+				scan = updates.OSUpdateModule
+			}
+			collections := [][2]string{{scan, "scan"}}
 			if afterJob {
 				collections = append(collections, [2]string{"inventory", "collect"})
 			}
@@ -320,6 +324,7 @@ var refreshAfter = map[[2]string][][2]string{
 	{"software", "uninstall"}: {{"inventory", "collect"}, {"winget", "scan"}},
 	{"winget", "upgrade"}:     {{"inventory", "collect"}, {"winget", "scan"}},
 	{"winupdate", "install"}:  {{"winupdate", "scan"}, {"inventory", "collect"}},
+	{"osupdate", "install"}:   {{"inventory", "collect"}}, // the install result is a scan
 }
 
 // refreshWindow is how long after a job ends its refresh is still queued

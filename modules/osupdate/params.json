@@ -1,0 +1,22 @@
+{
+  "scan": [],
+  "install": [
+    {
+      "name": "security_only",
+      "type": "bool",
+      "label": {
+        "it": "Solo aggiornamenti di sicurezza",
+        "en": "Security updates only"
+      },
+      "default": false
+    },
+    {
+      "name": "packages",
+      "type": "list",
+      "label": {
+        "it": "Solo questi pacchetti (vuoto: tutti)",
+        "en": "Only these packages (empty: all)"
+      }
+    }
+  ]
+}

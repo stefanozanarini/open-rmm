@@ -42,14 +42,15 @@ type setupData struct {
 	HasRoot   bool
 }
 
-// recommended are the modules of a typical Windows installation, with the
-// baseline policy rule of each (Every empty: no rule).
+// recommended are the modules of a typical Windows and Linux installation,
+// with the baseline policy rule of each (Every empty: no rule).
 var recommended = []struct {
 	Module, Action, Every string
 	When                  *policy.Condition
 }{
 	{inventory.ModuleID, inventory.Action, "24h", nil},
 	{"winupdate", "scan", "24h", nil},
+	{"osupdate", "scan", "24h", nil},
 	{"winget", "scan", "24h", nil},
 	{"firmware", "scan", "24h", nil},
 	{"protection-status", "status", "1h", nil},

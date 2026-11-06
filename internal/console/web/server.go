@@ -149,10 +149,11 @@ func New(cfg Config) (*Server, error) {
 func funcs(lang string) template.FuncMap {
 	timeFmt := dateFormat(lang) + " 15:04:05"
 	return template.FuncMap{
-		"t":   func(key string) string { return tr(lang, key) },
-		"tf":  func(key string, args ...any) string { return trf(lang, key, args...) },
-		"th":  func(key string) template.HTML { return trHTML(lang, key) },
-		"msg": func(s string) string { return trMessage(lang, s) },
+		"t":            func(key string) string { return tr(lang, key) },
+		"tf":           func(key string, args ...any) string { return trf(lang, key, args...) },
+		"th":           func(key string) template.HTML { return trHTML(lang, key) },
+		"msg":          func(s string) string { return trMessage(lang, s) },
+		"platformName": func(p string) string { return platformName(lang, p) },
 		"checkLink": func(agentID string, panel bool, checkID string) *actionLink {
 			return checkAction(lang, agentID, panel, checkID)
 		},
@@ -351,6 +352,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agent-installer/build", s.role(authn.RoleAdmin, s.handleBuildInstaller))
 	mux.Handle("POST /agent-installer/confirm", s.role(authn.RoleAdmin, s.handleConfirmInstaller))
 	mux.Handle("GET /agent-installer/{id}/msi", s.role(authn.RoleOperator, s.handleDownloadInstaller))
+	mux.Handle("GET /agent-installer/{id}/download", s.role(authn.RoleOperator, s.handleDownloadInstaller))
 	mux.Handle("POST /agent-installer/signing/ca", s.console(s.handleCreateSigningCA))
 	mux.Handle("POST /agent-installer/signing/request", s.console(s.handleCreateSigningRequest))
 	mux.Handle("GET /agent-installer/signing/request.csr", s.console(s.handleSigningRequestFile))

@@ -48,6 +48,8 @@ type Pending struct {
 	PolicyDoc []byte `json:"policy_doc,omitempty"`
 	// For "installer": the agent version of the installer to build.
 	Installer string `json:"installer,omitempty"`
+	// InstallerPlatform: windows/amd64 (MSI) when empty, or a Linux platform.
+	InstallerPlatform string `json:"installer_platform,omitempty"`
 	// For "publish": what is being published, module or release.
 	Publish string `json:"publish,omitempty"`
 }

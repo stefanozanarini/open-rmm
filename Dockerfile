@@ -2,9 +2,10 @@
 #
 # open-rmm console image: openrmm-gateway (default entrypoint),
 # openrmm-server, openrmm-signer and openrmm-admin. Static binaries on a
-# distroless base, running as non-root. It also carries the Windows agent
-# and watchdog of the same version and the modules of the repository, which
-# the console signs (with the builder's keys) and publishes.
+# distroless base, running as non-root. It also carries the Windows and
+# Linux agent and watchdog of the same version and the modules of the
+# repository, which the console signs (with the builder's keys) and
+# publishes.
 
 FROM golang:1.26-bookworm AS build
 WORKDIR /src
@@ -17,9 +18,11 @@ RUN v="${VERSION:-$(cat VERSION)}" \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$v" \
       -o /out/ ./console/cmd/openrmm-gateway ./console/cmd/openrmm-core ./console/cmd/openrmm-server \
                ./console/cmd/openrmm-signer ./console/cmd/openrmm-admin ./console/cmd/openrmm-builder \
- && mkdir -p /agent/windows-amd64 \
- && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$v" \
-      -o /agent/windows-amd64/ ./agent/cmd/openrmm-agent ./agent/cmd/openrmm-watchdog \
+ && for p in windows/amd64 linux/amd64 linux/arm64; do \
+      mkdir -p "/agent/${p%/*}-${p#*/}" \
+      && CGO_ENABLED=0 GOOS="${p%/*}" GOARCH="${p#*/}" go build -trimpath -ldflags "-s -w -X main.version=$v" \
+           -o "/agent/${p%/*}-${p#*/}/" ./agent/cmd/openrmm-agent ./agent/cmd/openrmm-watchdog || exit 1; \
+    done \
  && echo "$v" > /agent/VERSION
 
 # Mount points of the signer's and the package library's volumes, owned by

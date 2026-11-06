@@ -11,7 +11,7 @@ Legend: ✅ implemented · 🔜 next · 📋 planned
 
 | # | Requirement | Notes |
 |---|---|---|
-| R1 | Windows clients and servers, Linux | Windows first; Linux later |
+| R1 | Windows clients and servers, Linux | Windows first; Linux agent with installer and OS updates (apt, dnf/yum, zypper); macOS planned |
 | R2 | Deployment through Group Policy | MSI + ADMX templates (§10) ✅ |
 | R3 | Security as a primary requirement | §6 |
 | R4 | Automatic restart after crashes | Service recovery + watchdog + scheduled check (§5) ✅ |

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -51,12 +52,19 @@ var policyStates = map[openrmmv1.JobUpdate_State]store.JobState{
 	openrmmv1.JobUpdate_STATE_REJECTED:  store.JobRejected,
 }
 
+var unsupportedPlatform = regexp.MustCompile(`^module [a-z0-9-]+ does not support [a-z]+/[a-z0-9]+$`)
+
 // recordPolicyResult stores a rule result and reports whether to ack it.
 func (s *Server) recordPolicyResult(ctx context.Context, a store.Agent, r *openrmmv1.PolicyResult) bool {
 	state, ok := policyStates[r.GetState()]
 	if !ok || !ids.IsUUID(r.GetRunId()) || !ids.IsUUID(r.GetPolicyId()) || len(r.GetRuleId()) > 41 {
 		s.log.Warn("invalid policy result", "agent", a.ID)
 		return ids.IsUUID(r.GetRunId()) // drop it from the agent's outbox anyway
+	}
+	// Agents before 1.0.3 report the rules of another platform's modules
+	// (osupdate on Windows) as rejected; newer agents skip them.
+	if state == store.JobRejected && unsupportedPlatform.MatchString(r.GetError()) {
+		return true
 	}
 	res := store.PolicyResult{TenantID: a.TenantID, AgentID: a.ID, PolicyID: r.GetPolicyId(), RuleID: r.GetRuleId(),
 		PolicyVersion: r.GetPolicyVersion(), RunID: r.GetRunId(), State: state, Error: clip(r.GetError(), 8000),

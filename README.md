@@ -17,7 +17,7 @@ Phase 0 (foundations):
 - [x] Enrollment with tenant-bound, expiring, use-limited tokens (stored as hashes, rate-limited per IP)
 - [x] mTLS gateway: without a valid certificate only enrollment is reachable
 - [x] Agent: locally generated key, persistent connection, heartbeat, reconnection with backoff
-- [x] Windows services with automatic restart; systemd units for Linux
+- [x] Windows services with automatic restart; systemd units for Linux, self-extracting Linux installer built by the console
 - [x] Configuration from file, registry (MSI) and Group Policy (`HKLM\SOFTWARE\Policies\open-rmm`)
 - [x] Signed jobs (Ed25519, validity window, addressee, persistent anti-replay)
 - [x] PostgreSQL with per-tenant row-level security and an immutable hash-chained audit log

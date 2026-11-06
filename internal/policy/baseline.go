@@ -30,6 +30,7 @@ type BaselineRule struct {
 var BaselineRules = []BaselineRule{
 	{"inventory", "collect", 24 * time.Hour, nil},
 	{"winupdate", "scan", 24 * time.Hour, nil},
+	{"osupdate", "scan", 24 * time.Hour, nil}, // Linux; skipped by agents of other platforms
 	{"winget", "scan", 24 * time.Hour, nil},
 	{"firmware", "scan", 24 * time.Hour, nil},
 	{"protection-status", "status", time.Hour, nil},

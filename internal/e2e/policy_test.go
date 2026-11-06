@@ -149,3 +149,24 @@ func TestSignerPolicyApproval(t *testing.T) {
 		t.Fatalf("approval replayed: %v", err)
 	}
 }
+
+// A policy goes to every agent: rules whose module has no entrypoint for
+// the agent's platform are skipped, not reported as failures.
+func TestPolicySkipsModulesForOtherPlatforms(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("uses the sh entrypoint")
+	}
+	fastPolicies(t)
+	e := start(t)
+	v := e.publish(t, filepath.Join(repoRoot(t), "modules", "sysinfo"))
+	win := e.publish(t, shModule(t, `{"id":"winonly","version":"1.0.0","protocol_version":1,"entrypoints":{"windows/amd64":{"type":"sh","path":"main.sh"}},"actions":{"scan":{}}}`,
+		`. "$OPENRMM_MODULE_DIR/_sdk/openrmm.sh"; rmm_read_request; rmm_result '{}'`))
+	_, agentID := startAgent(t, e, true)
+	e.publishPolicy(t, &policy.Policy{ID: ids.NewUUID(), TenantID: e.tenant, Name: "Mixed", Version: 1, AppliesTo: policy.AppliesAll,
+		Rules: []policy.Rule{ruleFor(win, "windows", "scan", nil), ruleFor(v, "linux", "info", nil)}})
+	waitForWithin(t, func() bool { return e.results(t, agentID)["linux"].State == store.JobSucceeded }, 10*time.Second)
+	time.Sleep(300 * time.Millisecond)
+	if r, ran := e.results(t, agentID)["windows"]; ran {
+		t.Fatalf("windows-only rule reported on linux: %s %q", r.State, r.Error)
+	}
+}

@@ -18,22 +18,22 @@ RestartSec=5s
 StateDirectory=open-rmm
 StateDirectoryMode=0700
 ConfigurationDirectory=open-rmm
-UMask=0077
+ConfigurationDirectoryMode=0700
+# Package scripts run by modules inherit the umask: a restrictive one would
+# leave files they create unreadable to services. The agent writes its own
+# secrets with explicit permissions.
+UMask=0022
+# An agent restart (self-update) must not kill a package installation in
+# progress, which would leave dpkg or rpm half done.
+KillMode=process
 
-# Hardening. The agent runs as root because management modules need it;
-# these options limit what the core itself can do.
-ProtectSystem=full
-# The agent updates the watchdog unit's version drop-in.
-ReadWritePaths=-/etc/systemd/system/openrmm-watchdog.service.d
-ProtectHome=read-only
-PrivateTmp=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-RestrictSUIDSGID=yes
+# No filesystem or kernel hardening: modules run as children of the agent
+# and install packages and kernels (apt, dnf, zypper), which write /usr,
+# /etc and /boot, create setuid files and load kernel modules. Like the
+# Windows agent running as SYSTEM, the agent has root's full rights; what
+# it may run is decided by signed jobs and policies, not by the unit.
 LockPersonality=yes
 RestrictRealtime=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target

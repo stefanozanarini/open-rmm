@@ -18,6 +18,9 @@ const (
 	WindowsModule  = "winupdate"
 	WingetModule   = "winget"
 	FirmwareModule = "firmware"
+	// OSUpdateModule reports Linux updates in the winupdate report format,
+	// under SourceWindows: the operating system updates of any platform.
+	OSUpdateModule = "osupdate"
 	// FirmwareToolAction installs the vendor tool the firmware module uses.
 	FirmwareToolAction = "install-tool"
 	SourceWindows      = "windows"
@@ -33,7 +36,7 @@ const (
 // SourceOf returns the report source of a module action, or "".
 func SourceOf(module, action string) string {
 	switch {
-	case module == WindowsModule && (action == "scan" || action == "install"):
+	case (module == WindowsModule || module == OSUpdateModule) && (action == "scan" || action == "install"):
 		return SourceWindows
 	case module == WingetModule && (action == "scan" || action == "upgrade"):
 		return SourceWinget
@@ -52,6 +55,9 @@ type WindowsUpdate struct {
 	Severity       string     `json:"severity,omitempty"`
 	Released       *time.Time `json:"released,omitempty"`
 	SizeBytes      int64      `json:"size_bytes,omitempty"`
+	// Installed and Version: package versions (osupdate).
+	Installed string `json:"installed,omitempty"`
+	Version   string `json:"version,omitempty"`
 }
 
 // Important reports whether the update is a security or critical update.
@@ -82,6 +88,9 @@ var HResultRe = regexp.MustCompile(`^0x[0-9A-F]{8}$`)
 
 // WindowsReport is a normalized winupdate result.
 type WindowsReport struct {
+	// Manager is the Linux package manager (apt, dnf, yum, zypper) of an
+	// osupdate report; empty for Windows Update.
+	Manager       string          `json:"manager,omitempty"`
 	ManagedBy     string          `json:"managed_by"` // none | wsus | intune
 	WSUSServer    string          `json:"wsus_server,omitempty"`
 	ScannedAt     time.Time       `json:"scanned_at"`
@@ -185,6 +194,11 @@ func ParseWindows(raw []byte, now time.Time) (*WindowsReport, error) {
 		r.ManagedBy = "none"
 	}
 	r.WSUSServer = clip(r.WSUSServer)
+	switch r.Manager {
+	case "", "apt", "dnf", "yum", "zypper":
+	default:
+		r.Manager = ""
+	}
 	if r.ScannedAt.IsZero() || r.ScannedAt.After(now.Add(5*time.Minute)) {
 		r.ScannedAt = now
 	}
@@ -195,6 +209,7 @@ func ParseWindows(raw []byte, now time.Time) (*WindowsReport, error) {
 	out := r.Updates[:0]
 	for _, u := range r.Updates {
 		u.ID, u.Title, u.Severity = clip(u.ID), clip(u.Title), clip(u.Severity)
+		u.Installed, u.Version = clip(u.Installed), clip(u.Version)
 		if u.Title == "" {
 			continue
 		}

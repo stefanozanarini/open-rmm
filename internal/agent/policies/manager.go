@@ -296,7 +296,7 @@ func (m *Manager) launch(p *policy.Policy, r policy.Rule, key string) {
 			delete(m.running, key)
 			m.st.LastRun[key] = started
 			m.persist()
-			if res.GetState() != openrmmv1.JobUpdate_STATE_SUCCEEDED {
+			if res != nil && res.GetState() != openrmmv1.JobUpdate_STATE_SUCCEEDED {
 				m.log.Warn("policy rule failed", "policy", p.Name, "rule", r.ID, "state", res.GetState().String(), "error", res.GetError())
 			}
 		})

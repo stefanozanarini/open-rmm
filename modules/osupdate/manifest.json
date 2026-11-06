@@ -1,0 +1,14 @@
+{
+  "id": "osupdate",
+  "version": "1.0.0",
+  "description": "Linux operating system updates with the distribution's package manager: apt (Debian, Ubuntu), dnf or yum (RHEL, Rocky, Alma, CentOS), zypper (SUSE).",
+  "protocol_version": 1,
+  "entrypoints": {
+    "linux/amd64": { "type": "sh", "path": "main.sh" },
+    "linux/arm64": { "type": "sh", "path": "main.sh" }
+  },
+  "actions": {
+    "scan": { "description": "Refresh the package lists; available and security updates, pending reboot", "timeout_seconds": 900 },
+    "install": { "description": "Install all updates, the security ones or the given packages; never reboots", "timeout_seconds": 7200 }
+  }
+}

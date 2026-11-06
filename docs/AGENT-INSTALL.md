@@ -113,6 +113,26 @@ What the MSI cannot express is applied by the services themselves at every start
 - scheduled task;
 - registry and folder permissions.
 
+## Linux
+
+On the **Installer** page choose the platform *Linux x86_64* or *Linux ARM64*: the console builds `openrmm-agent-x.y.z-linux-amd64.run`, one file with the agent, the watchdog, the systemd units and the same configuration as the MSI (gateway address, root certificate, public keys, an enrollment token that never approves agents by itself). It is not signed: download it from the console over HTTPS and compare the SHA-256 shown on the page.
+
+```bash
+sudo sh openrmm-agent-1.0.3-linux-amd64.run
+```
+
+It needs systemd, `sh` and `tar` (Debian, Ubuntu, RHEL, Rocky, Alma, CentOS Stream, SUSE). It installs:
+
+| Item | Where |
+|---|---|
+| Agent and watchdog | `/opt/open-rmm/versions/<version>/` |
+| Services | `openrmm-agent`, `openrmm-watchdog`, timer `openrmm-healthcheck` (every 15 minutes) in `/etc/systemd/system`; the version is selected by the drop-in `50-openrmm-version.conf` |
+| Configuration | `/etc/open-rmm/agent.json` (root only, kept when the installer runs again) |
+| State and private key | `/var/lib/open-rmm` |
+| Removal | `sudo /opt/open-rmm/uninstall.sh`, then revoke the agent in the console |
+
+The agent runs as root without filesystem hardening in its unit: modules install packages and kernels. The machine is a *client* when it has a display manager or boots to the graphical target, otherwise a *server*. Operating system updates come from the `osupdate` module (apt, dnf/yum, zypper); Windows modules in the same policies are skipped on Linux.
+
 ## Updates and removal
 
 - After installation the agent **updates itself from the console** ([UPDATES.md](UPDATES.md)), not through a new MSI. If you redeploy an MSI, use a version **not older** than the one the agents already run: the MSI points the service back to its own version.

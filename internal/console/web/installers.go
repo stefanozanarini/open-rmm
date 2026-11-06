@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -19,6 +20,7 @@ import (
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/open-rmm/internal/codesign"
 	"github.com/stefanozanarini/open-rmm/internal/console/authn"
+	"github.com/stefanozanarini/open-rmm/internal/console/linuxinst"
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
 	"github.com/stefanozanarini/open-rmm/internal/ids"
 	"github.com/stefanozanarini/open-rmm/internal/release"
@@ -66,8 +68,35 @@ const (
 
 // installerApproval is an Admin's MFA approval to build one installer.
 type installerApproval struct {
-	Version string    `json:"version"`
-	At      time.Time `json:"at"`
+	Version  string    `json:"version"`
+	Platform string    `json:"platform,omitempty"` // windows/amd64 when empty
+	At       time.Time `json:"at"`
+}
+
+// installerPlatforms are the platforms installers are built for: the MSI,
+// and the self-extracting Linux installer.
+var installerPlatforms = append([]string{installerPlatform}, linuxinst.Platforms()...)
+
+// platformName is a platform as shown to operators.
+func platformName(lang, p string) string {
+	switch p {
+	case "", "windows/amd64":
+		return tr(lang, "Windows (MSI)")
+	case "linux/amd64":
+		return "Linux x86_64"
+	case "linux/arm64":
+		return "Linux ARM64"
+	}
+	return p
+}
+
+func validInstallerPlatform(p string) bool {
+	for _, q := range installerPlatforms {
+		if p == q {
+			return true
+		}
+	}
+	return false
 }
 
 type installerView struct {
@@ -76,17 +105,20 @@ type installerView struct {
 }
 
 type installersData struct {
-	Builder   bool
-	Signing   *openrmmv1.BuilderStatus
-	Chain     *codesign.Chain
-	Info      codesign.Info
-	Expiring  bool
-	Versions  []string
-	Missing   []string
-	Approved  string // version approved and waiting for the passphrase
-	List      []installerView
-	MinPass   int
-	BuilderUp bool
+	Builder  bool
+	Signing  *openrmmv1.BuilderStatus
+	Chain    *codesign.Chain
+	Info     codesign.Info
+	Expiring bool
+	Versions []string
+	Missing  []string
+	Approved string // version approved and waiting for the passphrase
+	// ApprovedPlatform is the approved installer's platform.
+	ApprovedPlatform string
+	Platforms        []string
+	List             []installerView
+	MinPass          int
+	BuilderUp        bool
 	// ConsoleAdmin manages the console-wide signing key.
 	ConsoleAdmin bool
 	// Module and agent release keys: the builder's, with their key ids.
@@ -123,8 +155,11 @@ func (s *Server) handleInstallers(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	d.Platforms = installerPlatforms
+	seen := map[string]bool{}
 	for _, rel := range rels {
-		if rel.Platform == installerPlatform {
+		if validInstallerPlatform(rel.Platform) && !seen[rel.Version] {
+			seen[rel.Version] = true
 			d.Versions = append(d.Versions, rel.Version)
 		}
 	}
@@ -140,12 +175,20 @@ func (s *Server) handleInstallers(w http.ResponseWriter, r *http.Request) {
 		}
 		d.Missing = rest
 	}
-	if d.Bundled = s.unpublishedBundle(ctx, installerPlatform); d.Bundled != "" && d.ReleaseKey != "" {
+	for _, p := range installerPlatforms {
+		if b := s.unpublishedBundle(ctx, p); b != "" {
+			d.Bundled = b
+		}
+	}
+	if d.Bundled != "" && d.ReleaseKey != "" && !seen[d.Bundled] {
 		d.Versions = append(d.Versions, d.Bundled)
 	}
 	sort.Slice(d.Versions, func(i, j int) bool { return compareVersions(d.Versions[i], d.Versions[j]) > 0 })
 	if a := sessionFrom(ctx).data.InstallerApproval; a != nil && s.now().Sub(a.At) < installerApprovalTTL {
-		d.Approved = a.Version
+		d.Approved, d.ApprovedPlatform = a.Version, a.Platform
+		if d.ApprovedPlatform == "" {
+			d.ApprovedPlatform = installerPlatform
+		}
 	}
 	list, err := s.store.ListInstallers(ctx, t)
 	if err != nil {
@@ -373,19 +416,26 @@ func (s *Server) handleRenewSigning(w http.ResponseWriter, r *http.Request) {
 // handleBuildInstaller starts the MFA approval of a build.
 func (s *Server) handleBuildInstaller(w http.ResponseWriter, r *http.Request) {
 	t, _ := tenantOf(r)
-	version := r.PostFormValue("version")
+	version, platform := r.PostFormValue("version"), r.PostFormValue("platform")
+	if platform == "" {
+		platform = installerPlatform
+	}
+	if !validInstallerPlatform(platform) {
+		http.Error(w, s.T(r, "richiesta non valida"), http.StatusBadRequest)
+		return
+	}
 	if s.builder == nil || len(s.installSettings(s.builderStatus(r.Context())).missing()) > 0 {
 		s.flash(w, r, s.T(r, "La creazione degli installer non è configurata su questa console."), "/agent-installer")
 		return
 	}
-	if _, err := s.store.GetRelease(r.Context(), version, installerPlatform); err != nil && version != s.unpublishedBundle(r.Context(), installerPlatform) {
+	if _, err := s.store.GetRelease(r.Context(), version, platform); err != nil && version != s.unpublishedBundle(r.Context(), platform) {
 		s.flash(w, r, s.T(r, "Versione non disponibile."), "/agent-installer")
 		return
 	}
 	sess := sessionFrom(r.Context())
 	sum := sha256.Sum256([]byte(t + "\x00" + version + "\x00" + ids.NewSecret(16)))
 	p := &Pending{Purpose: "installer", State: ids.NewSecret(24), Nonce: "installer." + base64.RawURLEncoding.EncodeToString(sum[:]),
-		CodeVerifier: oauth2.GenerateVerifier(), StartedAt: s.now(), Installer: version, Return: "/agent-installer"}
+		CodeVerifier: oauth2.GenerateVerifier(), StartedAt: s.now(), Installer: version, InstallerPlatform: platform, Return: "/agent-installer"}
 	sess.data.Pending = p
 	if err := s.save(r.Context(), w, sess); err != nil {
 		s.fail(w, r, err)
@@ -406,7 +456,7 @@ func (s *Server) completeInstaller(w http.ResponseWriter, r *http.Request, sess 
 		http.Error(w, tr(lang, "accesso non valido o scaduto: riprova"), http.StatusForbidden)
 		return
 	}
-	sess.data.InstallerApproval = &installerApproval{Version: p.Installer, At: s.now()}
+	sess.data.InstallerApproval = &installerApproval{Version: p.Installer, Platform: p.InstallerPlatform, At: s.now()}
 	s.flashTo(w, r, sess, tr(lang, "Approvato: inserisci la passphrase della chiave di firma per creare l'installer."), "/agent-installer#build")
 }
 
@@ -428,15 +478,19 @@ func (s *Server) handleConfirmInstaller(w http.ResponseWriter, r *http.Request) 
 	extendDeadlines(w, 10*time.Minute)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
+	platform := a.Platform
+	if platform == "" {
+		platform = installerPlatform
+	}
 	// The agent shipped with the console is published with its first
 	// installer, signed with the same passphrase.
-	if a.Version == s.unpublishedBundle(ctx, installerPlatform) {
-		data, err := s.bundle.Files(installerPlatform)
+	if a.Version == s.unpublishedBundle(ctx, platform) {
+		data, err := s.bundle.Files(platform)
 		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		msg, err := s.publishRelease(r, op, a.Version, installerPlatform, "bundled with the console", data, r.PostFormValue("passphrase"))
+		msg, err := s.publishRelease(r, op, a.Version, platform, "bundled with the console", data, r.PostFormValue("passphrase"))
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -446,20 +500,44 @@ func (s *Server) handleConfirmInstaller(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
+	goos, _, _ := strings.Cut(platform, "/")
 	files := map[string][]byte{}
-	for _, name := range []string{release.AgentFile("windows"), release.WatchdogFile("windows")} {
-		b, err := s.store.GetReleaseFile(ctx, a.Version, installerPlatform, name)
+	for _, name := range []string{release.AgentFile(goos), release.WatchdogFile(goos)} {
+		b, err := s.store.GetReleaseFile(ctx, a.Version, platform, name)
 		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
 		files[name] = b
 	}
-	// The token goes into the MSI: it never approves agents by itself.
+	// The token goes into the installer: it never approves agents by itself.
 	secret := ids.NewSecret(32)
-	tok := store.EnrollmentToken{ID: ids.NewUUID(), TenantID: t, Description: "MSI " + a.Version + " " + s.now().Format("2006-01-02"),
+	kind := "MSI"
+	if goos == "linux" {
+		kind = "Linux " + strings.TrimPrefix(platform, "linux/")
+	}
+	tok := store.EnrollmentToken{ID: ids.NewUUID(), TenantID: t, Description: kind + " " + a.Version + " " + s.now().Format("2006-01-02"),
 		MaxUses: installerTokenUses, ExpiresAt: s.now().Add(installerTokenTTL)}
 	ai := s.installSettings(s.builderStatus(ctx))
+	if goos == "linux" {
+		// Not signed: the operator downloads it from the console over HTTPS
+		// and checks the SHA-256 shown here.
+		var buf bytes.Buffer
+		if err := linuxinst.Build(&buf, a.Version, platform, files[release.AgentFile(goos)], files[release.WatchdogFile(goos)],
+			linuxinst.Settings{Server: ai.Server, RootCA: ai.RootCA, EnrollToken: secret,
+				JobKeys: ai.JobKeys, ModuleKeys: ai.ModuleKeys, ReleaseKeys: ai.ReleaseKeys}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		sha, size, err := s.packages.Save(&buf, maxInstaller)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.recordInstaller(w, r, store.Installer{TenantID: t, ID: ids.NewUUID(), Version: a.Version, Platform: platform,
+			SHA256: sha, Size: size, TokenID: tok.ID, CreatedBy: "operator:" + op.Username}, tok, secret, ai.Server)
+		return
+	}
 	req := &openrmmv1.BuildRequest{Version: a.Version, AgentExe: files[release.AgentFile("windows")],
 		WatchdogExe: files[release.WatchdogFile("windows")], Passphrase: r.PostFormValue("passphrase"), TimestampUrl: ai.Timestamp,
 		Properties: map[string]string{"SERVER": ai.Server, "ROOTCA": ai.RootCA, "ENROLLTOKEN": secret,
@@ -508,19 +586,28 @@ func (s *Server) handleConfirmInstaller(w http.ResponseWriter, r *http.Request) 
 	if ch, err := codesign.ParseChain([]byte(st.GetChainPem()), s.now()); err == nil {
 		signer = ch.Leaf.Subject.String()
 	}
+	s.recordInstaller(w, r, store.Installer{TenantID: t, ID: ids.NewUUID(), Version: a.Version, Platform: platform, SHA256: sha,
+		Size: size, TokenID: tok.ID, Signer: signer, CreatedBy: "operator:" + op.Username}, tok, secret, ai.Server)
+}
+
+// recordInstaller stores a built installer with its enrollment token.
+func (s *Server) recordInstaller(w http.ResponseWriter, r *http.Request, inst store.Installer, tok store.EnrollmentToken, secret, server string) {
+	op := sessionFrom(r.Context()).data.Operator
 	if err := s.store.CreateEnrollmentToken(r.Context(), tok, store.HashToken(secret)); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	inst := store.Installer{TenantID: t, ID: ids.NewUUID(), Version: a.Version, SHA256: sha, Size: size, TokenID: tok.ID,
-		Signer: signer, CreatedBy: "operator:" + op.Username}
 	if err := s.store.AddInstaller(r.Context(), inst); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.audit(r.Context(), t, op, "installer.built", inst.ID, map[string]any{"version": a.Version, "sha256": sha,
-		"token": tok.ID, "signer": signer, "server": ai.Server})
-	s.flash(w, r, s.Tf(r, "Installer %s creato e firmato.", a.Version), "/agent-installer")
+	s.audit(r.Context(), inst.TenantID, op, "installer.built", inst.ID, map[string]any{"version": inst.Version, "platform": inst.Platform,
+		"sha256": inst.SHA256, "token": tok.ID, "signer": inst.Signer, "server": server})
+	if inst.Signer == "" {
+		s.flash(w, r, s.Tf(r, "Installer %s per %s creato.", inst.Version, platformName(s.lang(r), inst.Platform)), "/agent-installer")
+		return
+	}
+	s.flash(w, r, s.Tf(r, "Installer %s creato e firmato.", inst.Version), "/agent-installer")
 }
 
 func (s *Server) handleDownloadInstaller(w http.ResponseWriter, r *http.Request) {
@@ -542,9 +629,13 @@ func (s *Server) handleDownloadInstaller(w http.ResponseWriter, r *http.Request)
 	}
 	defer f.Close()
 	extendDeadlines(w, 30*time.Minute)
-	w.Header().Set("Content-Type", "application/x-msi")
+	name, ctype := "openrmm-agent-"+inst.Version+".msi", "application/x-msi"
+	if strings.HasPrefix(inst.Platform, "linux/") {
+		name, ctype = linuxinst.FileName(inst.Version, inst.Platform), "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Content-Length", strconv.FormatInt(inst.Size, 10))
-	w.Header().Set("Content-Disposition", `attachment; filename="openrmm-agent-`+inst.Version+`.msi"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 	if _, err := io.Copy(w, f); err != nil {
 		s.log.Debug("send installer", "err", err)
 	}

@@ -5,6 +5,7 @@ package hostinfo
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -23,8 +24,23 @@ func osVersion() string {
 	return ""
 }
 
-// OSFamily is "unknown" on Linux: there is no reliable client/server marker.
-func OSFamily() string { return "unknown" }
+// OSFamily tells a Linux desktop from a server: a machine with a display
+// manager or that boots to the graphical target is a client. A server
+// installed with a desktop counts as a client.
+func OSFamily() string {
+	if _, err := os.Lstat("/etc/systemd/system/display-manager.service"); err == nil {
+		return "client"
+	}
+	for _, p := range []string{"/etc/systemd/system/default.target", "/lib/systemd/system/default.target", "/usr/lib/systemd/system/default.target"} {
+		if t, err := os.Readlink(p); err == nil {
+			if filepath.Base(t) == "graphical.target" {
+				return "client"
+			}
+			return "server"
+		}
+	}
+	return "server"
+}
 
 func machineID() string {
 	b, err := os.ReadFile("/etc/machine-id")
