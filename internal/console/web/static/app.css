@@ -88,6 +88,9 @@ main { max-width:1500px; }
 .small { font-size:12px; }
 .main { min-width:0; }
 table.agents tr.current td { background:var(--sel); }
+.list.scroll { position:relative; max-height:45vh; overflow:auto; border:1px solid var(--line); }
+.list.scroll table { margin:0; border:0; }
+.list.scroll thead th { position:sticky; top:0; z-index:1; background:var(--card); }
 table.agents td.icons .badge { margin:1px 0; }
 a.open { text-decoration:none; color:var(--muted); font-size:12px; }
 .panel { margin-top:24px; background:var(--card); border:1px solid var(--line); border-top:3px solid var(--accent); padding:4px 16px 16px; }

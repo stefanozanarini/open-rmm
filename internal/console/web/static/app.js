@@ -118,3 +118,10 @@
   });
   window.addEventListener("scroll", close, { passive: true });
 })();
+
+// Agents workspace: the scrolling list shows the selected agent.
+(function () {
+  var list = document.querySelector(".list.scroll");
+  var row = list && list.querySelector("tr.current");
+  if (row) list.scrollTop = Math.max(0, row.offsetTop - list.clientHeight / 3);
+})();

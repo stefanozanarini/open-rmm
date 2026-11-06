@@ -89,7 +89,8 @@
 {{end}}
 {{if .Active}}
 <form method="get" action="/agents/bulk">
-{{template "agentrows" (rowsCtx . .Active $.CanRun)}}
+{{/* With an agent selected the list scrolls on its own, so the panel stays right below it. */}}
+<div class="list{{if .Selected}} scroll{{end}}">{{template "agentrows" (rowsCtx . .Active $.CanRun)}}</div>
 {{if $.CanRun}}<div class="actions">
   <button class="primary">{{t "Azioni sui selezionati"}}</button>
   <a href="{{.SelectAllURL}}">{{t "seleziona tutti"}}</a> · <a href="{{.ClearURL}}">{{t "nessuno"}}</a>
