@@ -5,7 +5,7 @@
   <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Computer"}}</a>
   <a href="/reports{{qs "tab" "os"}}" {{if eq .Tab "os"}}class="current"{{end}}>{{t "Sistemi operativi"}}</a>
   <a href="/reports{{qs "tab" "logons"}}" {{if eq .Tab "logons"}}class="current"{{end}}>{{t "Accessi"}}</a>
-  <a href="/reports{{qs "tab" "cve"}}" {{if eq .Tab "cve"}}class="current"{{end}}>{{t "Vulnerabilità"}}</a>
+  <a href="/reports{{qs "tab" "cve"}}" {{if eq .Tab "cve"}}class="current"{{end}}>{{t "Vulnerabilità"}}</a>{{if eq .Tab "cve"}}{{help "section:cve"}}{{end}}
 </nav>
 
 {{if eq .Tab "cve"}}{{with .Vulns}}

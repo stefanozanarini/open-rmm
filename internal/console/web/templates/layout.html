@@ -64,7 +64,7 @@
 <main>
 {{if .Federated}}<p class="federated">{{tf "Stai operando sulla console di %s tramite la console centrale. Ogni azione è registrata qui a tuo nome." .Tenant.Name}} <a href="/federation">{{t "Console collegate"}}</a></p>{{end}}
 {{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
-<h1>{{.Title}}</h1>
+<h1>{{.Title}}{{help .Page}}</h1>
 {{template "content" .}}
 </main>
 {{if .Operator}}<aside id="jobdock" class="jobdock" hidden data-src="/jobs/active.json"

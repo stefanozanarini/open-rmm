@@ -46,6 +46,20 @@
     menus.forEach(function (d) { if (d.open && !d.contains(e.target)) d.open = false; });
   });
 
+  // Help "?": one open at a time, closed by a click elsewhere or Escape.
+  var helps = document.querySelectorAll("details.help");
+  helps.forEach(function (d) {
+    d.addEventListener("toggle", function () {
+      if (d.open) helps.forEach(function (o) { if (o !== d) o.open = false; });
+    });
+  });
+  document.addEventListener("click", function (e) {
+    helps.forEach(function (d) { if (d.open && !d.contains(e.target)) d.open = false; });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") helps.forEach(function (d) { d.open = false; });
+  });
+
   var tpl = document.getElementById("agent-menu");
   if (!tpl) return;
   var menu = null;

@@ -56,7 +56,7 @@
   <summary class="tree-title">Active Directory</summary>
   {{if .OU}}<a href="/agents{{qs "family" .Family "q" .Query "site" .Site}}">{{t "Tutte le OU"}}</a>{{end}}
   {{range .OUs}}<a href="/agents{{qs "ou" .Key "family" $.Data.Family "q" $.Data.Query "site" $.Data.Site}}" class="depth-{{.Depth}}{{if eq $.Data.OU .Key}} current{{end}}" title="{{.Key}}">{{.Label}} <span class="muted">{{.Count}}</span></a>{{end}}
-  <a class="muted small" href="/ad">{{t "confronto con AD"}}</a>
+  <a class="muted small" href="/ad">{{t "confronto con AD"}}</a>{{help "section:ad"}}
   </details>{{end}}
 </aside>
 <div class="main">

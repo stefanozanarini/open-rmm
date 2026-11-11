@@ -153,6 +153,7 @@ func funcs(lang string) template.FuncMap {
 	timeFmt := dateFormat(lang) + " 15:04:05"
 	return template.FuncMap{
 		"t":            func(key string) string { return tr(lang, key) },
+		"help":         func(key string) template.HTML { return helpHTML(lang, key) },
 		"tf":           func(key string, args ...any) string { return trf(lang, key, args...) },
 		"th":           func(key string) template.HTML { return trHTML(lang, key) },
 		"msg":          func(s string) string { return trMessage(lang, s) },
@@ -500,6 +501,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 // page is the data every template receives.
 type page struct {
 	Title    string
+	Page     string // template name, for the help
 	Operator *Operator
 	CSRF     string
 	Tenant   store.Tenant
@@ -527,7 +529,7 @@ type page struct {
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name, title string, data any) {
 	sess := sessionFrom(r.Context())
 	lang := langOf(r, sess)
-	p := page{Title: title, Data: data, Lang: lang}
+	p := page{Title: title, Data: data, Lang: lang, Page: name}
 	if sess != nil && sess.data.Operator != nil {
 		op := sess.data.Operator
 		p.Operator, p.CSRF, p.Flash, p.Theme = op, sess.data.CSRF, sess.data.Flash, sess.data.Theme

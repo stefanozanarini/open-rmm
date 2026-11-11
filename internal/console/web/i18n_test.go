@@ -100,6 +100,9 @@ func usedKeys(t *testing.T) map[string]bool {
 	for _, l := range dayNames {
 		keys[l] = keys[l] || false
 	}
+	for _, l := range helpTexts {
+		keys[l] = keys[l] || false
+	}
 	for _, l := range []string{"download non riuscito", "installazione interrotta", "installato con errori", "installazione non riuscita"} {
 		keys[l] = keys[l] || false
 	}
