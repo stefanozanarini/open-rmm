@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
@@ -19,6 +20,9 @@ type bulkData struct {
 	Commands []runnable
 	Scripts  []runnable
 	Packages []store.Package
+	// Preset: the action opened with its parameters filled in (?action=
+	// module.action&p.<name>=…), and why (?for=, e.g. a CVE).
+	Preset, For string
 }
 
 // selectedAgents returns the active agents listed in the "agent" values.
@@ -92,6 +96,21 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 	}
 	sortRunnables(d.Commands)
 	sortRunnables(d.Scripts)
+	q := r.URL.Query()
+	if preset := q.Get("action"); preset != "" {
+		for i := range d.Commands {
+			c := &d.Commands[i]
+			if c.Module+"."+c.Action != preset {
+				continue
+			}
+			c.Open, d.Preset, d.For = true, preset, q.Get("for")
+			for j := range c.Fields {
+				if vals, ok := q["p."+c.Fields[j].Name]; ok {
+					presetField(&c.Fields[j], vals)
+				}
+			}
+		}
+	}
 	if d.Packages, err = s.store.ListPackages(r.Context(), t); err != nil {
 		s.fail(w, r, err)
 		return
@@ -177,4 +196,28 @@ func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
+}
+
+// presetField fills a parameter field with values from the URL.
+func presetField(f *paramField, vals []string) {
+	switch f.Type {
+	case modules.ParamMulti:
+		for i := range f.Options {
+			f.Options[i].Checked = slices.Contains(vals, f.Options[i].Value)
+		}
+	case modules.ParamList, modules.ParamText:
+		f.Value = strings.Join(vals, "\n")
+	case modules.ParamBool:
+		f.Value = ""
+		if len(vals) > 0 && vals[0] == "true" {
+			f.Value = "true"
+		}
+	default:
+		if len(vals) > 0 {
+			f.Value = vals[0]
+		}
+		for i := range f.Options {
+			f.Options[i].Checked = f.Options[i].Value == f.Value
+		}
+	}
 }

@@ -58,6 +58,8 @@ type WindowsUpdate struct {
 	// Installed and Version: package versions (osupdate).
 	Installed string `json:"installed,omitempty"`
 	Version   string `json:"version,omitempty"`
+	// CVEs fixed by the update (osupdate).
+	CVEs []string `json:"cves,omitempty"`
 }
 
 // Important reports whether the update is a security or critical update.
@@ -156,6 +158,7 @@ func (r *WingetReport) Missing() bool { return r != nil && r.Available != nil &&
 
 var (
 	kbRe       = regexp.MustCompile(`^KB\d{4,8}$`)
+	cveRe      = regexp.MustCompile(`^CVE-\d{4}-\d{4,7}$`)
 	wingetIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$`)
 	classes    = map[string]bool{"security": true, "critical": true, "rollup": true, "update": true, "definition": true,
 		"feature_pack": true, "service_pack": true, "upgrade": true, "tools": true, "driver": true}
@@ -210,6 +213,13 @@ func ParseWindows(raw []byte, now time.Time) (*WindowsReport, error) {
 	for _, u := range r.Updates {
 		u.ID, u.Title, u.Severity = clip(u.ID), clip(u.Title), clip(u.Severity)
 		u.Installed, u.Version = clip(u.Installed), clip(u.Version)
+		var cves []string
+		for _, c := range u.CVEs {
+			if cveRe.MatchString(c) && len(cves) < 200 {
+				cves = append(cves, c)
+			}
+		}
+		u.CVEs = cves
 		if u.Title == "" {
 			continue
 		}

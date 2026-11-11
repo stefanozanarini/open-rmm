@@ -17,11 +17,14 @@
 <p>{{if .KEV}}<span class="badge chk-failing">{{t "sfruttata attivamente (CISA KEV)"}}</span> {{end}}{{if .Ransomware}}<span class="badge chk-failing">{{t "usata in attacchi ransomware"}}</span> {{end}}{{if and .Exploited (not .KEV)}}<span class="badge chk-failing">{{t "sfruttata (Microsoft)"}}</span> {{end}}
   <span class="badge {{cvssClass .CVSS}}">CVSS {{cvssText .CVSS}}</span>{{with .Severity}} <span class="badge">{{label .}}</span>{{end}}
   · {{.Product}}{{if not .Released.IsZero}} · {{tf "pubblicata il %s" (isoDate .Released)}}{{end}}{{with .KEVAdded}} · {{tf "nel catalogo CISA dal %s" .}}{{end}}</p>
-<p><a href="https://msrc.microsoft.com/update-guide/vulnerability/{{.ID}}" target="_blank" rel="noopener noreferrer">Microsoft ↗</a> · <a href="https://nvd.nist.gov/vuln/detail/{{.ID}}" target="_blank" rel="noopener noreferrer">NVD ↗</a></p>
+<p>{{if eq .Product "Windows"}}<a href="https://msrc.microsoft.com/update-guide/vulnerability/{{.ID}}" target="_blank" rel="noopener noreferrer">Microsoft ↗</a> · {{end}}<a href="https://nvd.nist.gov/vuln/detail/{{.ID}}" target="_blank" rel="noopener noreferrer">NVD ↗</a></p>
 <h3>{{tf "Computer colpiti (%d)" (len .Hits)}}</h3>
+{{if and $.CanRun $.Data.Vulns.FixURL}}<p><a class="button primary" href="{{$.Data.Vulns.FixURL}}">{{$.Data.Vulns.FixLabel}}</a>
+  <span class="muted">{{t "Apre l'azione già preparata per i computer colpiti: la controlli e la approvi con MFA."}}</span></p>
+{{else if $.Data.Vulns.FixNote}}<p class="muted">{{$.Data.Vulns.FixNote}}</p>{{end}}
 <table>
 <thead><tr><th>{{t "Computer"}}</th><th>{{t "Versione installata"}}</th><th>{{t "Correzione"}}</th></tr></thead>
-<tbody>{{range .Hits}}<tr><td><a href="/agents/{{.AgentID}}#patches">{{.Hostname}}</a></td><td>{{.Installed}}</td><td>{{.Fix}}</td></tr>{{end}}</tbody>
+<tbody>{{range .Hits}}<tr><td><a href="/agents/{{.AgentID}}#patches">{{.Hostname}}</a></td><td>{{.Installed}}</td><td>{{or .Fix (t "nessuna correzione indicata")}}</td></tr>{{end}}</tbody>
 </table>
 {{else}}
 <div class="cards">
@@ -48,7 +51,7 @@
 </table>
 {{if gt .Shown (len .Findings)}}<p class="muted small">{{tf "Mostrate %d vulnerabilità su %d: affina la ricerca." (len .Findings) .Shown}}</p>{{end}}
 {{end}}
-<p class="muted small">{{tf "Fonti: aggiornamenti di sicurezza Microsoft (%d mesi), confrontati con la build di Windows di ogni computer; catalogo CISA delle vulnerabilità sfruttate." .Months}}</p>
+<p class="muted small">{{tf "Fonti: aggiornamenti di sicurezza Microsoft (%d mesi), confrontati con la build di Windows di ogni computer; NVD per %d applicazioni note, confrontate con la versione installata; per Linux, le CVE degli aggiornamenti di sicurezza in sospeso (apt, dnf, zypper); catalogo CISA delle vulnerabilità sfruttate." .Months .Products}}</p>
 {{end}}
 {{end}}{{end}}
 

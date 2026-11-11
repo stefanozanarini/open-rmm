@@ -53,6 +53,8 @@ type runnable struct {
 	// has no description (the form shows a JSON field).
 	Fields []paramField
 	Known  bool
+	// Open: preselected (bulk form opened from a vulnerability).
+	Open bool
 }
 
 type agentData struct {

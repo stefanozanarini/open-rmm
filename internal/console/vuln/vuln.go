@@ -16,6 +16,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/stefanozanarini/open-rmm/internal/console/store"
@@ -54,16 +55,27 @@ type Fetcher struct {
 	Log    *slog.Logger
 	Now    func() time.Time
 	// Base URLs, replaced by tests.
-	MSRC, KEV string
+	MSRC, KEV, NVD string
+	// NVDKey is an optional NVD API key (OPENRMM_NVD_API_KEY); NVDPause
+	// keeps within NVD's limits: 5 requests in 30 s without a key, 50
+	// with one.
+	NVDKey   string
+	NVDPause time.Duration
 	// Months of Microsoft updates kept.
 	Months int
 }
 
 // NewFetcher returns a fetcher of the public sources.
 func NewFetcher(st Store, log *slog.Logger) *Fetcher {
-	return &Fetcher{Store: st, Client: &http.Client{Timeout: 10 * time.Minute}, Log: log, Now: time.Now,
+	f := &Fetcher{Store: st, Client: &http.Client{Timeout: 10 * time.Minute}, Log: log, Now: time.Now,
 		MSRC: "https://api.msrc.microsoft.com/cvrf/v3.0", Months: 24,
-		KEV: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"}
+		KEV: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+		NVD: "https://services.nvd.nist.gov/rest/json/cves/2.0", NVDKey: os.Getenv("OPENRMM_NVD_API_KEY"),
+		NVDPause: 6500 * time.Millisecond}
+	if f.NVDKey != "" {
+		f.NVDPause = 700 * time.Millisecond
+	}
+	return f
 }
 
 // Refresh downloads what is missing or changed. Errors of one source do not
@@ -73,7 +85,7 @@ func (f *Fetcher) Refresh(ctx context.Context) error {
 	for _, step := range []struct {
 		name string
 		run  func(context.Context) error
-	}{{"kev", f.refreshKEV}, {"msrc", f.refreshMSRC}} {
+	}{{"kev", f.refreshKEV}, {"msrc", f.refreshMSRC}, {"nvd", f.refreshNVD}} {
 		if err := step.run(ctx); err != nil {
 			f.Log.Warn("vulnerability source", "source", step.name, "err", err)
 			if first == nil {
@@ -86,9 +98,19 @@ func (f *Fetcher) Refresh(ctx context.Context) error {
 
 // get downloads url as JSON into v.
 func (f *Fetcher) get(ctx context.Context, url string, v any) error {
+	return f.getWith(ctx, url, nil, v)
+}
+
+// getWith is get with request headers; empty values are left out.
+func (f *Fetcher) getWith(ctx context.Context, url string, headers map[string]string, v any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
+	}
+	for k, val := range headers {
+		if val != "" {
+			req.Header.Set(k, val)
+		}
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "open-rmm")

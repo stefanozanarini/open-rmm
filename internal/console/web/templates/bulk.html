@@ -24,10 +24,11 @@
 </form>
 {{end}}
 {{if .Commands}}
-<details class="group" id="commands">
+{{with .For}}<p><span class="badge chk-warning">{{.}}</span> {{t "Azione preparata per correggere questa vulnerabilità: controlla agenti e parametri, poi approva."}}</p>{{end}}
+<details class="group" id="commands"{{if .Preset}} open{{end}}>
 <summary><h2>{{t "Esegui un comando"}} <span class="muted">({{len .Commands}})</span></h2></summary>
 {{range .Commands}}
-<details class="action">
+<details class="action"{{if .Open}} open{{end}}>
 <summary><strong>{{.Module}}</strong> · {{.Action}}{{if .Description}} <span class="muted">— {{.Description}}</span>{{end}}</summary>
 <form method="post" action="/agents/bulk" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">

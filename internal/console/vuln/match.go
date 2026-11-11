@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -45,6 +46,15 @@ type Endpoint struct {
 	AgentID, Hostname string
 	OS                string // windows, linux
 	OSVersion         string // e.g. Windows 11 Pro 25H2 (build 26200.9711)
+	Apps              []InstalledApp
+	// Linux: the CVEs of the pending security updates (osupdate).
+	Packages []PackageCVEs
+}
+
+// PackageCVEs is a pending Linux update with the CVEs it fixes.
+type PackageCVEs struct {
+	Name, Installed, Version, Severity string
+	CVEs                               []string
 }
 
 // Hit is an endpoint affected by a CVE.
@@ -52,6 +62,7 @@ type Hit struct {
 	AgentID, Hostname string
 	Installed         string // e.g. 26200.9711
 	Fix               string // e.g. KB5127648 (26200.9746)
+	Package           string // Linux: the package to update
 }
 
 // Finding is a CVE with the endpoints it affects.
@@ -70,9 +81,15 @@ type Index struct {
 	// Windows: per build, the CVEs with the lowest fixing revision.
 	win map[int][]winEntry
 	kev map[string]KEV
-	// Months of Microsoft data and whether the catalog is there.
-	Months int
-	HasKEV bool
+	// Applications: CVEs by catalog product (vendor:product).
+	apps map[string][]AppCVE
+	// details: title and CVSS of single CVEs (Linux), from NVD.
+	details map[string]CVEDetail
+	// Months of Microsoft data, products downloaded from NVD and whether
+	// the catalog is there.
+	Months   int
+	Products int
+	HasKEV   bool
 }
 
 type winEntry struct {
@@ -106,7 +123,14 @@ func Load(ctx context.Context, st Store) (*Index, error) {
 			ix.win[b] = append(ix.win[b], winEntry{cve: c, fix: fx})
 		}
 	}
-	if ix.Months == 0 && !ix.HasKEV {
+	if ix.apps, err = appCVEs(ctx, st); err != nil {
+		return nil, err
+	}
+	ix.Products = len(ix.apps)
+	if ix.details, err = cveDetails(ctx, st); err != nil {
+		return nil, err
+	}
+	if ix.Months == 0 && !ix.HasKEV && ix.Products == 0 && len(ix.details) == 0 {
 		return ix, ErrNoData
 	}
 	return ix, nil
@@ -141,6 +165,46 @@ func (ix *Index) Match(eps []Endpoint) []Finding {
 		f.Hits = append(f.Hits, h)
 	}
 	for _, ep := range eps {
+		for _, a := range ep.Apps {
+			app, v, ok := appVersion(a)
+			if !ok {
+				continue
+			}
+			for i := range ix.apps[app.CPE] {
+				ac := &ix.apps[app.CPE][i]
+				fix, hit := "", false
+				for _, r := range ac.Ranges {
+					if r.Contains(v) {
+						hit = true
+						if r.Fix() != "" && (fix == "" || CompareVersions(r.Fix(), fix) > 0) {
+							fix = r.Fix()
+						}
+					}
+				}
+				if !hit {
+					continue
+				}
+				if fix != "" {
+					fix = app.Label + " " + fix
+				}
+				add(&CVE{ID: ac.ID, Title: ac.Title, CVSS: ac.CVSS, Released: ac.Released}, app.Label,
+					Hit{AgentID: ep.AgentID, Hostname: ep.Hostname, Installed: app.Label + " " + v, Fix: fix})
+			}
+		}
+		for _, p := range ep.Packages {
+			for _, id := range p.CVEs {
+				c := &CVE{ID: id, Severity: p.Severity}
+				if d, ok := ix.details[id]; ok {
+					c.Title, c.CVSS, c.Released = d.Title, d.CVSS, d.Released
+				}
+				fix := p.Name
+				if p.Version != "" {
+					fix += " " + p.Version
+				}
+				add(c, p.Name, Hit{AgentID: ep.AgentID, Hostname: ep.Hostname, Installed: strings.TrimSpace(p.Name + " " + p.Installed), Fix: fix,
+					Package: p.Name})
+			}
+		}
 		if ep.OS != "windows" {
 			continue
 		}

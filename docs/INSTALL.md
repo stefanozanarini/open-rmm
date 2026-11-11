@@ -188,3 +188,7 @@ The `db-data` volume holds the whole console state. Take regular encrypted backu
 ```bash
 docker compose exec db pg_dump -U postgres -Fc openrmm > openrmm-$(date +%F).dump
 ```
+
+## Vulnerability data
+
+The `server` service downloads public vulnerability data for **Reporting → Vulnerabilities**: the Microsoft security updates (`api.msrc.microsoft.com`), the CISA Known Exploited Vulnerabilities catalog (`www.cisa.gov`) and NVD (`services.nvd.nist.gov`). It needs outbound HTTPS to these hosts (an `HTTPS_PROXY` in the environment is honoured). The first download takes a few minutes; then only what changed is downloaded, every 6 hours. Without an NVD API key NVD allows 5 requests every 30 seconds; a free key (`OPENRMM_NVD_API_KEY` in `.env`) makes it about ten times faster.

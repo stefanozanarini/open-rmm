@@ -119,6 +119,8 @@ services:
       OPENRMM_OIDC_ISSUER: ${OPENRMM_OIDC_ISSUER:?set OPENRMM_OIDC_ISSUER in .env}
       OPENRMM_OIDC_CLIENT_ID: ${OPENRMM_OIDC_CLIENT_ID:?set OPENRMM_OIDC_CLIENT_ID in .env}
       OPENRMM_OIDC_CLIENT_SECRET_FILE: /run/openrmm/secrets/oidc-client-secret
+      # Optional NVD API key: application CVEs download ten times faster.
+      OPENRMM_NVD_API_KEY: ${OPENRMM_NVD_API_KEY:-}
       OPENRMM_MFA_CLAIM: ${OPENRMM_MFA_CLAIM:-amr}
       OPENRMM_TENANT_MAP: ${OPENRMM_TENANT_MAP:-}
       OPENRMM_SIGNER_SOCKET: /run/openrmm-signer/signer.sock

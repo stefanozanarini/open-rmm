@@ -87,6 +87,44 @@ list_zypper() {
     $1 != "" { printf "%s\t%s\t%s\tupdate\t\n", $1, $2, $3 }'
 }
 
+# cve_map prints "package<TAB>CVE" for the pending security updates ($1:
+# the lister's lines). apt has no local CVE list: the changelog of the new
+# version names the CVEs it fixes (downloaded from the distribution).
+cve_map() {
+  case "$PM" in
+  dnf | yum)
+    if [ "$PM" = dnf ]; then
+      dnf -q updateinfo list --security --with-cve 2>/dev/null
+    else
+      yum -q updateinfo list cves 2>/dev/null
+    fi | awk '
+      $1 ~ /^CVE-[0-9]+-[0-9]+$/ && NF >= 3 {
+        nvra = $3; sub(/\.[^.]+$/, "", nvra)
+        n = split(nvra, p, "-"); name = p[1]
+        for (i = 2; i <= n - 2; i++) name = name "-" p[i]
+        print name "\t" $1
+      }' ;;
+  zypper)
+    zypper -n -q list-patches --cve --category security 2>/dev/null | zypper_table "No.,Patch,Status" | awk -F'\t' '
+      $1 ~ /^CVE-[0-9]+-[0-9]+$/ && $3 == "needed" { print $2 "\t" $1 }' ;;
+  apt)
+    # Security updates grouped by source package: one changelog each.
+    printf '%s\n' "$1" | awk -F'\t' '$4 == "security" { print $1 "\t" $3 }' | while IFS="$(printf '\t')" read -r pkg ver; do
+      printf '%s\t%s\t%s\n' "$(dpkg-query -W -f '${source:Package}\t${source:Version}' "$pkg" 2>/dev/null)" "$pkg" "$ver"
+    done | sort -t "$(printf '\t')" -k1,1 | awk -F'\t' '
+      $1 != "" { pk[$1] = pk[$1] " " $3; if (!($1 in v)) { v[$1] = $2; bin[$1] = $3 "=" $4 }; if (!($1 in order)) order[$1] = ++n; }
+      END { for (s in v) print order[s] "\t" s "\t" v[s] "\t" bin[s] "\t" pk[s] }' | sort -n | head -n 60 |
+      while IFS="$(printf '\t')" read -r _ _ installed bin group; do
+        timeout 30 apt-get -qq changelog "$bin" 2>/dev/null | awk -v stop="($installed)" '
+          /^[^ \t]/ && index($0, stop) { exit }
+          { while (match($0, /CVE-[0-9]+-[0-9]+/)) { print substr($0, RSTART, RLENGTH); $0 = substr($0, RSTART + RLENGTH) } }' |
+          sort -u | while read -r cve; do
+            for p in $group; do printf '%s\t%s\n' "$p" "$cve"; done
+          done
+      done ;;
+  esac
+}
+
 list_updates() {
   case "$PM" in
   apt) list_apt ;;
@@ -140,13 +178,20 @@ report() {
   required=$(printf '%s' "$rb" | cut -f1)
   since=$(printf '%s' "$rb" | cut -f2)
   reason=$(printf '%s' "$rb" | cut -f3)
+  rmm_progress 60 "CVE" >&3
+  cvefile=$(mktemp)
+  # The first line keeps NR == FNR true only while reading this file.
+  { printf '#\t#\n'; cve_map "$updates"; } >"$cvefile"
   items=$(printf '%s\n' "$updates" | awk -F'\t' '
     function esc(x) { gsub(/\\/, "\\\\", x); gsub(/"/, "\\\"", x); gsub(/[\001-\037]/, "", x); return x }
+    NR == FNR { if ($1 == "#") next; if (!(($1, $2) in seen)) { seen[$1, $2] = 1; cves[$1] = cves[$1] (cves[$1] == "" ? "" : ",") "\"" $2 "\"" }; next }
     $1 != "" {
       title = $1 ($3 != "" ? " " $3 : "")
-      printf "%s{\"id\":\"%s\",\"title\":\"%s\",\"classification\":\"%s\",\"severity\":\"%s\",\"installed\":\"%s\",\"version\":\"%s\"}",
-        (n++ ? "," : ""), esc($1), esc(title), $4, esc(toupper(substr($5, 1, 1)) tolower(substr($5, 2))), esc($2), esc($3)
-    }')
+      printf "%s{\"id\":\"%s\",\"title\":\"%s\",\"classification\":\"%s\",\"severity\":\"%s\",\"installed\":\"%s\",\"version\":\"%s\"%s}",
+        (n++ ? "," : ""), esc($1), esc(title), $4, esc(toupper(substr($5, 1, 1)) tolower(substr($5, 2))), esc($2), esc($3),
+        ($1 in cves) ? ",\"cves\":[" cves[$1] "]" : ""
+    }' "$cvefile" -)
+  rm -f "$cvefile"
   security=$(printf '%s\n' "$updates" | awk -F'\t' '$4 == "security"' | grep -c . || true)
   total=$(printf '%s\n' "$updates" | grep -c . || true)
   other=$((total - security))
