@@ -91,7 +91,7 @@ func TestConsoleSitesPanelNotesAndTheme(t *testing.T) {
 	}
 
 	// Each tab renders.
-	for _, tab := range []string{"summary", "checks", "patches", "software", "inventory", "logons", "policies", "history", "notes", "commands"} {
+	for _, tab := range []string{"summary", "checks", "patches", "software", "inventory", "logons", "policies", "history", "notes", "commands", "jobs"} {
 		if code, _ := get(t, c, e.console.URL+"/agents?agent="+bo+"&tab="+tab); code != 200 {
 			t.Errorf("tab %s: %d", tab, code)
 		}

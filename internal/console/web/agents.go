@@ -135,7 +135,7 @@ func (m siteMatcher) bySubnet(a store.Agent, ipv4 []string) (id, name string) {
 var tabs = []struct{ ID, Label string }{
 	{"summary", "Riepilogo"}, {"checks", "Controlli"}, {"patches", "Patch"}, {"software", "Software"},
 	{"inventory", "Inventario"}, {"logons", "Accessi"}, {"policies", "Raccolte"}, {"history", "Cronologia"},
-	{"notes", "Note"}, {"commands", "Comandi"},
+	{"notes", "Note"}, {"commands", "Comandi"}, {"jobs", "Job"},
 }
 
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {

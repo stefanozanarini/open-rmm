@@ -86,6 +86,10 @@ func TestConsoleLinuxUpdates(t *testing.T) {
 	if _, body := get(t, c, e.console.URL+"/jobs?agent="+pc); !strings.Contains(body, "Job di SRV-UBUNTU") || strings.Contains(body, "PC-ALTRO") {
 		t.Fatalf("jobs of one computer: %s", body)
 	}
+	if _, body := get(t, c, e.console.URL+"/agents?agent="+pc+"&tab=jobs"); !strings.Contains(body, `href="/jobs?agent=`+pc+`"`) ||
+		!strings.Contains(body, "osupdate 1.1.0") || !strings.Contains(body, "Ultimi job") {
+		t.Fatalf("jobs tab: %s", body)
+	}
 	if _, body := get(t, c, e.console.URL+"/jobs?q=altro"); !strings.Contains(body, "PC-ALTRO") || strings.Contains(body, ">SRV-UBUNTU<") {
 		t.Fatalf("jobs search: %s", body)
 	}

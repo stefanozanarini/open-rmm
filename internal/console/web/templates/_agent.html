@@ -3,6 +3,8 @@
 <dl class="facts">
   <dt>{{t "Stato"}}</dt><dd><span class="badge {{.Agent.Status}}">{{label .Agent.Status}}</span> {{if .Online}}<span class="badge online">online</span>{{end}}</dd>
   <dt>{{t "Sistema"}}</dt><dd>{{.Agent.Host.OSVersion}} ({{.Agent.Host.OS}}/{{.Agent.Host.Arch}}, {{label .Agent.Host.OSFamily}})</dd>
+  {{with .Inv}}{{with .System}}{{if or .Manufacturer .Model}}<dt>{{t "Computer"}}</dt><dd>{{.Manufacturer}} {{.Model}}{{if .Virtual}} <span class="badge">{{t "virtuale"}}</span>{{end}}</dd>{{end}}
+  {{with .Serial}}<dt>{{if isDell $.Data.Inv.System.Manufacturer}}Service Tag{{else}}{{t "Numero di serie"}}{{end}}</dt><dd><code>{{.}}</code>{{if isDell $.Data.Inv.System.Manufacturer}} <a href="https://www.dell.com/support/home/product-support/servicetag/{{.}}/overview" target="_blank" rel="noopener noreferrer">{{t "garanzia e driver su dell.com"}} ↗</a>{{end}}</dd>{{end}}{{end}}{{end}}
   <dt>{{t "Versione agente"}}</dt><dd>{{.Agent.Host.AgentVersion}}</dd>
   <dt>{{t "Ultimo contatto"}}</dt><dd>{{fmtTime .Agent.LastSeenAt}}{{with .Agent.LastSeenIP}} {{tf "da %v" .}}{{end}}</dd>
   {{with .AD}}<dt>Active Directory</dt><dd>{{.Domain}}{{with .OU}} · <a href="/agents{{qs "ou" $.Data.AD.Key}}">{{.}}</a>{{end}}{{if not .Enabled}} <span class="badge chk-failing">{{t "account disabilitato"}}</span>{{end}}{{with .LastLogon}} · {{tf "ultimo accesso al dominio %s" (fmtTime .)}}{{end}}</dd>{{end}}
@@ -418,7 +420,8 @@
 
 {{define "agent-jobs"}}
 <h2>{{t "Ultimi job"}}</h2>
-{{template "jobrows" .Data.Jobs}}
+{{template "jobrows" (lastJobs .Data.Jobs 10)}}
+{{if .Data.Jobs}}<p><a href="/jobs?agent={{.Data.Agent.ID}}">{{t "tutti i job di questo computer"}}</a></p>{{end}}
 {{end}}
 
 {{define "agent-notes"}}

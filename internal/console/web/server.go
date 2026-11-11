@@ -157,9 +157,16 @@ func funcs(lang string) template.FuncMap {
 		"msg":          func(s string) string { return trMessage(lang, s) },
 		"platformName": func(p string) string { return platformName(lang, p) },
 		"cvssClass":    cvssClass,
-		"cvssText":     cvssText,
-		"dayName":      func(d string) string { return tr(lang, dayNames[d]) },
-		"interval":     func(d string) string { return intervalName(lang, d) },
+		"isDell":       func(m string) bool { return strings.HasPrefix(strings.ToLower(strings.TrimSpace(m)), "dell") },
+		"lastJobs": func(jobs []store.Job, n int) []store.Job {
+			if len(jobs) > n {
+				return jobs[:n]
+			}
+			return jobs
+		},
+		"cvssText": cvssText,
+		"dayName":  func(d string) string { return tr(lang, dayNames[d]) },
+		"interval": func(d string) string { return intervalName(lang, d) },
 		"checkLink": func(agentID string, panel bool, checkID string) *actionLink {
 			return checkAction(lang, agentID, panel, checkID)
 		},

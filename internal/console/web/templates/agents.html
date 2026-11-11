@@ -120,7 +120,8 @@
   {{else if eq $.Data.Tab "inventory"}}{{template "agent-inventory" $p}}
   {{else if eq $.Data.Tab "logons"}}{{template "agent-logons" $p}}
   {{else if eq $.Data.Tab "policies"}}{{template "agent-policies" $p}}
-  {{else if eq $.Data.Tab "history"}}{{template "agent-jobs" $p}}{{template "agent-changes" $p}}
+  {{else if eq $.Data.Tab "history"}}{{template "agent-changes" $p}}
+  {{else if eq $.Data.Tab "jobs"}}{{template "agent-jobs" $p}}
   {{else if eq $.Data.Tab "notes"}}{{template "agent-notes" $p}}
   {{else if eq $.Data.Tab "commands"}}{{template "agent-actions" $p}}{{if not .Actions}}<p class="muted">{{t "Nessuna azione disponibile per questo agente."}}</p>{{end}}
   {{end}}
