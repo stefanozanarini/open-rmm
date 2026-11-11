@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/agent/pty"
-	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/pty"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/secfile"
 )
 
 const (

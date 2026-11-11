@@ -1,5 +1,5 @@
 #!/bin/sh
-# Creates the open-rmm database owned by a dedicated, non-superuser role:
+# Creates the Tempra RMM database owned by a dedicated, non-superuser role:
 # the console refuses to run as a superuser because it would bypass the
 # row-level security that isolates tenants. Runs only on first start.
 set -eu

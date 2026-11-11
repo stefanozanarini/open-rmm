@@ -1,7 +1,7 @@
 [Unit]
-Description=open-rmm services health check
+Description=Tempra RMM services health check
 
 [Service]
 Type=oneshot
-# Only systemctl, whose path never changes with open-rmm updates.
+# Only systemctl, whose path never changes with Tempra RMM updates.
 ExecStart=/bin/systemctl start openrmm-watchdog.service openrmm-agent.service

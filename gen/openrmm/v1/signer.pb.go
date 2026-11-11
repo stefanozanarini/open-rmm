@@ -607,7 +607,7 @@ const file_openrmm_v1_signer_proto_rawDesc = "" +
 	"\n" +
 	"SignPolicy\x12\x1d.openrmm.v1.SignPolicyRequest\x1a\x1e.openrmm.v1.SignPolicyResponse\x12O\n" +
 	"\fSignBaseline\x12\x1f.openrmm.v1.SignBaselineRequest\x1a\x1e.openrmm.v1.SignPolicyResponse\x12J\n" +
-	"\vSignCollect\x12\x1e.openrmm.v1.SignCollectRequest\x1a\x1b.openrmm.v1.SignJobResponseB>Z<github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
+	"\vSignCollect\x12\x1e.openrmm.v1.SignCollectRequest\x1a\x1b.openrmm.v1.SignJobResponseB@Z>github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
 
 var (
 	file_openrmm_v1_signer_proto_rawDescOnce sync.Once

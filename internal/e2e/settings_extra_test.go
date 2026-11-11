@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/signer"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/web"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/signer"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/web"
 )
 
 // Company logo, Active Directory readers, update ring and target version.

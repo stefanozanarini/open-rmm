@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
 )
 
 func script(t *testing.T, body string) Spec {

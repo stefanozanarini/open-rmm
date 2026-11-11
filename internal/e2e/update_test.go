@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/updater"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/release"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/updater"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/release"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 // publishRelease signs fake executables as release version and publishes it.

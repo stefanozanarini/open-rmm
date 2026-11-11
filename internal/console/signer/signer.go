@@ -32,12 +32,12 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/authn"
-	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/policy"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/policy"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 // Server implements openrmmv1.SignerServiceServer.

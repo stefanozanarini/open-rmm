@@ -22,14 +22,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/authn"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/modules"
-	"github.com/stefanozanarini/open-rmm/internal/release"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
-	"github.com/stefanozanarini/open-rmm/modules/sdk"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/release"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
+	"github.com/stefanozanarini/tempra-rmm/modules/sdk"
 )
 
 // Publishing modules and agent releases from the console. The builder holds

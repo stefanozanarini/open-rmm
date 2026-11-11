@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Package winsvc runs and installs the open-rmm Windows services. On other
+// Package winsvc runs and installs the Tempra RMM Windows services. On other
 // systems the services are managed by systemd (packaging/linux).
 package winsvc
 

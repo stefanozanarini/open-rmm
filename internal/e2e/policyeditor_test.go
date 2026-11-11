@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/signer"
-	"github.com/stefanozanarini/open-rmm/internal/console/web"
-	"github.com/stefanozanarini/open-rmm/internal/policy"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/signer"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/web"
+	"github.com/stefanozanarini/tempra-rmm/internal/policy"
 )
 
 // The policy editor: module cards with their actions, settings and

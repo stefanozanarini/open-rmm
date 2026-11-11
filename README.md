@@ -1,10 +1,12 @@
-# open-rmm
+# Tempra RMM
 
-Open-source Remote Monitoring and Management, designed with security as a primary requirement.
+**TEMPRA** — *TEMPRA Endpoint Monitoring, Patching & Remote Administration*. Open-source Remote Monitoring and Management, designed with security as a primary requirement.
 
 - **Agent** for Windows (clients and servers) and Linux, deployable through Group Policy, modular: new features arrive as signed plugins, without updating the agent.
 - **Console** that can be hosted at the customer, multi-tenant, and federable under a central console.
 - **Outbound-only connections** from the endpoints, mTLS with a pinned private CA, every command approved with a fresh MFA sign-in.
+
+The project was called open-rmm until November 2026. Technical identifiers keep that name so that installed agents keep working: services `openrmm-agent` and `openrmm-watchdog`, folders and registry keys `open-rmm`, the `OPENRMM_*` variables, the `openrmm.v1` protocol, the Entra role `OpenRMM.Admin`, the ADMX files and the module ids.
 
 The project is at an early stage. The full design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -63,4 +65,4 @@ make test
 
 ## Licence
 
-open-rmm is distributed under the [GNU Affero General Public License v3.0](LICENSE). Anyone who modifies open-rmm and offers it as a network service must make the source code of their modifications available.
+Tempra RMM is distributed under the [GNU Affero General Public License v3.0](LICENSE). Anyone who modifies Tempra RMM and offers it as a network service must make the source code of their modifications available.

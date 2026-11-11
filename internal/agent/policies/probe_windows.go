@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/windows/registry"
 	"golang.org/x/sys/windows/svc/mgr"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/hostinfo"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/hostinfo"
 )
 
 // SystemProbe inspects the local system.

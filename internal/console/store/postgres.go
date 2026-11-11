@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/audit"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/audit"
 )
 
 //go:embed migrations/*.sql

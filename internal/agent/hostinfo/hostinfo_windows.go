@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/sys/windows/registry"
 
-	"github.com/stefanozanarini/open-rmm/internal/winver"
+	"github.com/stefanozanarini/tempra-rmm/internal/winver"
 )
 
 func osVersion() string {

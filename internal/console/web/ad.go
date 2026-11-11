@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/adinv"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/adinv"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
 )
 
 // adCache keeps parsed Active Directory reports, which can hold thousands

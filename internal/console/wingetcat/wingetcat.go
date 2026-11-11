@@ -24,9 +24,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
-	"github.com/stefanozanarini/open-rmm/internal/inventory"
-	"github.com/stefanozanarini/open-rmm/internal/pkgref"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/pkgfiles"
+	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
+	"github.com/stefanozanarini/tempra-rmm/internal/pkgref"
 )
 
 const maxManifest = 1 << 20
@@ -69,7 +69,7 @@ func (c *Client) get(ctx context.Context, u string, limit int64) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "open-rmm")
+	req.Header.Set("User-Agent", "tempra-rmm")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -430,7 +430,7 @@ func (c *Client) Download(ctx context.Context, rel *Release, dir pkgfiles.Dir, m
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("User-Agent", "open-rmm")
+	req.Header.Set("User-Agent", "tempra-rmm")
 	hc := *c.HTTP
 	hc.Timeout = 0 // large files: bounded by ctx
 	resp, err := hc.Do(req)

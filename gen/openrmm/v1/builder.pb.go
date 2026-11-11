@@ -858,7 +858,7 @@ const file_openrmm_v1_builder_proto_rawDesc = "" +
 	"\x05Renew\x12\x18.openrmm.v1.RenewRequest\x1a\x19.openrmm.v1.BuilderStatus\x12;\n" +
 	"\x05Build\x12\x18.openrmm.v1.BuildRequest\x1a\x16.openrmm.v1.BuildChunk0\x01\x12T\n" +
 	"\x11CreateReleaseKeys\x12$.openrmm.v1.CreateReleaseKeysRequest\x1a\x19.openrmm.v1.BuilderStatus\x12Q\n" +
-	"\fSignManifest\x12\x1f.openrmm.v1.SignManifestRequest\x1a .openrmm.v1.SignManifestResponseB>Z<github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
+	"\fSignManifest\x12\x1f.openrmm.v1.SignManifestRequest\x1a .openrmm.v1.SignManifestResponseB@Z>github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
 
 var (
 	file_openrmm_v1_builder_proto_rawDescOnce sync.Once

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/config"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/config"
 )
 
 func TestBuild(t *testing.T) {

@@ -1,4 +1,4 @@
-# open-rmm gateway alone, for a separate DMZ host.
+# Tempra RMM gateway alone, for a separate DMZ host.
 #
 # Copy deploy/pki/gateway from the internal host into ./pki/gateway here
 # (it contains no private CA key), then:
@@ -13,7 +13,7 @@ name: open-rmm-dmz
 
 services:
   gateway:
-    image: ${OPENRMM_IMAGE:-ghcr.io/stefanozanarini/open-rmm:latest}
+    image: ${OPENRMM_IMAGE:-ghcr.io/stefanozanarini/tempra-rmm:latest}
     restart: unless-stopped
     environment:
       OPENRMM_LISTEN: ":8443"

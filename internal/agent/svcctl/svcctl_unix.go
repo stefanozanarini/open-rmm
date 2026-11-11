@@ -104,7 +104,7 @@ func (d Systemd) SetBinary(name, exe string, args []string) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil { // #nosec G301 -- systemd configuration directory
 		return err
 	}
-	content := "# Managed by open-rmm: selects the installed version.\n[Service]\nExecStart=\nExecStart=" +
+	content := "# Managed by Tempra RMM: selects the installed version.\n[Service]\nExecStart=\nExecStart=" +
 		strings.Join(append([]string{exe}, args...), " ") + "\n"
 	tmp := p + ".tmp"
 	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil { // #nosec G306 -- systemd units are world-readable

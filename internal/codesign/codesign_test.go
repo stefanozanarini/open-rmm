@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
 )
 
 func TestDedicatedCAChain(t *testing.T) {

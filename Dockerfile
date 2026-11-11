@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# open-rmm console image: openrmm-gateway (default entrypoint),
+# Tempra RMM console image: openrmm-gateway (default entrypoint),
 # openrmm-server, openrmm-signer and openrmm-admin. Static binaries on a
 # distroless base, running as non-root. It also carries the Windows and
 # Linux agent and watchdog of the same version and the modules of the

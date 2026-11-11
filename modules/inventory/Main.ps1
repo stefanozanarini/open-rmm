@@ -364,6 +364,61 @@ function Get-LocalAdmins {
     $out
 }
 
+# Get-PrivilegedGroups: on a domain controller, the members of the domain's
+# built-in privileged groups, found by SID. Administrators normally holds
+# only Administrator, Domain Admins and Enterprise Admins; the operators
+# groups are normally empty. Every other member is reported as not
+# standard: on a DC, BUILTIN\Administrators is admin of every DC and of
+# the AD database.
+function Get-PrivilegedGroups {
+    if ([int](Get-CimInstance Win32_ComputerSystem).DomainRole -lt 4) { return @() }
+    $root = [ADSI]'LDAP://RootDSE'
+    $domain = [ADSI]("LDAP://" + $root.defaultNamingContext)
+    $domainSid = (New-Object System.Security.Principal.SecurityIdentifier($domain.objectSid[0], 0)).Value
+    $standard = @("$domainSid-500", "$domainSid-512", "$domainSid-519")
+    $netbios = $env:USERDOMAIN
+    $out = @()
+    foreach ($g in @(@('S-1-5-32-544', $true), @('S-1-5-32-548', $false), @('S-1-5-32-549', $false), @('S-1-5-32-550', $false), @('S-1-5-32-551', $false))) {
+        try {
+            $group = [ADSI]"LDAP://<SID=$($g[0])>"
+            if ($null -eq $group.sAMAccountName -or -not [string]$group.sAMAccountName) { continue }
+        }
+        catch { Send-RmmLog "group $($g[0]): $($_.Exception.Message)" 'warn'; continue }
+        $members = @()
+        foreach ($dn in @($group.member)) {
+            if (-not $dn) { continue }
+            $m = [ADSI]("LDAP://" + ($dn -replace '/', '\/'))
+            $sid = ''
+            try { $sid = (New-Object System.Security.Principal.SecurityIdentifier($m.objectSid[0], 0)).Value } catch { }
+            $class = 'user'
+            if (@($m.objectClass) -contains 'group') { $class = 'group' }
+            elseif (@($m.objectClass) -contains 'computer') { $class = 'computer' }
+            $name = [string]$m.sAMAccountName
+            if (-not $name) { $name = ($dn -split ',')[0] -replace '^CN=', '' }
+            $members += @{ name = "$netbios\$name"; type = $class; standard = ($g[1] -and $standard -contains $sid)
+                disabled = ($class -ne 'group' -and $null -ne $m.userAccountControl[0] -and ([int]$m.userAccountControl[0] -band 2) -ne 0) }
+        }
+        $out += @{ name = [string]$group.sAMAccountName; sid = $g[0]; members = $members }
+    }
+    $out
+}
+
+# Get-PrivilegedCheck turns the groups into the check privileged-groups.
+function Get-PrivilegedCheck($Groups) {
+    $parts = @()
+    foreach ($g in $Groups) {
+        $extra = @($g.members | Where-Object { -not $_.standard })
+        if ($extra.Count -eq 0) { continue }
+        $names = @($extra | Select-Object -First 8 | ForEach-Object { $_.name.Split('\')[-1] })
+        $more = if ($extra.Count -gt 8) { ", ..." } else { '' }
+        $parts += "$($g.name) ($($extra.Count)): $($names -join ', ')$more"
+    }
+    if ($parts.Count) {
+        return @{ id = 'privileged-groups'; status = 'failing'; summary = "Membri non predefiniti nei gruppi privilegiati del dominio: $($parts -join '; ')" }
+    }
+    @{ id = 'privileged-groups'; status = 'ok'; summary = 'Gruppi privilegiati del dominio con i soli membri predefiniti' }
+}
+
 Invoke-RmmModule @{
     collect = {
         param($Params, $Request)
@@ -385,6 +440,11 @@ Invoke-RmmModule @{
         $inv.software = @(Get-Section 'software' { Get-SoftwareInfo } @())
         $inv.remote_access = Get-Section 'remote_access' { Get-RemoteAccessInfo } @{}
         $inv.local_admins = @(Get-Section 'local_admins' { Get-LocalAdmins } @())
+        $groups = @(Get-Section 'privileged_groups' { Get-PrivilegedGroups } @())
+        if ($groups.Count) {
+            $inv.privileged_groups = $groups
+            $inv.checks = @(Get-PrivilegedCheck $groups)
+        }
         $inv
     }
 }

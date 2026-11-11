@@ -25,8 +25,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/builder"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/builder"
 )
 
 func env(name, def string) string {

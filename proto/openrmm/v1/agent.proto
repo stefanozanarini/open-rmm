@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package openrmm.v1;
 
-option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
+option go_package = "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1;openrmmv1";
 
 // EnrollmentService is the only RPC reachable without a client certificate.
 // An agent exchanges a single-use enrollment token and a locally generated

@@ -13,14 +13,14 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/agent/policies"
-	"github.com/stefanozanarini/open-rmm/internal/console/authn"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/modules"
-	"github.com/stefanozanarini/open-rmm/internal/policy"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/policies"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/policy"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 func fastPolicies(t *testing.T) {
@@ -71,7 +71,7 @@ func TestPolicyRunsWhereConditionsHold(t *testing.T) {
 	e.publishPolicy(t, &policy.Policy{ID: pid, TenantID: e.tenant, Name: "Baseline", Version: 1, AppliesTo: policy.AppliesAll,
 		Rules: []policy.Rule{
 			ruleFor(v, "present", "info", &policy.Condition{FileExists: "/"}),
-			ruleFor(v, "absent", "info", &policy.Condition{FileExists: "/nonexistent/open-rmm"}),
+			ruleFor(v, "absent", "info", &policy.Condition{FileExists: "/nonexistent/Tempra RMM"}),
 		}})
 	waitForWithin(t, func() bool { return e.results(t, agentID)["present"].State == store.JobSucceeded }, 10*time.Second)
 	r := e.results(t, agentID)["present"]

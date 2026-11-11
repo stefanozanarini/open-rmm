@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
-  <displayName>open-rmm</displayName>
-  <description>open-rmm agent</description>
+  <displayName>Tempra RMM</displayName>
+  <description>Tempra RMM agent</description>
   <resources>
     <stringTable>
-      <string id="SUPPORTED_OPENRMM">Agente open-rmm su Windows 10, Windows Server 2016 o successivi</string>
-      <string id="OpenRMM">open-rmm</string>
+      <string id="SUPPORTED_OPENRMM">Agente Tempra RMM su Windows 10, Windows Server 2016 o successivi</string>
+      <string id="OpenRMM">Tempra RMM</string>
       <string id="OpenRMM_Trust">Fiducia e chiavi</string>
       <string id="OpenRMM_Local">Policy locali</string>
       <string id="Server">Indirizzo della console</string>
@@ -15,7 +15,7 @@
 
 ATTENZIONE: i valori di questo criterio sono leggibili da tutti gli utenti del computer. Usa un token con scadenza breve e senza approvazione automatica: i nuovi agenti restano in attesa finché un amministratore non li approva.</string>
       <string id="RootCA">Certificato radice della console</string>
-      <string id="RootCA_Help">Certificato radice di open-rmm in base64 DER, su una sola riga (openrmm-admin pki root-b64 -in root-ca.crt). L'agente si collega solo a una console il cui certificato discende da questa radice.</string>
+      <string id="RootCA_Help">Certificato radice di Tempra RMM in base64 DER, su una sola riga (openrmm-admin pki root-b64 -in root-ca.crt). L'agente si collega solo a una console il cui certificato discende da questa radice.</string>
       <string id="JobSigningKeys">Chiavi di firma dei comandi</string>
       <string id="ModuleSigningKeys">Chiavi di rilascio dei moduli</string>
       <string id="ReleaseSigningKeys">Chiavi di rilascio dell'agente</string>

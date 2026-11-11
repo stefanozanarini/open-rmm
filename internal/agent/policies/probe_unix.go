@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/hostinfo"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/hostinfo"
 )
 
 // SystemProbe inspects the local system.

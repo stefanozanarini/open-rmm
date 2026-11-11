@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
 )
 
 // The job dock: a corner panel on every page with the operator's jobs in

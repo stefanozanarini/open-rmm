@@ -15,7 +15,7 @@ You get: two IDs for `.env` and a client secret file for `setup-secrets.sh`.
 
 **App registrations → New registration**
 
-- Name: `open-rmm console`
+- Name: `Tempra RMM console`
 - Supported account types: **this organizational directory only**
 - Redirect URI: platform **Web**, `https://<console address>/auth/callback`
 
@@ -46,9 +46,9 @@ Then `deploy/setup-secrets.sh ~/client-secret.txt` and delete the file. Set a re
 
 | Display name | Value | Allows |
 |---|---|---|
-| open-rmm Administrator | `OpenRMM.Admin` | Everything: revoke agents, tokens, settings, publishing, commands |
-| open-rmm Operator | `OpenRMM.Operator` | View everything, approve new agents and run commands |
-| open-rmm Reader | `OpenRMM.Reader` | Read only |
+| Tempra RMM Administrator | `OpenRMM.Admin` | Everything: revoke agents, tokens, settings, publishing, commands |
+| Tempra RMM Operator | `OpenRMM.Operator` | View everything, approve new agents and run commands |
+| Tempra RMM Reader | `OpenRMM.Reader` | Read only |
 
 The **Value** must be exactly as above. An app created from *Enterprise applications* may also list `User` and `msiam_access`: leave them, but never assign them (they give no access to the console).
 
@@ -58,19 +58,19 @@ The **Value** must be exactly as above. An app created from *Enterprise applicat
 OPENRMM_OIDC_ISSUER=https://login.microsoftonline.com/<Directory ID>/v2.0
 OPENRMM_OIDC_CLIENT_ID=<Application ID>
 OPENRMM_MFA_CLAIM=amr              # none, amr or acrs:c1: see step 6
-OPENRMM_TENANT_MAP=<Directory ID>=<open-rmm tenant ID>
+OPENRMM_TENANT_MAP=<Directory ID>=<Tempra RMM tenant ID>
 ```
 
-The open-rmm tenant ID is printed by `openrmm-admin tenant create` ([INSTALL.md](INSTALL.md) §4). Several open-rmm tenants for the same operators: `<Directory ID>=<tenant1>|<tenant2>`.
+The Tempra RMM tenant ID is printed by `openrmm-admin tenant create` ([INSTALL.md](INSTALL.md) §4). Several Tempra RMM tenants for the same operators: `<Directory ID>=<tenant1>|<tenant2>`.
 
 ## 5. Who can sign in
 
-**Admin consent** (once, for all users). Most tenants do not let users consent to apps, and the first sign-in stops on *Approval required*. **App registrations → open-rmm console → Manage → API permissions → Grant admin consent for <organization>**, as Global Administrator or Privileged Role Administrator. The app asks only for `openid`, `profile` and `email` (shown as *User.Read*, *View users' basic profile*, *Maintain access*).
+**Admin consent** (once, for all users). Most tenants do not let users consent to apps, and the first sign-in stops on *Approval required*. **App registrations → Tempra RMM console → Manage → API permissions → Grant admin consent for <organization>**, as Global Administrator or Privileged Role Administrator. The app asks only for `openid`, `profile` and `email` (shown as *User.Read*, *View users' basic profile*, *Maintain access*).
 
-**Enterprise applications → open-rmm console**:
+**Enterprise applications → Tempra RMM console**:
 
 - **Properties → Assignment required: Yes**, so only assigned users can even try.
-- **Users and groups → Add user/group**: pick a user or (better) a group such as `open-rmm-admin`, and the role **open-rmm Administrator** (or Operator / Reader). If the roles do not show up yet, wait a minute and reload.
+- **Users and groups → Add user/group**: pick a user or (better) a group such as `Tempra RMM-admin`, and the role **Tempra RMM Administrator** (or Operator / Reader). If the roles do not show up yet, wait a minute and reload.
 
 ## 6. MFA
 
@@ -82,9 +82,9 @@ The console accepts a sign-in or a command only when the token proves MFA.
 
 **With Entra ID P1** (included in Microsoft 365 Business Premium, E3, E5; recommended): MFA is required again at **every** command.
 
-1. **Protection → Conditional Access → Authentication contexts → New**: name `open-rmm command`, ID `c1`, publish to apps.
-2. **New policy** "open-rmm: MFA for commands": users = the operators; target resources = **Authentication context `c1`**; grant = **Require authentication strength** (*Phishing-resistant MFA*, or at least *Multifactor authentication*); session = **Sign-in frequency: Every time**.
-3. **New policy** "open-rmm: console access": target = the *open-rmm console* app; grant = *Require multifactor authentication*.
+1. **Protection → Conditional Access → Authentication contexts → New**: name `Tempra RMM command`, ID `c1`, publish to apps.
+2. **New policy** "Tempra RMM: MFA for commands": users = the operators; target resources = **Authentication context `c1`**; grant = **Require authentication strength** (*Phishing-resistant MFA*, or at least *Multifactor authentication*); session = **Sign-in frequency: Every time**.
+3. **New policy** "Tempra RMM: console access": target = the *Tempra RMM console* app; grant = *Require multifactor authentication*.
 4. In `.env`: `OPENRMM_MFA_CLAIM=acrs:c1`.
 
 ## First sign-in
@@ -97,7 +97,7 @@ Open the console address and sign in. If access is refused, `docker compose logs
 | Entra error *AADSTS7000215* (invalid client secret) | The *Secret ID* was copied instead of the *Value*, or the secret expired |
 | Entra page *Approval required* / *Need admin approval* | Admin consent of step 5 not granted yet |
 | Entra error *AADSTS50105* (not assigned) | User not assigned in step 5 |
-| Console: no role | Assigned with `User`/`msiam_access` instead of an open-rmm role |
+| Console: no role | Assigned with `User`/`msiam_access` instead of an Tempra RMM role |
 | Console: MFA required, log `amr=[]` | Optional claim `amr` missing (step 1, *Token configuration*) |
 | Console: MFA required, `amr` without `mfa` | The user signed in without MFA (enable MFA for that user), or `acrs:c1` without the policy of step 6 or the `acrs` optional claim |
 

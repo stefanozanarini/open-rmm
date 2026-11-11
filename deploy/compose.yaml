@@ -1,4 +1,4 @@
-# open-rmm console on a single Linux host.
+# Tempra RMM console on a single Linux host.
 #
 #   cp .env.example .env    # then set the passwords
 #   docker compose up -d

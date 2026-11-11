@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/inventory"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
 )
 
 // The summary shows model and serial number; for Dell the Service Tag with

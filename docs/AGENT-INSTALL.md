@@ -64,11 +64,11 @@ Both executables are signed before they go into the MSI, then the MSI itself, wi
 1. **Administrative templates.** Copy to the domain *Central Store* (`\\domain\SYSVOL\domain\Policies\PolicyDefinitions`):
    - `packaging/admx/open-rmm.admx`
    - `packaging/admx/en-US/open-rmm.adml` into the `en-US` subfolder (and `it-IT` if needed).
-2. **Configuration.** In the computers' Group Policy Object: **Computer Configuration → Policies → Administrative Templates → open-rmm**:
+2. **Configuration.** In the computers' Group Policy Object: **Computer Configuration → Policies → Administrative Templates → Tempra RMM**:
    - console address and enrollment token;
    - *Trust and keys*: root certificate and the three public keys;
    - *Local policies*: whether ad-hoc PowerShell scripts are allowed, whether **interactive shell sessions** are allowed (off unless enabled: enable it only on the computers where operators need it), concurrent commands.
-3. **Installation.** Copy the MSI to a network share readable by the computers (e.g. `\\fileserver\deploy$\open-rmm\`), then **Computer Configuration → Policies → Software Settings → Software installation → New → Package → Assigned**.
+3. **Installation.** Copy the MSI to a network share readable by the computers (e.g. `\\fileserver\deploy$\Tempra RMM\`), then **Computer Configuration → Policies → Software Settings → Software installation → New → Package → Assigned**.
 
 At the next restart the PCs install the agent, which enrolls and appears in the console **pending approval**.
 

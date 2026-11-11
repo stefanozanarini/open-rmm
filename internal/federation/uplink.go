@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/relay"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/relay"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
 )
 
 // clientTLS is the customer console's TLS configuration for the link: its

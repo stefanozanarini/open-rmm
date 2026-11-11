@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/modules"
-	"github.com/stefanozanarini/open-rmm/internal/policy"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/policy"
 )
 
 // The policy editor: one card per published module with its actions; an

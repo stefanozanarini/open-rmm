@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <policyDefinitionResources xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" revision="1.0" schemaVersion="1.0" xmlns="http://schemas.microsoft.com/GroupPolicy/2006/07/PolicyDefinitions">
-  <displayName>open-rmm</displayName>
-  <description>open-rmm agent</description>
+  <displayName>Tempra RMM</displayName>
+  <description>Tempra RMM agent</description>
   <resources>
     <stringTable>
-      <string id="SUPPORTED_OPENRMM">open-rmm agent on Windows 10, Windows Server 2016 or later</string>
-      <string id="OpenRMM">open-rmm</string>
+      <string id="SUPPORTED_OPENRMM">Tempra RMM agent on Windows 10, Windows Server 2016 or later</string>
+      <string id="OpenRMM">Tempra RMM</string>
       <string id="OpenRMM_Trust">Trust and keys</string>
       <string id="OpenRMM_Local">Local policies</string>
       <string id="Server">Console address</string>
@@ -15,7 +15,7 @@
 
 WARNING: the values of this policy are readable by every user of the computer. Use a short-lived token without automatic approval: new agents wait until an administrator approves them.</string>
       <string id="RootCA">Console root certificate</string>
-      <string id="RootCA_Help">open-rmm root certificate as base64 DER on one line (openrmm-admin pki root-b64 -in root-ca.crt). The agent only talks to a console whose certificate chains to this root.</string>
+      <string id="RootCA_Help">Tempra RMM root certificate as base64 DER on one line (openrmm-admin pki root-b64 -in root-ca.crt). The agent only talks to a console whose certificate chains to this root.</string>
       <string id="JobSigningKeys">Command signing keys</string>
       <string id="ModuleSigningKeys">Module release keys</string>
       <string id="ReleaseSigningKeys">Agent release keys</string>

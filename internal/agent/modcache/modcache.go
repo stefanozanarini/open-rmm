@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
-	"github.com/stefanozanarini/open-rmm/internal/modules"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/secfile"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 // Fetched is what a Fetcher returns: the signed manifest and the archive.

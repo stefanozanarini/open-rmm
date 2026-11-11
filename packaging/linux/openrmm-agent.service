@@ -1,6 +1,6 @@
 [Unit]
-Description=open-rmm endpoint management agent
-Documentation=https://github.com/stefanozanarini/open-rmm
+Description=Tempra RMM endpoint management agent
+Documentation=https://github.com/stefanozanarini/tempra-rmm
 Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=600

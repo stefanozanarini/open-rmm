@@ -35,7 +35,7 @@
   {{else}}<td colspan="4" class="muted">{{t "nessuna verifica di Windows Update"}}</td>{{end}}
   <td>{{if .WingetMissing}}<span class="badge chk-warning" title="{{t "winget non è installato su questo endpoint: le applicazioni si confrontano solo con il catalogo della console"}}">{{t "winget assente"}}</span>{{else}}{{with .Winget}}{{if .ThirdParty}}<a class="badge chk-warning" href="/agents/{{.AgentID}}#patches">{{.ThirdParty}}</a>{{else}}0{{end}}{{else}}-{{end}}{{end}}</td>
   <td>{{with .Firmware}}{{if .Important}}<span class="badge chk-failing">{{.Important}}</span> {{end}}{{if .Other}}{{.Other}}{{end}}{{if and (not .Important) (not .Other)}}0{{end}}{{else}}-{{end}}{{if .BIOS}} <span class="badge chk-warning">BIOS</span>{{end}}</td>
-  <td>{{with .Windows}}{{if eq .ManagedBy "none"}}open-rmm{{else}}{{.ManagedBy}} <span class="muted">({{t "osservazione"}})</span>{{end}}{{end}}
+  <td>{{with .Windows}}{{if eq .ManagedBy "none"}}Tempra RMM{{else}}{{.ManagedBy}} <span class="muted">({{t "osservazione"}})</span>{{end}}{{end}}
     {{if .Blocked}} <a class="badge chk-failing" href="/agents/{{.Agent.ID}}#update-blockers">{{t "bloccato"}}</a>{{else if .Limited}} <a class="badge chk-warning" href="/agents/{{.Agent.ID}}#update-blockers">{{t "limitato"}}</a>{{end}}</td>
   <td>{{with .Windows}}{{fmtTime .ScannedAt}}{{end}}{{if .Stale}} <span class="badge chk-warning">{{t "vecchia"}}</span>{{end}}</td>
 </tr>{{end}}

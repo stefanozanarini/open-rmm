@@ -19,13 +19,13 @@ import (
 
 	"golang.org/x/oauth2"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/authn"
-	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
-	"github.com/stefanozanarini/open-rmm/internal/federation"
-	"github.com/stefanozanarini/open-rmm/internal/inventory"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/pkgfiles"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/wingetcat"
+	"github.com/stefanozanarini/tempra-rmm/internal/federation"
+	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
 )
 
 //go:embed templates/*.html static/*
@@ -604,7 +604,7 @@ var labels = map[string]string{
 	"logon.spray": "password spraying", "account.lockout": "account bloccato", "logon.truncated": "eventi troncati",
 	"logon": "accesso", "security": "sicurezza", "rollup": "cumulativo", "update": "aggiornamento",
 	"definition": "definizioni", "feature_pack": "feature pack", "service_pack": "service pack", "upgrade": "nuova versione",
-	"tools": "strumenti", "driver": "driver", "wsus": "WSUS", "intune": "Intune", "none": "open-rmm",
+	"tools": "strumenti", "driver": "driver", "wsus": "WSUS", "intune": "Intune", "none": "Tempra RMM",
 	"windows_update": "Windows Update", "component_servicing": "componenti di Windows", "file_rename": "file da sostituire", "logon_failed": "accesso fallito", "lockout": "blocco account", "rdp_auth": "autenticazione RDP",
 	"rdp_session_logon": "sessione RDP", "rdp_disconnect": "RDP disconnesso", "rdp_reconnect": "RDP riconnesso",
 }

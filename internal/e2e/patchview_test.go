@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
-	"github.com/stefanozanarini/open-rmm/internal/console/signer"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/web"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/updates"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/signer"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/web"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/updates"
 )
 
 // The patch table: missing and installed updates, search, selection for

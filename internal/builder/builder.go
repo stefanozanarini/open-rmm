@@ -32,9 +32,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/codesign"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/codesign"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
 )
 
 // State files, in Dir.
@@ -507,7 +507,7 @@ func (s *Service) Build(req *openrmmv1.BuildRequest, stream openrmmv1.BuilderSer
 	}
 	sign := func(path string) error {
 		args := []string{"sign", "-certs", s.path(fileChain), "-key", s.path(fileKey), "-readpass", "/dev/fd/3",
-			"-h", "sha256", "-n", "open-rmm agent", "-i", "https://github.com/stefanozanarini/open-rmm"}
+			"-h", "sha256", "-n", "Tempra RMM agent", "-i", "https://github.com/stefanozanarini/tempra-rmm"}
 		if ts != "" {
 			args = append(args, "-ts", ts)
 		}

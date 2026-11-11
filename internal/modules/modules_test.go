@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 func baseManifest() *Manifest {

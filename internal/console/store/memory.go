@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/audit"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/audit"
 )
 
 // Memory is an in-memory Store for tests and local experiments.

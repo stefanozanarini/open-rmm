@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 // File names inside a release, per OS.

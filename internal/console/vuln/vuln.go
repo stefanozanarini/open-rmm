@@ -19,7 +19,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
 )
 
 // CVE is a vulnerability in the extracts.
@@ -113,7 +113,7 @@ func (f *Fetcher) getWith(ctx context.Context, url string, headers map[string]st
 		}
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "open-rmm")
+	req.Header.Set("User-Agent", "tempra-rmm")
 	resp, err := f.Client.Do(req)
 	if err != nil {
 		return err

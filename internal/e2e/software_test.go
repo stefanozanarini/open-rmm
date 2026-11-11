@@ -17,10 +17,10 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/inventory"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
 )
 
 // fakeWinget serves the manifests of 7zip.7zip 24.08 and its installer.
@@ -160,7 +160,7 @@ func TestConsoleCatalogDeployAndUninstall(t *testing.T) {
 	if j.Action != "uninstall" || !strings.Contains(string(j.Params), `"name":"Notepad++ (64-bit x64)"`) {
 		t.Fatalf("uninstall job = %+v", j)
 	}
-	if _, body, _ = post(t, c, e.console.URL+"/agents/"+pc2+"/uninstall", url.Values{"csrf": {csrf}, "name": {"open-rmm agent"}}); !strings.Contains(body, "non si disinstalla") {
+	if _, body, _ = post(t, c, e.console.URL+"/agents/"+pc2+"/uninstall", url.Values{"csrf": {csrf}, "name": {"Tempra RMM agent"}}); !strings.Contains(body, "non si disinstalla") {
 		t.Fatal("agent uninstall not refused")
 	}
 }

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/inventory"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
 )
 
 // Reporting: questions over what the agents collected, answered from the

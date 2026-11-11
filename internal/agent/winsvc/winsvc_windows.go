@@ -1,6 +1,6 @@
 //go:build windows
 
-// Package winsvc runs and installs the open-rmm Windows services.
+// Package winsvc runs and installs the Tempra RMM Windows services.
 package winsvc
 
 import (
@@ -182,7 +182,7 @@ const taskName = `\open-rmm\Controllo servizi`
 
 // InstallHealthTask creates the scheduled task that, every 15 minutes and at
 // startup, starts both services if they are stopped. It only calls sc.exe,
-// whose path never changes when open-rmm is updated.
+// whose path never changes when Tempra RMM is updated.
 func InstallHealthTask() error {
 	sc := filepath.Join(os.Getenv("SystemRoot"), "System32", "sc.exe")
 	cmd := filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")

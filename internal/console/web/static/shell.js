@@ -1,4 +1,4 @@
-// open-rmm interactive shell: xterm.js connected to the session over a
+// Tempra RMM interactive shell: xterm.js connected to the session over a
 // WebSocket. Output arrives as binary messages, status as text messages.
 (function () {
   "use strict";

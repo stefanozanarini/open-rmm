@@ -9,7 +9,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/audit"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/audit"
 )
 
 var (

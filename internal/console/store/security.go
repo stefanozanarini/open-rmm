@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 )
 
 // LogonRetention is how long logon events are kept.

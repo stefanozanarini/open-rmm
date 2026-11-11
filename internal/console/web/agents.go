@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/accesslog"
-	"github.com/stefanozanarini/open-rmm/internal/adinv"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/updates"
+	"github.com/stefanozanarini/tempra-rmm/internal/accesslog"
+	"github.com/stefanozanarini/tempra-rmm/internal/adinv"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/updates"
 )
 
 // agentRow is an agent in a list, with its status icons.

@@ -57,13 +57,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/authn"
-	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/web"
-	"github.com/stefanozanarini/open-rmm/internal/federation"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/pkgfiles"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/web"
+	"github.com/stefanozanarini/tempra-rmm/internal/federation"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
 )
 
 func main() {

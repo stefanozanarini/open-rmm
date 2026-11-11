@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
 )
 
 // Thresholds.
 const (
 	// StaleAfter: an agent that Vision One has not heard from for this long
-	// while open-rmm sees the endpoint online is reported.
+	// while Tempra RMM sees the endpoint online is reported.
 	StaleAfter = 24 * time.Hour
-	// onlineWindow: an agent seen by open-rmm this recently is online.
+	// onlineWindow: an agent seen by Tempra RMM this recently is online.
 	onlineWindow = 30 * time.Minute
 	lookBack     = 24 * time.Hour
 )
@@ -106,7 +106,7 @@ func (s *Syncer) Sync(ctx context.Context) error {
 			}
 			summary := "Endpoint non presente nell'inventario di Vision One"
 			if status == store.CheckOK {
-				summary = "Endpoint non presente in Vision One (offline anche per open-rmm)"
+				summary = "Endpoint non presente in Vision One (offline anche per Tempra RMM)"
 			}
 			s.put(ctx, a, "registered", status, summary, now)
 		}

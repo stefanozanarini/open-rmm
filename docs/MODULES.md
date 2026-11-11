@@ -1,6 +1,6 @@
 # Modules
 
-Every open-rmm feature is a module (plugin): the agent only downloads, verifies and runs them. A new feature is added by publishing a module, **without updating the agent**.
+Every Tempra RMM feature is a module (plugin): the agent only downloads, verifies and runs them. A new feature is added by publishing a module, **without updating the agent**.
 
 ## Chain of trust
 
@@ -177,7 +177,7 @@ Details in [ENTRA.md](ENTRA.md). The full text of scripts goes to the audit log.
 | Module | Platforms | Actions |
 |---|---|---|
 | `sysinfo` 1.0.0 | Windows, Linux | `info`: hostname, operating system, uptime |
-| `inventory` 1.0.0 | Windows, Linux | `collect`: hardware, OS, BitLocker, battery, network, installed software, Supremo/AnyDesk/TeamViewer ids. Results become the agent's inventory in the console |
+| `inventory` 1.2.0 | Windows, Linux | `collect`: hardware, OS, BitLocker, battery, network, installed software, Supremo/AnyDesk/TeamViewer ids, local administrators. On a **domain controller** also the members of the domain's built-in privileged groups (Administrators, Account, Server, Print and Backup Operators) with the check `inventory/privileged-groups`: failing when Administrators holds anyone other than Administrator, Domain Admins and Enterprise Admins, or an Operators group is not empty. Results become the agent's inventory in the console |
 | `accesslog` 1.0.0 | Windows | `collect`: new logon events since the previous run (local, RDP, failures, lockouts). The console stores them and raises alerts for unusual logons |
 | `trendmicro` 1.0.0 | Windows | `status`: Trend Micro products installed, versions, services; one check per product. Parameters: `expect`, `products`, `definitions` (override service names) |
 | `protection-status` 1.0.0 | Windows | `status`: antivirus in Windows Security Center, Defender, firewall; checks `antivirus`, `defender`, `firewall` |

@@ -17,8 +17,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/config"
-	linuxunits "github.com/stefanozanarini/open-rmm/packaging/linux"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/config"
+	linuxunits "github.com/stefanozanarini/tempra-rmm/packaging/linux"
 )
 
 // Settings are the values preset in the installer.
@@ -104,7 +104,7 @@ func Build(w io.Writer, version, platform string, agent, watchdog []byte, s Sett
 
 // The script ends with the __PAYLOAD__ line; the archive follows.
 var script = template.Must(template.New("run").Parse(`#!/bin/sh
-# open-rmm agent {{.Version}} for {{.Platform}}: installer preconfigured by
+# Tempra RMM agent {{.Version}} for {{.Platform}}: installer preconfigured by
 # the console. Run as root:  sudo sh {{"$"}}0
 # The agent appears in the console pending approval. Remove it with
 # /opt/open-rmm/uninstall.sh.
@@ -152,14 +152,14 @@ for svc in agent watchdog; do
     fi
   fi
   install -d -m 0755 "$d"
-  printf '# Managed by open-rmm: selects the installed version.\n[Service]\nExecStart=\nExecStart=%s run -config /etc/open-rmm/agent.json\n' \
+  printf '# Managed by Tempra RMM: selects the installed version.\n[Service]\nExecStart=\nExecStart=%s run -config /etc/open-rmm/agent.json\n' \
     "$dir/openrmm-$svc" >"$conf.tmp"
   chmod 0644 "$conf.tmp"
   mv "$conf.tmp" "$conf"
 done
 cat >/opt/open-rmm/uninstall.sh <<'UNINSTALL'
 #!/bin/sh
-# Removes the open-rmm agent, its state and its private key. Revoke the
+# Removes the Tempra RMM agent, its state and its private key. Revoke the
 # agent in the console afterwards.
 set -u
 case "$(id -u)" in 0) ;; *) echo "Run as root." >&2; exit 1 ;; esac
@@ -169,14 +169,14 @@ rm -rf /etc/systemd/system/openrmm-agent.service /etc/systemd/system/openrmm-wat
   /etc/systemd/system/openrmm-agent.service.d /etc/systemd/system/openrmm-watchdog.service.d
 systemctl daemon-reload
 rm -rf /opt/open-rmm /var/lib/open-rmm /etc/open-rmm
-echo "open-rmm agent removed."
+echo "Tempra RMM agent removed."
 UNINSTALL
 chmod 0700 /opt/open-rmm/uninstall.sh
 systemctl daemon-reload
 systemctl enable openrmm-agent.service openrmm-watchdog.service openrmm-healthcheck.timer >/dev/null
 systemctl restart openrmm-watchdog.service openrmm-agent.service
 systemctl start openrmm-healthcheck.timer
-echo "open-rmm agent $VERSION installed: it appears in the console pending approval."
+echo "Tempra RMM agent $VERSION installed: it appears in the console pending approval."
 exit 0
 __PAYLOAD__
 `))

@@ -3,18 +3,18 @@ package web
 import (
 	"encoding/json"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/modules"
-	"github.com/stefanozanarini/open-rmm/internal/updates"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/updates"
 )
 
 // staleScan: an agent whose last scan is older is counted as not scanned.

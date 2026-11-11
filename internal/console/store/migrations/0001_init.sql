@@ -1,4 +1,4 @@
--- open-rmm initial schema.
+-- Tempra RMM initial schema.
 --
 -- Tenant isolation: tables holding tenant data enable and FORCE row-level
 -- security, so even the table owner only sees rows of the tenant set with

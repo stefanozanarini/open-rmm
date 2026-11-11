@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/stefanozanarini/open-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
 )
 
 const createNoWindow = 0x08000000

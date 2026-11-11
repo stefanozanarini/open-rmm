@@ -2,7 +2,7 @@
 
 A managed-service provider runs one **central console**; each customer runs its own **customer console** with its agents, database and signer. A link lets the provider's operators do, from the central console, everything they could do on the customer console — while the customer console keeps its data, its signing key, its audit log and the power to cut the link.
 
-Both are the same open-rmm software; federation is a link, not a different product. Two levels at most: a central console is not itself linked to another one.
+Both are the same Tempra RMM software; federation is a link, not a different product. Two levels at most: a central console is not itself linked to another one.
 
 ## How it works
 
@@ -40,7 +40,7 @@ Trust, in short: a central console that is compromised could read the customer's
    ```
    OPENRMM_FEDERATION_ISSUER=https://login.microsoftonline.com/<provider tenant id>/v2.0
    OPENRMM_FEDERATION_CLIENT_ID=<central console application id>
-   OPENRMM_FEDERATION_TENANT_MAP=<provider tenant id>=<open-rmm tenant id of this console>
+   OPENRMM_FEDERATION_TENANT_MAP=<provider tenant id>=<Tempra RMM tenant id of this console>
    OPENRMM_FEDERATION_MAX_ROLE=OpenRMM.Admin
    ```
 

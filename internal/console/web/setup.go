@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/accesslog"
-	"github.com/stefanozanarini/open-rmm/internal/adinv"
-	"github.com/stefanozanarini/open-rmm/internal/codesign"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
-	"github.com/stefanozanarini/open-rmm/internal/inventory"
-	"github.com/stefanozanarini/open-rmm/internal/policy"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/accesslog"
+	"github.com/stefanozanarini/tempra-rmm/internal/adinv"
+	"github.com/stefanozanarini/tempra-rmm/internal/codesign"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/wingetcat"
+	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
+	"github.com/stefanozanarini/tempra-rmm/internal/policy"
 )
 
 // Setup item statuses.

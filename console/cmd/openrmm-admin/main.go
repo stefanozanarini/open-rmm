@@ -45,11 +45,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/audit"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/audit"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 func main() {
@@ -158,11 +158,11 @@ func pkiInit(args []string) error {
 		return err
 	}
 	now := time.Now()
-	root, err := pki.NewRootCA("open-rmm root CA", now)
+	root, err := pki.NewRootCA("Tempra RMM root CA", now)
 	if err != nil {
 		return err
 	}
-	agentsCA, err := pki.NewIntermediateCA(root, "open-rmm agents CA", now)
+	agentsCA, err := pki.NewIntermediateCA(root, "Tempra RMM agents CA", now)
 	if err != nil {
 		return err
 	}

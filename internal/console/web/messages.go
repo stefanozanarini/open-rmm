@@ -56,7 +56,7 @@ var messages = []message{
 	msg("Accesso a Windows Update disattivato da Gestione comunicazioni Internet (DisableWindowsUpdateAccess)", "Access to Windows Update turned off by Internet Communication Management (DisableWindowsUpdateAccess)"),
 	msg("Il file hosts reindirizza i server di Windows Update: {}", "The hosts file redirects the Windows Update servers: ${1}"),
 	msg("Connessione a Windows Update su internet disattivata (DoNotConnectToWindowsUpdateInternetLocations) senza un server WSUS", "Connection to Windows Update on the internet turned off (DoNotConnectToWindowsUpdateInternetLocations) without a WSUS server"),
-	msg("Aggiornamenti automatici disattivati da policy (NoAutoUpdate): li installa open-rmm", "Automatic updates turned off by policy (NoAutoUpdate): open-rmm installs them"),
+	msg("Aggiornamenti automatici disattivati da policy (NoAutoUpdate): li installa open-rmm", "Automatic updates turned off by policy (NoAutoUpdate): Tempra RMM installs them"),
 	msg("Aggiornamenti di qualità differiti di {} giorni da policy", "Quality updates deferred by ${1} days by policy"),
 	msg("Aggiornamenti di funzionalità differiti di {} giorni da policy", "Feature updates deferred by ${1} days by policy"),
 	msg("Aggiornamenti in pausa fino al {}", "Updates paused until ${1}"),
@@ -84,6 +84,9 @@ var messages = []message{
 	msg("{} aggiornamenti firmware/driver, BIOS da aggiornare", "${1} firmware/driver updates, BIOS to update"),
 	msg("{} aggiornamenti firmware/driver, {} critici", "${1} firmware/driver updates, ${2} critical"),
 	msg("{} aggiornamenti firmware/driver", "${1} firmware/driver updates"),
+	// inventory (domain controllers)
+	msg("Membri non predefiniti nei gruppi privilegiati del dominio: {}", "Non-standard members in the domain privileged groups: ${1}"),
+	msg("Gruppi privilegiati del dominio con i soli membri predefiniti", "Domain privileged groups with only their default members"),
 	// winget
 	msg("Nessuna applicazione da aggiornare (winget)", "No applications to update (winget)"),
 	msg("{} applicazioni da aggiornare: {}", "${1} applications to update: ${2}"),
@@ -94,7 +97,8 @@ var messages = []message{
 	msg("{} attivo", "${1} active"),
 	// Vision One
 	msg("Endpoint non presente nell'inventario di Vision One", "Endpoint not in the Vision One inventory"),
-	msg("Endpoint non presente in Vision One (offline anche per open-rmm)", "Endpoint not in Vision One (offline for open-rmm too)"),
+	msg("Endpoint non presente in Vision One (offline anche per Tempra RMM)", "Endpoint not in Vision One (offline for Tempra RMM too)"),
+	msg("Endpoint non presente in Vision One (offline anche per open-rmm)", "Endpoint not in Vision One (offline for Tempra RMM too)"), // before the rename
 	msg("Agente di protezione non connesso a Vision One dal {}, ma il PC è online, componenti non aggiornati", "Protection agent not connected to Vision One since ${1}, but the PC is online, components out of date"),
 	msg("Agente di protezione non connesso a Vision One dal {}, ma il PC è online", "Protection agent not connected to Vision One since ${1}, but the PC is online"),
 	msg("Protezione endpoint {}, versione {}, componenti non aggiornati", "Endpoint protection ${1}, version ${2}, components out of date"),

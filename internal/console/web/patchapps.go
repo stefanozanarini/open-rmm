@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
-	"github.com/stefanozanarini/open-rmm/internal/updates"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/wingetcat"
+	"github.com/stefanozanarini/tempra-rmm/internal/updates"
 )
 
 // Upgrading one application on every endpoint that needs it, or on those

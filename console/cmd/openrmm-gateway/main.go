@@ -31,9 +31,9 @@ import (
 
 	"google.golang.org/grpc/credentials"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/relay"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
-	"github.com/stefanozanarini/open-rmm/internal/tlsconf"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/relay"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/tlsconf"
 )
 
 func main() {

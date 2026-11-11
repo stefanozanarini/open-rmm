@@ -37,14 +37,14 @@ import (
 
 	"google.golang.org/grpc"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
-	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
-	"github.com/stefanozanarini/open-rmm/internal/console/relay"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/visionone"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/gateway"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/pkgfiles"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/relay"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/visionone"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
 )
 
 func main() {

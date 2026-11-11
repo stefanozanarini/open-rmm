@@ -29,10 +29,10 @@ import (
 
 	"google.golang.org/grpc"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/authn"
-	"github.com/stefanozanarini/open-rmm/internal/console/signer"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/signer"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 func main() {

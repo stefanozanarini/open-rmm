@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/agent/config"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
-	"github.com/stefanozanarini/open-rmm/internal/release"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/config"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/release"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 type fakeSession struct {

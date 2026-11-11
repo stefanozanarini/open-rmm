@@ -14,14 +14,14 @@ import (
 	"strings"
 	"time"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/inventory"
-	"github.com/stefanozanarini/open-rmm/internal/modules"
-	"github.com/stefanozanarini/open-rmm/internal/pkgref"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/wingetcat"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/pkgref"
 )
 
 const (
@@ -647,8 +647,8 @@ func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, s.T(r, "Applicazione non valida."), back)
 		return
 	}
-	if strings.HasPrefix(strings.ToLower(name), "open-rmm") {
-		s.flash(w, r, s.T(r, "L'agente open-rmm non si disinstalla dalla console."), back)
+	if n := strings.ToLower(name); strings.HasPrefix(n, "open-rmm") || strings.HasPrefix(n, "tempra rmm") {
+		s.flash(w, r, s.T(r, "L'agente Tempra RMM non si disinstalla dalla console."), back)
 		return
 	}
 	if extra := strings.TrimSpace(r.PostFormValue("uninstall_args")); extra != "" {

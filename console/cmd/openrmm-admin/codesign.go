@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/codesign"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/codesign"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
 )
 
 func codesignSubject(fs *flag.FlagSet) func() codesign.Subject {

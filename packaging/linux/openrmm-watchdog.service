@@ -1,6 +1,6 @@
 [Unit]
-Description=open-rmm watchdog (keeps the agent running, applies its updates)
-Documentation=https://github.com/stefanozanarini/open-rmm
+Description=Tempra RMM watchdog (keeps the agent running, applies its updates)
+Documentation=https://github.com/stefanozanarini/tempra-rmm
 After=network-online.target
 
 [Service]

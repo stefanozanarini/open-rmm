@@ -1,4 +1,4 @@
-// Package modules defines signed open-rmm modules: the manifest, the bundle
+// Package modules defines signed Tempra RMM modules: the manifest, the bundle
 // distributed to agents, and safe packing and extraction of the archive.
 //
 // Trust chain: the module release key (kept offline) signs the manifest; the

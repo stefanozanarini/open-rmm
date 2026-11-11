@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package openrmm.v1;
 
-option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
+option go_package = "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1;openrmmv1";
 
 // BuilderService holds the console's signing keys, all encrypted with one
 // passphrase the console never stores: the Authenticode key that signs agent

@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/authn"
-	"github.com/stefanozanarini/open-rmm/internal/console/signer"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/web"
-	"github.com/stefanozanarini/open-rmm/internal/federation"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/signer"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/web"
+	"github.com/stefanozanarini/tempra-rmm/internal/federation"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 	"google.golang.org/protobuf/proto"
 )
 

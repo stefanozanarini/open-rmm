@@ -19,7 +19,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 )
 
 // Roles are Entra app roles assigned to operators (or to groups of them).
@@ -41,7 +41,7 @@ type Config struct {
 	//   "none"        no check: MFA is left to the directory's own policy
 	//                 (Entra v2.0 ID tokens omit amr unless requested)
 	MFAClaim string
-	// TenantMap maps the Entra tenant (tid claim) to the open-rmm tenants
+	// TenantMap maps the Entra tenant (tid claim) to the Tempra RMM tenants
 	// its operators may manage.
 	TenantMap map[string][]string
 	// MaxAuthAge bounds how old an authentication may be when it approves a
@@ -57,7 +57,7 @@ type Config struct {
 //	OPENRMM_OIDC_ISSUER     https://login.microsoftonline.com/<tid>/v2.0
 //	OPENRMM_OIDC_CLIENT_ID  application (client) ID
 //	OPENRMM_MFA_CLAIM       "amr" (default), "acrs:<context id>" or "none"
-//	OPENRMM_TENANT_MAP      <entra tid>=<open-rmm tenant>[|<tenant>...][,...]
+//	OPENRMM_TENANT_MAP      <entra tid>=<Tempra RMM tenant>[|<tenant>...][,...]
 func FromEnv() (Config, error) {
 	c := Config{
 		Issuer:     os.Getenv("OPENRMM_OIDC_ISSUER"),
@@ -189,7 +189,7 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// Claims are the token claims open-rmm uses.
+// Claims are the token claims Tempra RMM uses.
 type Claims struct {
 	Subject  string   `json:"sub"`
 	ObjectID string   `json:"oid"`
@@ -248,13 +248,13 @@ var (
 	ErrStale      = errors.New("the authentication is too old: sign in again")
 	ErrNonce      = errors.New("the authentication was not issued for this request")
 	ErrNoTenant   = errors.New("the operator's directory is not allowed on this console")
-	ErrNoRole     = errors.New("the operator has no open-rmm role")
+	ErrNoRole     = errors.New("the operator has no Tempra RMM role")
 	ErrMissingOID = errors.New("token without object id")
 )
 
 // Verify checks signature, issuer, audience and expiry, then extracts the
 // claims and checks that the operator belongs to an allowed directory and has
-// at least one open-rmm role. MFA is always required.
+// at least one Tempra RMM role. MFA is always required.
 func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*Claims, error) {
 	tok, err := v.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
@@ -314,7 +314,7 @@ func (v *Verifier) CheckFresh(c *Claims, now time.Time) error {
 	return nil
 }
 
-// Tenants returns the open-rmm tenants the operator may manage.
+// Tenants returns the Tempra RMM tenants the operator may manage.
 func (v *Verifier) Tenants(c *Claims) []string { return v.cfg.TenantMap[c.TenantID] }
 
 // MayManage reports whether the operator may act on tenantID.

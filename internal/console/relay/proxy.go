@@ -21,7 +21,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
 )
 
 // frame is an opaque gRPC message: the gateway never decodes payloads.

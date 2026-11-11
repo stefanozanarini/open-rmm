@@ -9,7 +9,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/stefanozanarini/open-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/modules"
 )
 
 // pwshCandidates are tried for PowerShell modules on Linux (PowerShell 7).

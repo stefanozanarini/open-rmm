@@ -51,8 +51,8 @@ else
 fi
 "${RUN[@]}" "
   sign() {
-    osslsigncode sign -certs '$CERT' -key '$KEY' -h sha256 -n 'open-rmm agent' \\
-      -i https://github.com/stefanozanarini/open-rmm ${TS:+-ts '$TS'} -in \"\$1\" -out \"\$1.signed\" >/dev/null
+    osslsigncode sign -certs '$CERT' -key '$KEY' -h sha256 -n 'Tempra RMM agent' \\
+      -i https://github.com/stefanozanarini/tempra-rmm ${TS:+-ts '$TS'} -in \"\$1\" -out \"\$1.signed\" >/dev/null
     mv \"\$1.signed\" \"\$1\"
   }
   bindir=bin

@@ -27,7 +27,7 @@ const file_openrmm_v1_broker_proto_rawDesc = "" +
 	"\x17openrmm/v1/broker.proto\x12\n" +
 	"openrmm.v1\x1a\x16openrmm/v1/agent.proto2R\n" +
 	"\x12ShellBrokerService\x12<\n" +
-	"\x06Attach\x12\x16.openrmm.v1.ShellFrame\x1a\x16.openrmm.v1.ShellFrame(\x010\x01B>Z<github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
+	"\x06Attach\x12\x16.openrmm.v1.ShellFrame\x1a\x16.openrmm.v1.ShellFrame(\x010\x01B@Z>github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
 
 var file_openrmm_v1_broker_proto_goTypes = []any{
 	(*ShellFrame)(nil), // 0: openrmm.v1.ShellFrame

@@ -1,4 +1,4 @@
-# open-rmm — Architecture
+# Tempra RMM — Architecture
 
 > Status: draft v1.1 — 2026-10-19
 > First customer: ~200 Windows endpoints (clients and servers), mixed Dell / Lenovo / Acer fleet, BitLocker widely used, laptops also working off-site, console hosted at the customer and reachable from the internet. A managed-service-provider deployment (one central console federating several customer consoles) is a design goal from day one.
@@ -202,7 +202,7 @@ Recurring work (inventory every 24 h, Trend Micro status every 15 min, logon eve
 4. New agents are **pending** until an operator approves them, unless the token auto-approves. Pending agents can connect and are visible, but receive no jobs.
 5. Certificates last 90 days and are renewed automatically with a new key when a third of the validity is left; the previous certificate stays valid until the new one is first used.
 6. Revocation disconnects agents immediately, even mid-session.
-7. The agent pins the open-rmm root CA; the system trust store is never used.
+7. The agent pins the Tempra RMM root CA; the system trust store is never used.
 
 ---
 
@@ -291,7 +291,7 @@ internet ──► [DMZ] openrmm-gateway  ◄──── mTLS, opened from the 
 ```
 
 - `openrmm-core` (LAN) opens a long-lived mTLS tunnel **to** the gateway (port 8444); the firewall allows no connection from the DMZ to the LAN. On the tunnel the roles are reversed: the gateway is the gRPC client, the core the server. One tunnel at a time, reopened within seconds when it drops; keepalives detect dead tunnels.
-- Tunnel authentication: the core presents a dedicated certificate (`openrmm://core`, issued by the agents CA, not usable as an agent identity) and pins the open-rmm root; the gateway accepts only core certificates on the tunnel port.
+- Tunnel authentication: the core presents a dedicated certificate (`openrmm://core`, issued by the agents CA, not usable as an agent identity) and pins the Tempra RMM root; the gateway accepts only core certificates on the tunnel port.
 - The gateway terminates the agents' mTLS, checks client certificates against the agents CA certificate (public part only) and relays an **allow-list** of methods (enrollment, agent stream, renewal, module and release downloads) as **opaque frames**: it never decodes payloads, so new RPCs need no gateway change, and internal services are unreachable from the internet.
 - The verified client chain and the agent's address travel as metadata built from scratch by the gateway (nothing sent by the agent is forwarded). The core honours that metadata **only on calls received through a tunnel** and **verifies the chain again** against the agents CA, then applies the usual checks (current certificate, not revoked).
 - Certificate issuance, agent authorization, database access and job dispatch live in the core. Enrollment is rate-limited both at the gateway and in the core.
@@ -357,7 +357,7 @@ The installation type is also sent by the core on connect (one field), so the co
 
 - The service names are the most common ones and **not yet verified on the customer's endpoints**; every definition (services, required services, Uninstall name pattern) can be overridden by the policy parameters, e.g. `{"expect":["sep"],"definitions":{"ztsa":{"services":["…"],"required":["…"]}}}`, without a new module version.
 - Typical policy: rule `trendmicro`·`status` every 15 minutes with `when: {"service_exists":"ntrtscan"}` and params `{"expect":["sep"]}` for clients, `when: {"service_exists":"ds_agent"}` and `{"expect":["swp"]}` for servers. Endpoints without Trend never download the module.
-- **Vision One connector:** every 15 minutes it lists the endpoint inventory and the Workbench alerts of the last period, and matches endpoints to agents by host name. It stores checks `visionone/protection` (agent status, version, last connection: an endpoint online for open-rmm but not connected to Vision One for 24 h fails), `visionone/sensor` and `visionone/registered` (a Windows agent online but missing from Vision One is a warning). Workbench alerts on a matched host become open-rmm alerts (high/critical → critical, medium → warning), raised once per Workbench id. Paging links are followed only on the API host, so the key is never sent elsewhere. 📋 API field names to verify against the live tenant.
+- **Vision One connector:** every 15 minutes it lists the endpoint inventory and the Workbench alerts of the last period, and matches endpoints to agents by host name. It stores checks `visionone/protection` (agent status, version, last connection: an endpoint online for Tempra RMM but not connected to Vision One for 24 h fails), `visionone/sensor` and `visionone/registered` (a Windows agent online but missing from Vision One is a warning). Workbench alerts on a matched host become Tempra RMM alerts (high/critical → critical, medium → warning), raised once per Workbench id. Paging links are followed only on the API host, so the key is never sent elsewhere. 📋 API field names to verify against the live tenant.
 
 ### 8.4 Checks and alerts ✅
 
@@ -367,7 +367,7 @@ The installation type is also sent by the core on connect (one field), so the co
 ### 8.5 `winupdate` ✅
 
 - Windows Update Agent COM API. `scan`: missing updates (classification by category id, so it works on any display language; KB, severity, release date), pending reboot and since when, last successful installation, **who manages updates** (WSUS from the Group Policy keys, Intune from the MDM policy keys, or nobody). `install`: downloads and installs by classification (default security, critical, rollup, update, definition), with `include_kbs`/`exclude_kbs`; skips updates that need user input; **never reboots**.
-- **WSUS/Intune coexistence:** on a managed endpoint open-rmm only **observes** (scan, dashboards); `install` refuses unless the policy sets `allow_managed`.
+- **WSUS/Intune coexistence:** on a managed endpoint Tempra RMM only **observes** (scan, dashboards); `install` refuses unless the policy sets `allow_managed`.
 - Checks: `winupdate/updates` (failing when security/critical updates released more than `max_age_days`, default 30, are missing) and `winupdate/reboot` (warning when a reboot has been pending for 3 days).
 - ✅ Error codes of failed installations explained in the patch view. **Blockers** (1.2.0): every scan lists the settings that keep updates from being offered or installed — a pinned release (`TargetReleaseVersion` by policy or MDM, or **left over in `UpdatePolicy\PolicyState`** after the policy was removed), `DisableWindowsUpdateAccess`, `DoNotConnectToWindowsUpdateInternetLocations` without WSUS, an **unreachable WSUS server**, pauses, deferrals, disabled services (wuauserv, BITS, UsoSvc, TrustedInstaller, CryptSvc), low disk space — with the check `winupdate/policy`, shown on the agent's Patch tab and counted on the Patch dashboard. 1.3.0 adds a WSUS server that answers TCP but not HTTP, or with no successful search for 14 days, `NoWindowsUpdate`, Internet Communication Management, update servers in `hosts`, and the `repair` action (DISM /RestoreHealth, SFC, cache reset).
 - ✅ **Logs of failed updates**: `logs` collects Windows Update and servicing events, CBS.log errors and the state that explains failures; the quick version (7 days) is a read-only on-demand collection (one click on the Patch tab, signed without a new sign-in), the full one (days, WindowsUpdate.log decoded) a command with MFA. A failed `install` attaches a short diagnosis to its result.
@@ -385,7 +385,7 @@ The installation type is also sent by the core on connect (one field), so the co
 - **Package library** (page *Software*): Admins upload an installer (MSI, Inno Setup, NSIS, WiX bundle, or any exe with its silent switches) or import one from the winget catalog. Files are stored outside the database by SHA-256 in a volume written by the web console and read by the core; the metadata (name, version, kind, switches, product code, origin, uploader) is per tenant and audited.
 - **Distribution:** an Operator picks a package and the endpoints (those with an older version are preselected) and approves **once with MFA** for all of them (§6.3). Each job pins the package hash; the agent downloads it through the gateway (also through the DMZ relay), only while that job is pending, and verifies size and hash.
 - The `software` module verifies the **Authenticode signature** (refused unless the package was explicitly marked "unsigned allowed"), installs silently (`msiexec /i … /qn /norestart /l*v`, or the installer's silent switches), translates the common Windows Installer exit codes and never reboots: a 3010/1641 result records a reboot need that the `reboot` module honours until the next boot.
-- **Uninstall from the console:** from the software list of an endpoint, approved with per-command MFA. The module removes the application the right way for its type: `msiexec /x {ProductCode} /qn /norestart` for MSI products (also when only the `UninstallString` points to msiexec), the registered `QuietUninstallString`, or the `UninstallString` plus switches the operator gives explicitly; it never runs an interactive uninstaller, refuses per-user installations and the open-rmm agent, and checks afterwards that the application is gone.
+- **Uninstall from the console:** from the software list of an endpoint, approved with per-command MFA. The module removes the application the right way for its type: `msiexec /x {ProductCode} /qn /norestart` for MSI products (also when only the `UninstallString` points to msiexec), the registered `QuietUninstallString`, or the `UninstallString` plus switches the operator gives explicitly; it never runs an interactive uninstaller, refuses per-user installations and the Tempra RMM agent, and checks afterwards that the application is gone.
 - 📋 Later: uninstall for a group ("remove 7-Zip 9.20 everywhere"), reading MSI properties at upload, Authenticode check on the console, removal of unused files.
 
 ### 8.8 Firmware ✅
@@ -453,7 +453,7 @@ A PowerShell session (bash on Linux) on one endpoint, in a terminal in the brows
 
 A console can manage **local tenants** (its own agents) and **linked customer consoles**. Requirement R19: **every operation available on a customer console is available from the central console**. Guide: [FEDERATION.md](FEDERATION.md).
 
-- **Same software, two roles.** The central console is an open-rmm console; federation is a link, not a different product. Two levels at most.
+- **Same software, two roles.** The central console is an Tempra RMM console; federation is a link, not a different product. Two levels at most.
 - **The customer console opens the link**: TLS 1.3 to the central console's link listener (`OPENRMM_FEDERATION_LISTEN`), outbound only, a few tunnels kept open. Both sides are self-signed and **pinned**: the central console's fingerprint is in the one-time link token (24 hours), the customer console's certificate is registered when it presents the token once.
 - **One console, served over the link.** On the tunnels the roles are reversed: the central console is the HTTP client, the customer console serves its own web console. When an operator opens a linked console, the central console forwards each request with the operator's identity (object id, directory, roles, a per-session key); the customer console checks the directory against its trust settings, **caps the roles** to its maximum, keeps a separate session (and CSRF token) per central session, and renders its own pages with its own checks. Only redirects inside the console and a few response headers are relayed; the security headers are the central console's.
 - **Commands stay signed where the agents are.** A step-up started on a linked console comes back to the central console, which signs the operator in again with MFA against its own directory, with the customer's nonce (the hash of the exact request), and hands the id_token over the link. The customer console verifies it and passes it to its signer, which accepts it only if the customer configured the central directory on the signer too (`OPENRMM_FEDERATION_*`, deployment configuration, not the web console). The central console never holds customer signing keys and cannot create commands or policies by itself.
@@ -581,7 +581,7 @@ The console matches computers and agents by host name and shows:
 
 | Date | Decision |
 |---|---|
-| 2026-10-16 | Project name **open-rmm**; licence AGPL-3.0 |
+| 2026-10-16 | Project name **Tempra RMM**; licence AGPL-3.0 |
 | 2026-10-16 | Agent and console in **Go**, database **PostgreSQL** |
 | 2026-10-16 | Operators sign in **only with Microsoft 365 (Entra ID)**, **MFA mandatory**; on-prem AD not used for sign-in |
 | 2026-10-16 | Ad-hoc PowerShell commands **on by default**, **MFA before every run** |

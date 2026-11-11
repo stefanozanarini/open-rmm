@@ -23,15 +23,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/stefanozanarini/open-rmm/internal/pki"
-	"github.com/stefanozanarini/open-rmm/internal/signing"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/signing"
 )
 
 // Config is the effective agent configuration.
 type Config struct {
 	// Server is host:port of the agents endpoint, e.g. agent.example.com:443.
 	Server string `json:"server"`
-	// RootCAFile or RootCAPEM holds the pinned open-rmm root certificate.
+	// RootCAFile or RootCAPEM holds the pinned Tempra RMM root certificate.
 	RootCAFile string `json:"root_ca_file,omitempty"`
 	RootCAPEM  string `json:"root_ca_pem,omitempty"`
 	// EnrollToken is used only until the agent has an identity.

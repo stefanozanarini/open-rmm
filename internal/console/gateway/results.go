@@ -6,12 +6,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/accesslog"
-	"github.com/stefanozanarini/open-rmm/internal/adinv"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/inventory"
-	"github.com/stefanozanarini/open-rmm/internal/policy"
-	"github.com/stefanozanarini/open-rmm/internal/updates"
+	"github.com/stefanozanarini/tempra-rmm/internal/accesslog"
+	"github.com/stefanozanarini/tempra-rmm/internal/adinv"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
+	"github.com/stefanozanarini/tempra-rmm/internal/policy"
+	"github.com/stefanozanarini/tempra-rmm/internal/updates"
 )
 
 // jobOrigin returns the module and action of a job of agent a, from the

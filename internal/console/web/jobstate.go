@@ -3,7 +3,7 @@ package web
 import (
 	"encoding/json"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
 )
 
 // A job that installs several items (Windows updates, winget applications)

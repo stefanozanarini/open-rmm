@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/pkgfiles"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/pkgfiles"
 )
 
 var payload = []byte("fake msi bytes")

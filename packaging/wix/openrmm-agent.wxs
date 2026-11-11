@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  open-rmm agent installer (WiX v3 schema, built with msitools/wixl on Linux).
+  Tempra RMM agent installer (WiX v3 schema, built with msitools/wixl on Linux).
 
   Installs agent and watchdog in %ProgramFiles%\open-rmm\versions\<version>\,
   registers the two services and, optionally, writes the configuration passed
@@ -26,19 +26,19 @@
   themselves at every start.
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="open-rmm agent" Manufacturer="open-rmm" Version="$(var.Version)"
+  <Product Id="*" Name="Tempra RMM agent" Manufacturer="Tempra RMM" Version="$(var.Version)"
            UpgradeCode="4B4C42F6-5B9A-4C37-9A5E-3A0E6D2F7A10" Language="1033">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
-             Description="open-rmm endpoint management agent" Comments="https://github.com/stefanozanarini/open-rmm"/>
-    <MajorUpgrade DowngradeErrorMessage="A newer version of the open-rmm agent is already installed."/>
+             Description="Tempra RMM endpoint management agent" Comments="https://github.com/stefanozanarini/tempra-rmm"/>
+    <MajorUpgrade DowngradeErrorMessage="A newer version of the Tempra RMM agent is already installed."/>
     <Media Id="1" Cabinet="agent.cab" EmbedCab="yes"/>
 
-    <Condition Message="The open-rmm agent requires 64-bit Windows.">VersionNT64</Condition>
+    <Condition Message="The Tempra RMM agent requires 64-bit Windows.">VersionNT64</Condition>
     <!-- No Modify/Repair: a repair would write the enrollment token back. -->
     <Property Id="ARPNOMODIFY" Value="1"/>
     <Property Id="ALLOWINTERACTIVESHELL" Value="1"/>
     <Property Id="ARPNOREPAIR" Value="1"/>
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/stefanozanarini/open-rmm"/>
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/stefanozanarini/tempra-rmm"/>
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
@@ -48,8 +48,8 @@
 
               <Component Id="AgentExe" Guid="*" Win64="yes">
                 <File Id="AgentExe" Name="openrmm-agent.exe" Source="$(var.BinDir)/openrmm-agent.exe" KeyPath="yes"/>
-                <ServiceInstall Id="AgentService" Name="openrmm-agent" DisplayName="open-rmm agent"
-                                Description="open-rmm endpoint management agent" Type="ownProcess" Start="auto"
+                <ServiceInstall Id="AgentService" Name="openrmm-agent" DisplayName="Tempra RMM agent"
+                                Description="Tempra RMM endpoint management agent" Type="ownProcess" Start="auto"
                                 ErrorControl="normal" Account="LocalSystem"
                                 Arguments='run -service -config "[CommonAppDataFolder]open-rmm\agent.json"'/>
                 <ServiceControl Id="AgentServiceControl" Name="openrmm-agent" Start="install" Stop="both" Remove="uninstall" Wait="yes"/>
@@ -57,8 +57,8 @@
 
               <Component Id="WatchdogExe" Guid="*" Win64="yes">
                 <File Id="WatchdogExe" Name="openrmm-watchdog.exe" Source="$(var.BinDir)/openrmm-watchdog.exe" KeyPath="yes"/>
-                <ServiceInstall Id="WatchdogService" Name="openrmm-watchdog" DisplayName="open-rmm watchdog"
-                                Description="Keeps the open-rmm agent running and applies its updates" Type="ownProcess"
+                <ServiceInstall Id="WatchdogService" Name="openrmm-watchdog" DisplayName="Tempra RMM watchdog"
+                                Description="Keeps the Tempra RMM agent running and applies its updates" Type="ownProcess"
                                 Start="auto" ErrorControl="normal" Account="LocalSystem"
                                 Arguments='run -service -config "[CommonAppDataFolder]open-rmm\agent.json"'/>
                 <ServiceControl Id="WatchdogServiceControl" Name="openrmm-watchdog" Start="install" Stop="both" Remove="uninstall" Wait="yes"/>
@@ -107,7 +107,7 @@
       <Custom Action="Cleanup" Sequence="3450">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
     </InstallExecuteSequence>
 
-    <Feature Id="Agent" Title="open-rmm agent" Level="1">
+    <Feature Id="Agent" Title="Tempra RMM agent" Level="1">
       <ComponentRef Id="AgentExe"/>
       <ComponentRef Id="WatchdogExe"/>
       <ComponentRef Id="DataDir"/>

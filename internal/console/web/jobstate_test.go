@@ -3,7 +3,7 @@ package web
 import (
 	"testing"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
 )
 
 func TestJobState(t *testing.T) {

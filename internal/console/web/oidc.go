@@ -13,12 +13,12 @@ import (
 	"golang.org/x/oauth2"
 	"google.golang.org/protobuf/proto"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/audit"
-	"github.com/stefanozanarini/open-rmm/internal/console/authn"
-	"github.com/stefanozanarini/open-rmm/internal/console/jobreq"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/audit"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 )
 
 // authOptions are the authorize parameters common to login and step-up.
@@ -127,7 +127,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, authn.ErrNoMFA):
 			msg = tr(lang, "accesso negato: è richiesta l'autenticazione a più fattori")
 		case errors.Is(err, authn.ErrNoRole):
-			msg = tr(lang, "accesso negato: nessun ruolo open-rmm assegnato")
+			msg = tr(lang, "accesso negato: nessun ruolo Tempra RMM assegnato")
 		case errors.Is(err, authn.ErrNoTenant):
 			msg = tr(lang, "accesso negato: directory non autorizzata")
 		}

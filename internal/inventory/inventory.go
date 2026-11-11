@@ -51,6 +51,37 @@ type Inventory struct {
 	RemoteAccess RemoteAccess `json:"remote_access"`
 	// LocalAdmins: members of the built-in Administrators group (inventory 1.1.0).
 	LocalAdmins []LocalAccount `json:"local_admins,omitempty"`
+	// PrivilegedGroups: on a domain controller, the domain's built-in
+	// privileged groups (Administrators and the operators groups) with
+	// their members (inventory 1.2.0).
+	PrivilegedGroups []PrivilegedGroup `json:"privileged_groups,omitempty"`
+}
+
+// PrivilegedGroup is a built-in group of the domain.
+type PrivilegedGroup struct {
+	Name    string        `json:"name"`
+	SID     string        `json:"sid"`
+	Members []GroupMember `json:"members,omitempty"`
+}
+
+// GroupMember is a member of a privileged group. Standard: one of the
+// default members (Administrator, Domain Admins, Enterprise Admins).
+type GroupMember struct {
+	Name     string `json:"name"`
+	Type     string `json:"type,omitempty"` // user | group | computer
+	Standard bool   `json:"standard,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
+// NonStandard counts the members that are not default members.
+func (g PrivilegedGroup) NonStandard() int {
+	n := 0
+	for _, m := range g.Members {
+		if !m.Standard {
+			n++
+		}
+	}
+	return n
 }
 
 // LocalAccount is a member of a local group.
@@ -345,6 +376,19 @@ func (inv *Inventory) normalize() {
 		admins = append(admins, a)
 	}
 	inv.LocalAdmins = admins
+	if len(inv.PrivilegedGroups) > 10 {
+		inv.PrivilegedGroups = inv.PrivilegedGroups[:10]
+	}
+	for i := range inv.PrivilegedGroups {
+		g := &inv.PrivilegedGroups[i]
+		g.Name, g.SID = clip(g.Name), clip(g.SID)
+		if len(g.Members) > maxItems {
+			g.Members = g.Members[:maxItems]
+		}
+		for j := range g.Members {
+			g.Members[j].Name, g.Members[j].Type = clip(g.Members[j].Name), clip(g.Members[j].Type)
+		}
+	}
 }
 
 // VisibleSoftware returns the applications an operator normally cares

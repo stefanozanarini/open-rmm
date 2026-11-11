@@ -83,7 +83,7 @@ Fill in `.env`: `OPENRMM_AGENT_SERVER` (the gateway name of step 2 with its publ
 
 ## 4. Tenant and start
 
-Create the open-rmm tenant first: its ID goes into `OPENRMM_TENANT_MAP`, which the console and the signer need to start.
+Create the Tempra RMM tenant first: its ID goes into `OPENRMM_TENANT_MAP`, which the console and the signer need to start.
 
 ```bash
 docker compose up -d db
@@ -144,7 +144,7 @@ Publish the `software` module. On the **Software** page administrators upload in
 ./setup-secrets.sh /path/to/client-secret.txt /path/to/visionone-key.txt
 ```
 
-Then set in `.env` the open-rmm tenant whose endpoints are compared with Vision One, and the region (`eu` for a tenant hosted in Germany/Frankfurt):
+Then set in `.env` the Tempra RMM tenant whose endpoints are compared with Vision One, and the region (`eu` for a tenant hosted in Germany/Frankfurt):
 
 ```bash
 OPENRMM_VISIONONE_TENANT=<TENANT>

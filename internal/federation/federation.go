@@ -37,8 +37,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
 )
 
 const (
@@ -82,7 +82,7 @@ func NewIdentity(name string, now time.Time) (*Identity, error) {
 	}
 	tmpl := &x509.Certificate{
 		SerialNumber: new(big.Int).SetBytes(ids.Random(16)),
-		Subject:      pkix.Name{CommonName: "open-rmm federation " + name},
+		Subject:      pkix.Name{CommonName: "Tempra RMM federation " + name},
 		NotBefore:    now.Add(-5 * time.Minute),
 		NotAfter:     now.Add(identityValidity),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
@@ -144,7 +144,7 @@ func ParseBundle(s string) (Bundle, error) {
 	var b Bundle
 	enc, ok := strings.CutPrefix(strings.TrimSpace(s), bundlePrefix)
 	if !ok {
-		return b, errors.New("not an open-rmm link token")
+		return b, errors.New("not an Tempra RMM link token")
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(enc)
 	if err != nil {

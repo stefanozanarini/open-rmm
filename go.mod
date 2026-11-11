@@ -1,4 +1,4 @@
-module github.com/stefanozanarini/open-rmm
+module github.com/stefanozanarini/tempra-rmm
 
 go 1.26.10
 

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/updates"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/updates"
 )
 
 const blockedReport = `{"managed_by":"none","updates":[],"pending_reboot":{"required":false},

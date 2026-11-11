@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
-	"github.com/stefanozanarini/open-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
 )
 
 const handshakeTimeout = 10 * time.Second
@@ -55,7 +55,7 @@ func TunnelTLS(cert tls.Certificate, agentsCA *x509.Certificate) *tls.Config {
 		ClientCAs:    pool,
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			if len(cs.VerifiedChains) == 0 || !pki.IsCore(cs.VerifiedChains[0][0]) {
-				return errors.New("tunnel client is not an open-rmm core")
+				return errors.New("tunnel client is not an Tempra RMM core")
 			}
 			return nil
 		},
@@ -160,7 +160,7 @@ type Dialer struct {
 func (d *Dialer) Up() int { return int(d.up.Load()) }
 
 // CoreTLS is the core's TLS configuration for dialing the gateway: it
-// presents the core certificate and trusts only the open-rmm root.
+// presents the core certificate and trusts only the Tempra RMM root.
 func CoreTLS(serverName string, root *x509.Certificate, cert tls.Certificate) *tls.Config {
 	pool := x509.NewCertPool()
 	pool.AddCert(root)

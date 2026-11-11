@@ -1,4 +1,4 @@
-// Command openrmm-agent is the open-rmm endpoint agent core.
+// Command openrmm-agent is the Tempra RMM endpoint agent core.
 //
 //	openrmm-agent run [-config path]        run in the foreground (or as a service)
 //	openrmm-agent install [-config path]    install the Windows service (development; the MSI does this)
@@ -18,11 +18,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/client"
-	"github.com/stefanozanarini/open-rmm/internal/agent/config"
-	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
-	"github.com/stefanozanarini/open-rmm/internal/agent/svcctl"
-	"github.com/stefanozanarini/open-rmm/internal/agent/winsvc"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/client"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/config"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/secfile"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/svcctl"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/winsvc"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -61,7 +61,7 @@ func run(args []string) error {
 		managed := os.Getenv("INVOCATION_ID") != ""
 		return runAgent(ctx, *cfgPath, slog.New(slog.NewTextHandler(os.Stderr, nil)), managed)
 	case "install":
-		return winsvc.Install(svcctl.Agent, "open-rmm agent", "open-rmm endpoint management agent", "run", "-service", "-config", *cfgPath)
+		return winsvc.Install(svcctl.Agent, "Tempra RMM agent", "Tempra RMM endpoint management agent", "run", "-service", "-config", *cfgPath)
 	case "uninstall":
 		return winsvc.Uninstall(svcctl.Agent)
 	case "version":

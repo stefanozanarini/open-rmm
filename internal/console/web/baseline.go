@@ -5,11 +5,11 @@ import (
 	"encoding/hex"
 	"errors"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/console/audit"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/console/wingetcat"
-	"github.com/stefanozanarini/open-rmm/internal/policy"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/audit"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/wingetcat"
+	"github.com/stefanozanarini/tempra-rmm/internal/policy"
 )
 
 // Automatic collection: every tenant has a policy, kept by the console,

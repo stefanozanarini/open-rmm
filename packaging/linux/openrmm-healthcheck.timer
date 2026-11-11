@@ -1,5 +1,5 @@
 [Unit]
-Description=Start the open-rmm services if they are stopped (every 15 minutes)
+Description=Start the Tempra RMM services if they are stopped (every 15 minutes)
 
 [Timer]
 OnBootSec=2min

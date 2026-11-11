@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
 )
 
 const (

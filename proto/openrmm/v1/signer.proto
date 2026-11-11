@@ -4,7 +4,7 @@ package openrmm.v1;
 
 import "openrmm/v1/agent.proto";
 
-option go_package = "github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1";
+option go_package = "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1;openrmmv1";
 
 // SignerService is exposed by openrmm-signer on a local socket. The signer
 // does not trust its caller: every request carries an operator's id_token,

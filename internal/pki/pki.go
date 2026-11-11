@@ -1,4 +1,4 @@
-// Package pki implements the open-rmm certificate hierarchy:
+// Package pki implements the Tempra RMM certificate hierarchy:
 //
 //	root CA (kept offline, pinned by every agent)
 //	└── agents CA (online on the gateway)
@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 )
 
 const (
@@ -98,7 +98,7 @@ func (ca *CA) IssueCore(now time.Time) (*x509.Certificate, crypto.Signer, error)
 	}
 	u, _ := url.Parse(coreURI)
 	tmpl := &x509.Certificate{
-		Subject:        pkix.Name{CommonName: "open-rmm core", Organization: []string{"open-rmm"}},
+		Subject:        pkix.Name{CommonName: "Tempra RMM core", Organization: []string{"Tempra RMM"}},
 		URIs:           []*url.URL{u},
 		NotBefore:      now.Add(-clockSkew),
 		NotAfter:       minTime(now.Add(ServerValidity), ca.Cert.NotAfter),
@@ -158,7 +158,7 @@ func NewRootCA(commonName string, now time.Time) (*CA, error) {
 		return nil, err
 	}
 	tmpl := &x509.Certificate{
-		Subject:               pkix.Name{CommonName: commonName, Organization: []string{"open-rmm"}},
+		Subject:               pkix.Name{CommonName: commonName, Organization: []string{"Tempra RMM"}},
 		NotBefore:             now.Add(-clockSkew),
 		NotAfter:              now.Add(RootValidity),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
@@ -181,7 +181,7 @@ func NewIntermediateCA(root *CA, commonName string, now time.Time) (*CA, error) 
 		return nil, err
 	}
 	tmpl := &x509.Certificate{
-		Subject:               pkix.Name{CommonName: commonName, Organization: []string{"open-rmm"}},
+		Subject:               pkix.Name{CommonName: commonName, Organization: []string{"Tempra RMM"}},
 		NotBefore:             now.Add(-clockSkew),
 		NotAfter:              minTime(now.Add(AgentsCAValidity), root.Cert.NotAfter),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
@@ -209,7 +209,7 @@ func (ca *CA) IssueServer(dnsNames []string, now time.Time) (*x509.Certificate, 
 		return nil, nil, err
 	}
 	tmpl := &x509.Certificate{
-		Subject:        pkix.Name{CommonName: dnsNames[0], Organization: []string{"open-rmm"}},
+		Subject:        pkix.Name{CommonName: dnsNames[0], Organization: []string{"Tempra RMM"}},
 		DNSNames:       dnsNames,
 		NotBefore:      now.Add(-clockSkew),
 		NotAfter:       minTime(now.Add(ServerValidity), ca.Cert.NotAfter),
@@ -249,7 +249,7 @@ func (ca *CA) IssueAgent(csrDER []byte, id Identity, now time.Time) (*x509.Certi
 		return nil, errors.New("identity must use UUIDs")
 	}
 	tmpl := &x509.Certificate{
-		Subject:        pkix.Name{CommonName: id.AgentID, Organization: []string{"open-rmm agent"}},
+		Subject:        pkix.Name{CommonName: id.AgentID, Organization: []string{"Tempra RMM agent"}},
 		URIs:           []*url.URL{id.URI()},
 		NotBefore:      now.Add(-clockSkew),
 		NotAfter:       minTime(now.Add(AgentCertValidity), ca.Cert.NotAfter),

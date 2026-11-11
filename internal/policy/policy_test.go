@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 )
 
 func valid() *Policy {

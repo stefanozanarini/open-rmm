@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 )
 
 func TestBaseline(t *testing.T) {

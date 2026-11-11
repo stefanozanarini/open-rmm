@@ -3,7 +3,7 @@ package pkgref
 import (
 	"testing"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
 )
 
 func TestValidFileName(t *testing.T) {

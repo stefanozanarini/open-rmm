@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/agent/config"
-	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
-	"github.com/stefanozanarini/open-rmm/internal/release"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/config"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/secfile"
+	"github.com/stefanozanarini/tempra-rmm/internal/release"
 )
 
 // Session is the live connection: it downloads releases and reports status.

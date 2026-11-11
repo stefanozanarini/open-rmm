@@ -9,8 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/stefanozanarini/open-rmm/internal/console/audit"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/audit"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 )
 
 // Integration tests run only when OPENRMM_TEST_DATABASE_URL points to a

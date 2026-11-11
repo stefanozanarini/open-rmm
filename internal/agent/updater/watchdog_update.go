@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/svcctl"
-	"github.com/stefanozanarini/open-rmm/internal/release"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/svcctl"
+	"github.com/stefanozanarini/tempra-rmm/internal/release"
 )
 
 // UpdateWatchdog is run by a freshly applied agent: when the agent executable

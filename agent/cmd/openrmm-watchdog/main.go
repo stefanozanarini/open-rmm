@@ -20,10 +20,10 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/config"
-	"github.com/stefanozanarini/open-rmm/internal/agent/svcctl"
-	"github.com/stefanozanarini/open-rmm/internal/agent/watchdog"
-	"github.com/stefanozanarini/open-rmm/internal/agent/winsvc"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/config"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/svcctl"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/watchdog"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/winsvc"
 )
 
 var version = "0.0.0-dev"
@@ -58,7 +58,7 @@ func run(args []string) error {
 		defer stop()
 		return runWatchdog(ctx, *cfgPath, slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	case "install":
-		if err := winsvc.Install(svcctl.Watchdog, "open-rmm watchdog", "Keeps the open-rmm agent running and applies its updates",
+		if err := winsvc.Install(svcctl.Watchdog, "Tempra RMM watchdog", "Keeps the Tempra RMM agent running and applies its updates",
 			"run", "-service", "-config", *cfgPath); err != nil {
 			return err
 		}
@@ -120,7 +120,7 @@ func msiUninstall(_ string) error {
 	selfDir := filepath.Dir(self)
 	versions := filepath.Dir(selfDir)
 	if filepath.Base(versions) != "versions" || filepath.Base(filepath.Dir(versions)) != "open-rmm" {
-		return fmt.Errorf("%s is not an open-rmm installation, nothing removed", selfDir)
+		return fmt.Errorf("%s is not an Tempra RMM installation, nothing removed", selfDir)
 	}
 	entries, _ := os.ReadDir(versions)
 	for _, e := range entries {

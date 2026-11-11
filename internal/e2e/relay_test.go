@@ -18,14 +18,14 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/agent/identity"
-	"github.com/stefanozanarini/open-rmm/internal/console/gateway"
-	"github.com/stefanozanarini/open-rmm/internal/console/relay"
-	"github.com/stefanozanarini/open-rmm/internal/console/store"
-	"github.com/stefanozanarini/open-rmm/internal/ids"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
-	"github.com/stefanozanarini/open-rmm/internal/tlsconf"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/identity"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/gateway"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/relay"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/ids"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
+	"github.com/stefanozanarini/tempra-rmm/internal/tlsconf"
 )
 
 // viaRelay makes start() put a DMZ relay between agents and core.

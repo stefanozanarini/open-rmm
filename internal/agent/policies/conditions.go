@@ -1,7 +1,7 @@
 package policies
 
 import (
-	"github.com/stefanozanarini/open-rmm/internal/policy"
+	"github.com/stefanozanarini/tempra-rmm/internal/policy"
 )
 
 // Probe answers the elementary questions conditions ask about the endpoint.

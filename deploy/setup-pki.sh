@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates the open-rmm PKI and prepares the files the gateway container needs.
+# Creates the Tempra RMM PKI and prepares the files the gateway container needs.
 #
 #   deploy/setup-pki.sh agent.cliente.it
 #

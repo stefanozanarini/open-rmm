@@ -1,4 +1,4 @@
-// open-rmm console: the agent context menu (right click on an agent row)
+// Tempra RMM console: the agent context menu (right click on an agent row)
 // and opening the action named in the address (#act-...). The menu items
 // come from a <template> rendered by the server, already translated and
 // limited to what the operator may do; this script only shows them.

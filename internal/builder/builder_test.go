@@ -21,9 +21,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
-	"github.com/stefanozanarini/open-rmm/internal/codesign"
-	"github.com/stefanozanarini/open-rmm/internal/pki"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/codesign"
+	"github.com/stefanozanarini/tempra-rmm/internal/pki"
 )
 
 const pass = "una passphrase lunga e sicura"

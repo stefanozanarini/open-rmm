@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/secfile"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/secfile"
 )
 
 const fileName = "health.json"

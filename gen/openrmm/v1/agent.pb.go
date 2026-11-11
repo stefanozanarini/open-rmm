@@ -2064,7 +2064,7 @@ const file_openrmm_v1_agent_proto_rawDesc = "" +
 	"\n" +
 	"GetPackage\x12\x1d.openrmm.v1.GetPackageRequest\x1a\x18.openrmm.v1.PackageChunk0\x01\x12Q\n" +
 	"\x0fGetAgentRelease\x12\".openrmm.v1.GetAgentReleaseRequest\x1a\x18.openrmm.v1.ReleaseChunk0\x01\x12;\n" +
-	"\x05Shell\x12\x16.openrmm.v1.ShellFrame\x1a\x16.openrmm.v1.ShellFrame(\x010\x01B>Z<github.com/stefanozanarini/open-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
+	"\x05Shell\x12\x16.openrmm.v1.ShellFrame\x1a\x16.openrmm.v1.ShellFrame(\x010\x01B@Z>github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1;openrmmv1b\x06proto3"
 
 var (
 	file_openrmm_v1_agent_proto_rawDescOnce sync.Once

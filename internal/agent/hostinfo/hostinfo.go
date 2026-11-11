@@ -6,7 +6,7 @@ import (
 	"os"
 	"runtime"
 
-	openrmmv1 "github.com/stefanozanarini/open-rmm/gen/openrmm/v1"
+	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
 )
 
 // Collect returns the host description.

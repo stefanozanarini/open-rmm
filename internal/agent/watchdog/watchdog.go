@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stefanozanarini/open-rmm/internal/agent/health"
-	"github.com/stefanozanarini/open-rmm/internal/agent/svcctl"
-	"github.com/stefanozanarini/open-rmm/internal/agent/updater"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/health"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/svcctl"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/updater"
 )
 
 // Config tunes the watchdog; zero values take the defaults.
