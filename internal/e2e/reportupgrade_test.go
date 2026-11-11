@@ -34,4 +34,13 @@ func TestConsoleReportUpgrade(t *testing.T) {
 	if _, body = get(t, c, e.console.URL+"/reports?tab=computers&software=firefox"); strings.Contains(body, "Aggiorna questa applicazione") {
 		t.Fatal("button without a match")
 	}
+	// Search with no filter lists every computer, with the chosen columns,
+	// also in the CSV.
+	_, body = get(t, c, e.console.URL+"/reports?tab=computers&search=1&col=agent_version")
+	if !strings.Contains(body, "PC-OLD") || !strings.Contains(body, "PC-USER") || !strings.Contains(body, "<th>Versione agente</th>") {
+		t.Fatalf("all computers with a column: %s", body)
+	}
+	if _, csv := get(t, c, e.console.URL+"/reports?tab=computers&search=1&col=agent_version&format=csv"); !strings.HasPrefix(csv, "computer,site,operating_system,model,user,software,version,inventory,agent_version") {
+		t.Fatalf("csv: %s", csv)
+	}
 }

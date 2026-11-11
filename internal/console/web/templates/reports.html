@@ -98,7 +98,7 @@
 {{if eq .Tab "computers"}}
 <p class="muted">{{t "Trova i computer per software installato, sistema operativo, utente, modello o sede, dai dati dell'ultimo inventario. I filtri si combinano; ogni campo cerca il testo contenuto, senza distinguere maiuscole e minuscole. Puoi aggiungere colonne dall'inventario ed esportare il risultato in CSV."}}</p>
 <form method="get" action="/reports" class="stack">
-  <input type="hidden" name="tab" value="computers">
+  <input type="hidden" name="tab" value="computers"><input type="hidden" name="search" value="1">
   <div class="grid2">
     <label>{{t "Software installato"}} <input name="software" value="{{.Software}}" placeholder="7-Zip"></label>
     <label>{{t "Versione del software"}} <input name="version" value="{{.Version}}" placeholder="24."></label>

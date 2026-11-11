@@ -245,7 +245,7 @@ fieldset.policy-action fieldset.window { border:1px solid var(--line); border-ra
 /* File manager */
 .files .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:8px; }
 .files input.wide { width:min(560px, 100%); }
-.files .inline-check { white-space:nowrap; }
+
 .files-table td:nth-child(2), .files-table td:nth-child(3) { white-space:nowrap; }
 .files-table button.link, .files-table a { margin-right:8px; }
 .files #fs-roots button { margin-left:4px; }
@@ -265,4 +265,6 @@ details.help .help-pop { position:absolute; z-index:60; top:24px; left:-8px; wid
 /* Reporting → Inventory: extra columns */
 details.columns { margin:4px 0 8px; }
 details.columns summary { cursor:pointer; }
-.column-choices { display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:8px; }
+.column-choices { display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:8px; }
+label.inline-check, form.stack label.inline-check { display:inline-flex; flex-direction:row; align-items:center; gap:6px; white-space:nowrap; font-weight:400; }
+label.inline-check input[type=checkbox] { width:auto; margin:0; }

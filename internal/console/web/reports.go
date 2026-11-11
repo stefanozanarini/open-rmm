@@ -209,7 +209,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	d.Sites = sites
 	matcher := newSiteMatcher(sites, manual)
 	osCount := map[string]int{}
-	d.Searched = d.Software != "" || d.Version != "" || d.OSFilter != "" || d.User != "" || d.Model != "" || d.Site != "" || q.Has("all")
+	d.Searched = d.Software != "" || d.Version != "" || d.OSFilter != "" || d.User != "" || d.Model != "" || d.Site != "" || q.Has("all") || q.Has("search")
 	for _, a := range agents {
 		if a.Status == store.AgentRevoked {
 			continue
