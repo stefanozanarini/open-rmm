@@ -418,7 +418,11 @@ func (s *Server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
 }
 
-type jobsData struct{ Jobs []store.Job }
+type jobsData struct {
+	Jobs []store.Job
+	// Hosts: agent id → host name, for the computer column.
+	Hosts map[string]string
+}
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
@@ -431,7 +435,16 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "jobs", s.T(r, "Job"), jobsData{Jobs: jobs})
+	agents, err := s.store.ListAgents(r.Context(), t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d := jobsData{Jobs: jobs, Hosts: make(map[string]string, len(agents))}
+	for _, a := range agents {
+		d.Hosts[a.ID] = a.Host.Hostname
+	}
+	s.render(w, r, "jobs", s.T(r, "Job"), d)
 }
 
 type jobData struct {

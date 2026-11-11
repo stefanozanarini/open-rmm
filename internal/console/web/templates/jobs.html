@@ -1,3 +1,20 @@
 {{define "content"}}
-{{template "jobrows" .Data.Jobs}}
+{{with .Data}}{{$hosts := .Hosts}}
+{{if .Jobs}}
+<table>
+<thead><tr><th>Job</th><th>{{t "Computer"}}</th><th>{{t "Modulo"}}</th><th>{{t "Azione"}}</th><th>{{t "Stato"}}</th><th>{{t "Creato"}}</th><th>{{t "Da"}}</th></tr></thead>
+<tbody>
+{{range .Jobs}}<tr>
+  <td><a href="/jobs/{{.ID}}"><code>{{short .ID}}</code></a></td>
+  <td><a href="/agents/{{.AgentID}}">{{or (index $hosts .AgentID) (short .AgentID)}}</a></td>
+  <td>{{.Module}} {{.ModuleVersion}}</td>
+  <td>{{.Action}}</td>
+  <td><span class="badge {{.State}}">{{label .State}}</span></td>
+  <td>{{fmtTime .CreatedAt}}</td>
+  <td>{{.CreatedBy}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}{{template "jobrows" .Jobs}}{{end}}
+{{end}}
 {{end}}

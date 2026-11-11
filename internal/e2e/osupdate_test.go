@@ -75,6 +75,10 @@ func TestConsoleLinuxUpdates(t *testing.T) {
 	if len(jobs) != 2 || !strings.Contains(all, `"packages":["openssl"]`) || !strings.Contains(all, `"security_only":true`) {
 		t.Fatalf("install params: %s", all)
 	}
+	// The jobs list names the computer of each job.
+	if _, body := get(t, c, e.console.URL+"/jobs"); !strings.Contains(body, `<a href="/agents/`+pc+`">SRV-UBUNTU</a>`) {
+		t.Fatalf("jobs list without the computer: %s", body)
+	}
 
 	// The installations are listed on the agent page: Linux has no update
 	// history of its own.
