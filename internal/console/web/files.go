@@ -18,6 +18,7 @@ import (
 	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/vuln"
 	"github.com/stefanozanarini/tempra-rmm/internal/filesession"
 	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 	"github.com/stefanozanarini/tempra-rmm/internal/modules"
@@ -39,6 +40,14 @@ const (
 	filesUploadPath    = "/files/upload"
 	maxFilesPerSession = 50
 )
+
+// minFilesAgent is the first agent version that serves file sessions.
+const minFilesAgent = "1.1.0"
+
+// filesAgent tells whether an agent version serves file sessions.
+func filesAgent(version string) bool {
+	return version != "" && vuln.CompareVersions(version, minFilesAgent) >= 0
+}
 
 func init() {
 	streamedUploads[filesUploadPath] = maxFileMaxMB<<20 + 1<<20
@@ -116,6 +125,11 @@ func (s *Server) handleOpenFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, ok := man.Entrypoints[a.Host.OS+"/"+a.Host.Arch]; !ok {
 			s.flash(w, r, s.Tf(r, "Il modulo %s non supporta %s.", mod.ID, a.Host.Hostname), back)
+			return
+		}
+		if !filesAgent(a.Host.AgentVersion) {
+			s.flash(w, r, s.Tf(r, "%s ha l'agente %s: la gestione dei file richiede la versione %s o successiva. Pubblica la release dalla pagina Installer e attendi l'aggiornamento.",
+				a.Host.Hostname, a.Host.AgentVersion, minFilesAgent), back)
 			return
 		}
 		targets = append(targets, id)

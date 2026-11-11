@@ -30,7 +30,7 @@ func TestConsoleFiles(t *testing.T) {
 	cfg := e.agentConfig(t, e.tokenWith(t, 1, true))
 	noShell := false
 	cfg.AllowInteractiveShell = &noShell
-	runAgent(t, cfg)
+	runAgentVersion(t, cfg, "1.1.0")
 	agentID := e.onlyAgent(t).ID
 	ce := consoleOn(t, e, broker)
 	c, csrf := ce.loginTo(t, admin)

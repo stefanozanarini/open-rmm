@@ -100,6 +100,9 @@
     var id = row.dataset.agent;
     menu = tpl.content.firstElementChild.cloneNode(true);
     menu.querySelector(".ctx-title").textContent = row.dataset.name || "";
+    menu.querySelectorAll("[data-only-files]").forEach(function (el) {
+      if (!row.hasAttribute("data-files")) el.remove();
+    });
     menu.querySelectorAll("[data-only-active]").forEach(function (el) {
       if (row.dataset.status !== "active") el.remove();
     });
@@ -114,7 +117,9 @@
     });
     menu.querySelectorAll("button[data-post]").forEach(function (b) {
       b.addEventListener("click", function () {
-        post(b.dataset.post.replace("{id}", encodeURIComponent(id)), { module: b.dataset.module, action: b.dataset.action });
+        var fields = {};
+        if (b.dataset.module) { fields.module = b.dataset.module; fields.action = b.dataset.action; }
+        post(b.dataset.post.replace("{id}", encodeURIComponent(id)), fields);
       });
     });
     document.body.appendChild(menu);

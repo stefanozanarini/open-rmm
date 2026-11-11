@@ -68,7 +68,7 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 	if _, man, ok := s.fileModule(r); ok && s.shell != nil {
 		d.Files = true
 		for _, a := range agents {
-			if _, ok := man.Entrypoints[a.Host.OS+"/"+a.Host.Arch]; !ok {
+			if _, ok := man.Entrypoints[a.Host.OS+"/"+a.Host.Arch]; !ok || !filesAgent(a.Host.AgentVersion) {
 				d.Files = false
 			}
 		}

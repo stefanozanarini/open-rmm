@@ -175,6 +175,7 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 		_, d.Shell = s.shellModuleFor(r, a)
 		if _, man, ok := s.fileModule(r); ok && s.shell != nil {
 			_, d.Files = man.Entrypoints[a.Host.OS+"/"+a.Host.Arch]
+			d.Files = d.Files && filesAgent(a.Host.AgentVersion)
 		}
 	}
 	d.Outdated = map[string]string{}
