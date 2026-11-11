@@ -119,6 +119,7 @@ type Store interface {
 	ADStore
 	FederationStore
 	InstallerStore
+	VulnFeedStore
 }
 
 // HashToken returns the value stored in place of an enrollment token.

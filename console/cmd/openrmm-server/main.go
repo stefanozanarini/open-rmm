@@ -207,6 +207,22 @@ func run(log *slog.Logger) error {
 			}
 		}
 	}()
+	// Vulnerability sources (Microsoft, CISA, NVD): shortly after startup,
+	// then every 6 hours; only what changed is downloaded.
+	go func() {
+		wait := time.Minute
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(wait):
+			}
+			if err := srv.RefreshVulns(ctx); err != nil {
+				log.Warn("vulnerability sources", "err", err)
+			}
+			wait = 6 * time.Hour
+		}
+	}()
 	// Collect again what a finished job changed (software, updates).
 	go func() {
 		t := time.NewTicker(30 * time.Second)

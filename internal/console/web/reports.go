@@ -23,7 +23,9 @@ const (
 )
 
 type reportsData struct {
-	Tab string // dashboard | computers | os | logons
+	Tab string // dashboard | computers | os | logons | cve
+	// Vulnerabilities.
+	Vulns *vulnData
 	// Dashboard.
 	Dash *dashData
 	// Computers.
@@ -96,7 +98,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		d.Days = n
 	}
 	switch d.Tab {
-	case "computers", "os", "logons":
+	case "computers", "os", "logons", "cve":
 	default:
 		d.Tab = "dashboard"
 	}
@@ -113,6 +115,17 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.Dash = dash
+		s.render(w, r, "reports", s.T(r, "Reporting"), d)
+		return
+	}
+
+	if d.Tab == "cve" {
+		v, err := s.vulnReport(r, t)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		d.Vulns = v
 		s.render(w, r, "reports", s.T(r, "Reporting"), d)
 		return
 	}

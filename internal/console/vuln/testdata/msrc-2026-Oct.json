@@ -1,0 +1,12 @@
+{"Vulnerability":[
+ {"CVE":"CVE-2026-1001","Title":{"Value":"Windows Kernel Elevation of Privilege Vulnerability"},
+  "Threats":[{"Type":1,"Description":{"Value":"Publicly Disclosed:No;Exploited:Yes;Latest Software Release:Exploitation Detected"}},{"Type":3,"Description":{"Value":"Important"}}],
+  "CVSSScoreSets":[{"BaseScore":7.8}],
+  "Remediations":[{"Type":2,"Description":{"Value":"5127648"},"FixedBuild":"10.0.26100.9711"},{"Type":2,"Description":{"Value":"5127648"},"FixedBuild":"10.0.26200.9711"},
+                  {"Type":2,"Description":{"Value":"5126653"},"FixedBuild":"10.0.22631.7652"},{"Type":3,"Description":null,"FixedBuild":null}]},
+ {"CVE":"CVE-2026-1002","Title":{"Value":"Windows SMB Remote Code Execution Vulnerability"},
+  "Threats":[{"Type":3,"Description":{"Value":"Critical"}}],"CVSSScoreSets":[{"BaseScore":9.8}],
+  "Remediations":[{"Type":2,"Description":{"Value":"5127648"},"FixedBuild":"10.0.26100.9711"}]},
+ {"CVE":"CVE-2019-25781","Title":{"Value":"Python-Markdown Denial of Service"},
+  "Threats":[],"CVSSScoreSets":[{"BaseScore":7.5}],"Remediations":[{"Type":2,"Description":{"Value":"Release Notes"},"FixedBuild":""}]}
+]}

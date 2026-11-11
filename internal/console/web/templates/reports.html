@@ -5,7 +5,52 @@
   <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Computer"}}</a>
   <a href="/reports{{qs "tab" "os"}}" {{if eq .Tab "os"}}class="current"{{end}}>{{t "Sistemi operativi"}}</a>
   <a href="/reports{{qs "tab" "logons"}}" {{if eq .Tab "logons"}}class="current"{{end}}>{{t "Accessi"}}</a>
+  <a href="/reports{{qs "tab" "cve"}}" {{if eq .Tab "cve"}}class="current"{{end}}>{{t "Vulnerabilità"}}</a>
 </nav>
+
+{{if eq .Tab "cve"}}{{with .Vulns}}
+{{if not .Ready}}<p class="muted">{{t "Dati sulle vulnerabilità non ancora scaricati: la console li scarica da Microsoft e da CISA pochi minuti dopo l'avvio, poi ogni 6 ore."}}</p>
+{{else}}{{with .Selected}}
+<p><a href="/reports{{qs "tab" "cve"}}">← {{t "tutte le vulnerabilità"}}</a></p>
+<h2>{{.ID}}</h2>
+<p>{{.Title}}</p>
+<p>{{if .KEV}}<span class="badge chk-failing">{{t "sfruttata attivamente (CISA KEV)"}}</span> {{end}}{{if .Ransomware}}<span class="badge chk-failing">{{t "usata in attacchi ransomware"}}</span> {{end}}{{if and .Exploited (not .KEV)}}<span class="badge chk-failing">{{t "sfruttata (Microsoft)"}}</span> {{end}}
+  <span class="badge {{cvssClass .CVSS}}">CVSS {{cvssText .CVSS}}</span>{{with .Severity}} <span class="badge">{{label .}}</span>{{end}}
+  · {{.Product}}{{if not .Released.IsZero}} · {{tf "pubblicata il %s" (isoDate .Released)}}{{end}}{{with .KEVAdded}} · {{tf "nel catalogo CISA dal %s" .}}{{end}}</p>
+<p><a href="https://msrc.microsoft.com/update-guide/vulnerability/{{.ID}}" target="_blank" rel="noopener noreferrer">Microsoft ↗</a> · <a href="https://nvd.nist.gov/vuln/detail/{{.ID}}" target="_blank" rel="noopener noreferrer">NVD ↗</a></p>
+<h3>{{tf "Computer colpiti (%d)" (len .Hits)}}</h3>
+<table>
+<thead><tr><th>{{t "Computer"}}</th><th>{{t "Versione installata"}}</th><th>{{t "Correzione"}}</th></tr></thead>
+<tbody>{{range .Hits}}<tr><td><a href="/agents/{{.AgentID}}#patches">{{.Hostname}}</a></td><td>{{.Installed}}</td><td>{{.Fix}}</td></tr>{{end}}</tbody>
+</table>
+{{else}}
+<div class="cards">
+  <a class="card" href="/reports{{qs "tab" "cve"}}"><span class="num">{{.Total}}</span>{{t "vulnerabilità trovate"}}</a>
+  <a class="card {{if .KEVCount}}bad{{end}}" href="/reports{{qs "tab" "cve" "exploited" "1"}}"><span class="num">{{.KEVCount}}</span>{{t "sfruttate attivamente (CISA)"}}</a>
+  <span class="card {{if .Critical}}warn{{end}}"><span class="num">{{.Critical}}</span>{{t "critiche (CVSS 9 o più)"}}</span>
+  <span class="card"><span class="num">{{.Endpoints}}</span>{{t "computer colpiti"}}</span>
+</div>
+<form method="get" action="/reports" class="toolbar">
+  <input type="hidden" name="tab" value="cve">
+  <input type="search" name="q" value="{{.Query}}" placeholder="{{t "CVE, prodotto, computer o KB"}}" aria-label="{{t "Cerca"}}">
+  <label class="check"><input type="checkbox" name="exploited" value="1"{{if .Exploited}} checked{{end}}> {{t "solo sfruttate"}}</label>
+  <button>{{t "Cerca"}}</button>
+</form>
+<table>
+<thead><tr><th>CVE</th><th>{{t "Gravità"}}</th><th>{{t "Prodotto"}}</th><th>{{t "Computer"}}</th><th>{{t "Correzione"}}</th></tr></thead>
+<tbody>{{range .Findings}}<tr>
+  <td><a href="/reports{{qs "tab" "cve" "id" .ID}}">{{.ID}}</a>{{if .KEV}} <span class="badge chk-failing" title="{{t "sfruttata attivamente (CISA KEV)"}}">KEV</span>{{else if .Exploited}} <span class="badge chk-failing">{{t "sfruttata"}}</span>{{end}}</td>
+  <td><span class="badge {{cvssClass .CVSS}}">{{cvssText .CVSS}}</span>{{with .Severity}} <span class="muted small">{{label .}}</span>{{end}}</td>
+  <td>{{.Product}}<br><span class="muted small">{{.Title}}</span></td>
+  <td>{{len .Hits}}</td>
+  <td class="small">{{range $i, $f := .FixList}}{{if $i}}<br>{{end}}{{$f}}{{end}}</td>
+</tr>{{else}}<tr><td colspan="5" class="muted">{{t "Nessuna vulnerabilità trovata."}}</td></tr>{{end}}</tbody>
+</table>
+{{if gt .Shown (len .Findings)}}<p class="muted small">{{tf "Mostrate %d vulnerabilità su %d: affina la ricerca." (len .Findings) .Shown}}</p>{{end}}
+{{end}}
+<p class="muted small">{{tf "Fonti: aggiornamenti di sicurezza Microsoft (%d mesi), confrontati con la build di Windows di ogni computer; catalogo CISA delle vulnerabilità sfruttate." .Months}}</p>
+{{end}}
+{{end}}{{end}}
 
 {{if eq .Tab "dashboard"}}{{with .Dash}}
 <div class="cards">

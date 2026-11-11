@@ -39,6 +39,7 @@ type Memory struct {
 	adDomains   map[string]ADDomain
 	federation  *memFederation
 	installers  []Installer
+	vulnFeeds   map[string]VulnFeed
 }
 
 func NewMemory() *Memory {

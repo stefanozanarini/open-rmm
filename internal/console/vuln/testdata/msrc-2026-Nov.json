@@ -1,0 +1,8 @@
+{"Vulnerability":[
+ {"CVE":"CVE-2026-2001","Title":{"Value":"Windows Graphics Information Disclosure"},
+  "Threats":[{"Type":3,"Description":{"Value":"Moderate"}}],"CVSSScoreSets":[{"BaseScore":5.5}],
+  "Remediations":[{"Type":2,"Description":{"Value":"5130001"},"FixedBuild":"10.0.26100.9800"}]},
+ {"CVE":"CVE-2026-1002","Title":{"Value":"Windows SMB Remote Code Execution Vulnerability"},
+  "Threats":[{"Type":3,"Description":{"Value":"Critical"}}],"CVSSScoreSets":[{"BaseScore":9.8}],
+  "Remediations":[{"Type":2,"Description":{"Value":"5130001"},"FixedBuild":"10.0.26100.9800"}]}
+]}

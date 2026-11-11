@@ -78,19 +78,21 @@ type Server struct {
 	// refreshed: finished jobs whose refresh was attempted (RunRefreshes),
 	// so that a refused collection is not retried every 30 seconds.
 	refreshed sync.Map
-	store     store.Store
-	verifier  *authn.Verifier
-	signer    openrmmv1.SignerServiceClient
-	log       *slog.Logger
-	oauth     oauth2.Config
-	origin    string
-	idpHost   string
-	now       func() time.Time
-	client    *http.Client
-	pages     map[string]map[string]*template.Template // language, page
-	packages  pkgfiles.Dir
-	winget    *wingetcat.Client
-	ad        adCache
+	// vulns: the loaded vulnerability extracts (vulns.go).
+	vulns    vulnCache
+	store    store.Store
+	verifier *authn.Verifier
+	signer   openrmmv1.SignerServiceClient
+	log      *slog.Logger
+	oauth    oauth2.Config
+	origin   string
+	idpHost  string
+	now      func() time.Time
+	client   *http.Client
+	pages    map[string]map[string]*template.Template // language, page
+	packages pkgfiles.Dir
+	winget   *wingetcat.Client
+	ad       adCache
 
 	hub          *federation.Hub
 	linkAddr     string
@@ -154,6 +156,8 @@ func funcs(lang string) template.FuncMap {
 		"th":           func(key string) template.HTML { return trHTML(lang, key) },
 		"msg":          func(s string) string { return trMessage(lang, s) },
 		"platformName": func(p string) string { return platformName(lang, p) },
+		"cvssClass":    cvssClass,
+		"cvssText":     cvssText,
 		"dayName":      func(d string) string { return tr(lang, dayNames[d]) },
 		"interval":     func(d string) string { return intervalName(lang, d) },
 		"checkLink": func(agentID string, panel bool, checkID string) *actionLink {
@@ -583,6 +587,7 @@ var labels = map[string]string{
 	"software.added": "software installato", "software.removed": "software rimosso", "software.updated": "software aggiornato",
 	"hardware": "hardware", "os": "sistema operativo", "firmware": "firmware", "disk.health": "stato disco",
 	"encryption": "cifratura", "remote_access": "accesso remoto",
+	"Critical": "critica", "Important": "importante", "Moderate": "moderata", "Low": "bassa",
 	"warning": "attenzione", "failing": "errore", "critical": "critica", "info": "informazione", "ok": "ok",
 	"check.failing": "controllo non superato", "rdp.outside_lan": "RDP fuori dalle reti consentite",
 	"rdp.new_source": "RDP da indirizzo nuovo", "logon.failures": "accessi falliti ripetuti",
