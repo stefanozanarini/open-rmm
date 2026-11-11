@@ -48,6 +48,18 @@ func TestRebootRescans(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.store.UpdateJob(ctx, e.tenant, restarted, job.ID, store.JobUpdate{State: store.JobSucceeded}, now.Add(-20*time.Minute))
+	// PC-NOTICE: the restart was scheduled with 15 minutes of notice: it
+	// happened 5 minutes ago, too early to scan. PC-SKIPPED: no restart.
+	notice := agent("PC-NOTICE", now.Add(-time.Hour), true)
+	skipped := agent("PC-SKIPPED", now.Add(-time.Hour), true)
+	for id, result := range map[string]string{notice: `{"action":"scheduled","delay_seconds":900}`, skipped: `{"action":"skipped","reason":"utente collegato"}`} {
+		j := job
+		j.ID, j.AgentID = ids.NewUUID(), id
+		if err := e.store.CreateJob(ctx, j); err != nil {
+			t.Fatal(err)
+		}
+		e.store.UpdateJob(ctx, e.tenant, id, j.ID, store.JobUpdate{State: store.JobSucceeded, Result: []byte(result)}, now.Add(-20*time.Minute))
+	}
 
 	e.web.RunRebootRescans(ctx)
 	queued := func(id string) (scans, invs int) {
@@ -66,7 +78,8 @@ func TestRebootRescans(t *testing.T) {
 		name        string
 		id          string
 		scans, invs int
-	}{{"restarted", restarted, 1, 1}, {"waiting", waiting, 0, 0}, {"old scan", old, 1, 0}, {"clean", clean, 0, 0}} {
+	}{{"restarted", restarted, 1, 1}, {"waiting", waiting, 0, 0}, {"old scan", old, 1, 0}, {"clean", clean, 0, 0},
+		{"notice not over", notice, 0, 0}, {"skipped", skipped, 0, 0}} {
 		if s, i := queued(c.id); s != c.scans || i != c.invs {
 			t.Errorf("%s: %d scans, %d inventories; want %d, %d", c.name, s, i, c.scans, c.invs)
 		}

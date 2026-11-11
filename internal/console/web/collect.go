@@ -248,11 +248,33 @@ func (s *Server) handleSetRing(w http.ResponseWriter, r *http.Request) {
 // the next scan. For online agents with a reboot pending, the console scans
 // again 10 minutes after a restart job ends (with the inventory, for the
 // boot time), and every rebootRescanEvery otherwise, to notice restarts
-// done outside the console.
+// done outside the console. The reboot module only schedules the restart,
+// after a notice to logged-on users: the scan waits for the restart itself
+// (rebootTime).
 const (
 	rebootRescanAfterJob = 10 * time.Minute
 	rebootRescanEvery    = 3 * time.Hour
 )
+
+// rebootTime is when a successful reboot job restarts the endpoint: when
+// it ended plus the notice given to users. A skipped restart has none.
+func rebootTime(j store.Job) (time.Time, bool) {
+	if j.FinishedAt == nil {
+		return time.Time{}, false
+	}
+	var res struct {
+		Action string `json:"action"`
+		Delay  int64  `json:"delay_seconds"`
+	}
+	_ = json.Unmarshal(j.Result, &res)
+	switch res.Action {
+	case "skipped":
+		return time.Time{}, false
+	case "already_scheduled": // the notice of the earlier request is unknown
+		return j.FinishedAt.Add(15 * time.Minute), true
+	}
+	return j.FinishedAt.Add(time.Duration(res.Delay) * time.Second), true
+}
 
 // RunRebootRescans queues those scans. Called every 10 minutes.
 func (s *Server) RunRebootRescans(ctx context.Context) {
@@ -287,8 +309,10 @@ func (s *Server) RunRebootRescans(ctx context.Context) {
 				switch {
 				case (j.Module == updates.WindowsModule || j.Module == updates.OSUpdateModule) && j.Action == "scan" && j.CreatedAt.After(lastScan):
 					lastScan = j.CreatedAt
-				case j.Module == "reboot" && j.State == store.JobSucceeded && j.FinishedAt != nil && j.FinishedAt.After(rebooted):
-					rebooted = *j.FinishedAt
+				case j.Module == "reboot" && j.State == store.JobSucceeded:
+					if at, ok := rebootTime(j); ok && at.After(rebooted) {
+						rebooted = at
+					}
 				}
 			}
 			if lastScan.Before(st.ScannedAt) {
