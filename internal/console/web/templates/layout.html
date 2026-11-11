@@ -80,7 +80,7 @@
   <td><a href="/jobs/{{.ID}}"><code>{{short .ID}}</code></a></td>
   <td>{{.Module}} {{.ModuleVersion}}</td>
   <td>{{.Action}}</td>
-  <td><span class="badge {{.State}}">{{label .State}}</span></td>
+  <td>{{$st := jobState .}}<span class="badge {{$st}}">{{label $st}}</span></td>
   <td>{{fmtTime .CreatedAt}}</td>
   <td>{{.CreatedBy}}</td>
 </tr>{{end}}

@@ -157,6 +157,8 @@ func funcs(lang string) template.FuncMap {
 		"msg":          func(s string) string { return trMessage(lang, s) },
 		"platformName": func(p string) string { return platformName(lang, p) },
 		"cvssClass":    cvssClass,
+		"jobState":     jobState,
+		"jobFailures":  jobFailures,
 		"isDell":       func(m string) bool { return strings.HasPrefix(strings.ToLower(strings.TrimSpace(m)), "dell") },
 		"lastJobs": func(jobs []store.Job, n int) []store.Job {
 			if len(jobs) > n {
@@ -585,7 +587,7 @@ var logonTypes = map[int]string{2: "interattivo", 3: "rete", 4: "batch", 5: "ser
 var labels = map[string]string{
 	"pending": "in attesa", "active": "attivo", "revoked": "revocato", "online": "online",
 	"queued": "in coda", "sent": "inviato", "accepted": "accettato", "running": "in esecuzione",
-	"succeeded": "completato", "failed": "fallito", "rejected": "rifiutato", "expired": "scaduto",
+	"succeeded": "completato", "partial": "completato con errori", "failed": "fallito", "rejected": "rifiutato", "expired": "scaduto",
 	"downloading": "download", "staged": "pronto", "applied": "installato", "rolled_back": "ripristinato",
 	"all": "tutti", "clients": "solo client", "servers": "solo server", "client": "client", "server": "server", "unknown": "non noto",
 	"on": "attivo", "off": "non attivo", "suspended": "sospeso", "encrypting": "cifratura in corso", "decrypting": "decifratura in corso",

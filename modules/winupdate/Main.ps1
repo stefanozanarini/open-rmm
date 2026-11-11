@@ -10,17 +10,25 @@
 # logs     collects what explains failed updates: Windows Update events,
 #          the errors in CBS.log (and optionally WindowsUpdate.log), the
 #          services, free space, pending operations, failed installations.
+# repair   repairs the component store (DISM /RestoreHealth, optionally
+#          from a source of the same build) and the system files (SFC),
+#          optionally resetting the Windows Update cache first. Fixes
+#          errors such as 0x800f0983 (component store missing a binary).
 #
 # Every report lists the settings that keep updates from being offered or
 # installed ("blockers"): a pinned release (TargetReleaseVersion, also when
 # only left over in UpdatePolicy\PolicyState), Windows Update access turned
-# off, an unreachable WSUS server, pauses and deferrals, disabled services,
-# low disk space.
+# off (by policy, Explorer policy or Internet Communication Management), a
+# WSUS server unreachable, not answering or with no successful search for
+# weeks, update servers redirected in the hosts file, pauses and deferrals,
+# disabled services, low disk space.
 #
 # Parameters (install):
 #   { "classifications": ["security","critical","rollup","update","definition"],
 #     "exclude_kbs": ["KB5030000"], "include_kbs": [], "allow_managed": false,
 #     "max_age_days": 30 }
+# Parameters (repair):
+#   { "source": "WIM:D:\sources\install.wim:1", "sfc": true, "reset_components": false }
 Import-Module (Join-Path $PSScriptRoot '_sdk/OpenRmm.psm1')
 
 $ErrorActionPreference = 'Stop'
@@ -211,6 +219,46 @@ function Test-TcpPort([string]$HostName, [int]$Port) {
     finally { $c.Dispose() }
 }
 
+# Test-Wsus asks the WSUS client web service for its description: '' when
+# it answers, else the reason (HTTP 503 when the IIS pool is stopped, a
+# timeout, a certificate error).
+function Test-Wsus([string]$Url) {
+    try {
+        $req = [Net.HttpWebRequest]::Create($Url.TrimEnd('/') + '/ClientWebService/client.asmx')
+        $req.Timeout = 15000
+        $req.UseDefaultCredentials = $true
+        $req.GetResponse().Close()
+        return ''
+    }
+    catch {
+        $e = $_.Exception
+        while ($e -and -not ($e -is [Net.WebException])) { $e = $e.InnerException }
+        if (-not $e) { return $_.Exception.Message }
+        if ($e.Response) {
+            $code = [int]$e.Response.StatusCode
+            $e.Response.Close()
+            if ($code -ge 500) { return "HTTP $code" }
+            return ''
+        }
+        return [string]$e.Status
+    }
+}
+
+# Get-AutoUpdateResults: the last successful search and installation of
+# the Windows Update client, whoever started them.
+function Get-AutoUpdateResults {
+    try {
+        $r = (New-Object -ComObject Microsoft.Update.AutoUpdate).Results
+        $out = @{}
+        foreach ($n in 'LastSearchSuccessDate', 'LastInstallationSuccessDate') {
+            $d = $r.$n
+            if ($d -is [datetime] -and $d.Year -gt 2000) { $out[$n] = $d.ToUniversalTime() }
+        }
+        return $out
+    }
+    catch { return @{} }
+}
+
 # Get-Blockers lists the settings that keep updates from being offered or
 # installed. severity: block (no updates), limit (some updates held back),
 # info (worth knowing).
@@ -249,19 +297,59 @@ function Get-Blockers {
     if ((Read-Reg $pol 'DisableWindowsUpdateAccess') -eq 1) {
         & $add 'access_disabled' 'block' 'Accesso a Windows Update disattivato da policy (DisableWindowsUpdateAccess)' "$pol\DisableWindowsUpdateAccess" 1
     }
+    $explorer = 'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
+    if ((Read-Reg $explorer 'NoWindowsUpdate') -eq 1) {
+        & $add 'no_windows_update' 'block' 'Windows Update disattivato da policy (NoWindowsUpdate)' "$explorer\NoWindowsUpdate" 1
+    }
+    foreach ($icm in 'HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Internet Communication Management\Internet Communication',
+        'HKEY_LOCAL_MACHINE\SYSTEM\Internet Communication Management\Internet Communication') {
+        if ((Read-Reg $icm 'DisableWindowsUpdateAccess') -eq 1) {
+            & $add 'icm_disabled' 'block' 'Accesso a Windows Update disattivato da Gestione comunicazioni Internet (DisableWindowsUpdateAccess)' "$icm\DisableWindowsUpdateAccess" 1
+            break
+        }
+    }
     $useWsus = (Read-Reg "$pol\AU" 'UseWUServer') -eq 1
     $wsus = [string](Read-Reg $pol 'WUServer')
-    if ($useWsus -and $wsus) {
+    if ($useWsus -and -not $wsus) {
+        & $add 'wsus_missing' 'block' 'Server WSUS attivato (UseWUServer) ma nessun indirizzo configurato (WUServer)' "$pol\AU\UseWUServer" 1
+    }
+    elseif ($useWsus) {
+        $reachable = $false
         try {
             $u = [Uri]$wsus
             if (-not (Test-TcpPort $u.Host $u.Port)) {
                 & $add 'wsus_unreachable' 'block' "Server WSUS $wsus non raggiungibile" "$pol\WUServer" $wsus
             }
+            else { $reachable = $true }
         }
         catch { & $add 'wsus_invalid' 'block' "Indirizzo del server WSUS non valido: $wsus" "$pol\WUServer" $wsus }
+        if ($reachable) {
+            $why = Test-Wsus $wsus
+            if ($why) { & $add 'wsus_not_responding' 'block' "Server WSUS $wsus raggiungibile ma il servizio non risponde ($why)" "$pol\WUServer" $wsus }
+        }
+        # A WSUS server that answers but no longer works (database, sync,
+        # approvals): no successful search, or nothing installed, for weeks.
+        $res = Get-AutoUpdateResults
+        $now = (Get-Date).ToUniversalTime()
+        if ($res.LastSearchSuccessDate) {
+            $days = [int]($now - $res.LastSearchSuccessDate).TotalDays
+            if ($days -ge 14) { & $add 'wsus_stale' 'block' "Server WSUS $wsus configurato: nessuna ricerca di aggiornamenti riuscita da $days giorni" "$pol\WUServer" $wsus }
+        }
+        if ($res.LastInstallationSuccessDate) {
+            $days = [int]($now - $res.LastInstallationSuccessDate).TotalDays
+            if ($days -ge 60) { & $add 'wsus_no_installs' 'limit' "Server WSUS $wsus configurato: nessun aggiornamento installato da $days giorni (il server non approva più aggiornamenti?)" "$pol\WUServer" $wsus }
+        }
     }
     elseif ((Read-Reg $pol 'DoNotConnectToWindowsUpdateInternetLocations') -eq 1) {
         & $add 'no_internet_wu' 'block' 'Connessione a Windows Update su internet disattivata (DoNotConnectToWindowsUpdateInternetLocations) senza un server WSUS' "$pol\DoNotConnectToWindowsUpdateInternetLocations" 1
+    }
+    # Update servers redirected (often to 0.0.0.0) by "privacy" tools.
+    $hosts = Join-Path $env:SystemRoot 'System32\drivers\etc\hosts'
+    $redirected = @(Get-Content -Path $hosts -ErrorAction SilentlyContinue | ForEach-Object { ($_ -replace '#.*$', '').Trim() } |
+        Where-Object { $_ -match '(?i)(windowsupdate\.(com|microsoft\.com)|update\.microsoft\.com|delivery\.mp\.microsoft\.com|download\.microsoft\.com)\s*$' } |
+        ForEach-Object { ($_ -split '\s+')[-1] } | Select-Object -Unique -First 5)
+    if ($redirected.Count) {
+        & $add 'hosts' 'block' "Il file hosts reindirizza i server di Windows Update: $($redirected -join ', ')" $hosts ($redirected -join ', ')
     }
     if ((Read-Reg "$pol\AU" 'NoAutoUpdate') -eq 1) {
         & $add 'no_auto_update' 'info' 'Aggiornamenti automatici disattivati da policy (NoAutoUpdate): li installa open-rmm' "$pol\AU\NoAutoUpdate" 1
@@ -290,10 +378,12 @@ function Get-Blockers {
     if ((Read-Reg $pol 'ExcludeWUDriversInQualityUpdate') -eq 1) {
         & $add 'no_drivers' 'info' 'Driver esclusi dagli aggiornamenti di qualità da policy (ExcludeWUDriversInQualityUpdate)' "$pol\ExcludeWUDriversInQualityUpdate" 1
     }
-    foreach ($svc in 'wuauserv', 'bits', 'UsoSvc', 'TrustedInstaller', 'CryptSvc') {
+    # WaaSMedicSvc repairs Windows Update: without it updates still work.
+    foreach ($svc in 'wuauserv', 'bits', 'UsoSvc', 'TrustedInstaller', 'CryptSvc', 'WaaSMedicSvc') {
         $s = Get-CimInstance Win32_Service -Filter "Name='$svc'" -ErrorAction SilentlyContinue
         if ($s -and $s.StartMode -eq 'Disabled') {
-            & $add "service_$($svc.ToLowerInvariant())" 'block' "Servizio $svc disabilitato" "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\$svc\Start" 4
+            $sev = if ($svc -eq 'WaaSMedicSvc') { 'limit' } else { 'block' }
+            & $add "service_$($svc.ToLowerInvariant())" $sev "Servizio $svc disabilitato" "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\$svc\Start" 4
         }
     }
     $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction SilentlyContinue
@@ -405,6 +495,37 @@ function New-Report($Session, $Request, $Params) {
     }
 }
 
+# ---- repair ----
+
+# Invoke-Tool runs a console tool and keeps its meaningful lines (no
+# progress bars). SFC writes UTF-16.
+function Invoke-Tool([string]$Exe, [string[]]$Arguments, [Text.Encoding]$Encoding) {
+    $prev = [Console]::OutputEncoding
+    [Console]::OutputEncoding = $Encoding
+    try { $out = & $Exe @Arguments 2>&1 | ForEach-Object { ([string]$_ -replace "`0", '').Trim() } }
+    finally { [Console]::OutputEncoding = $prev }
+    $code = $LASTEXITCODE
+    $lines = @($out | Where-Object { $_ -and $_ -notmatch '^\[[ =.\d%]*\]?$' -and $_ -notmatch '^[\d.]+%$' })
+    @{ exit_code = ('0x{0:X8}' -f $code); ok = ($code -eq 0); output = (($lines | Select-Object -Last 8) -join "`n"); code = $code }
+}
+
+# Reset-WuComponents empties the Windows Update cache: the services are
+# stopped, SoftwareDistribution and catroot2 renamed (kept as .old).
+function Reset-WuComponents {
+    $svcs = 'wuauserv', 'bits', 'cryptsvc', 'UsoSvc'
+    foreach ($svc in $svcs) { Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue }
+    $stamp = (Get-Date).ToString('yyyyMMddHHmmss')
+    $renamed = @()
+    foreach ($dir in (Join-Path $env:SystemRoot 'SoftwareDistribution'), (Join-Path $env:SystemRoot 'System32\catroot2')) {
+        if (Test-Path $dir) {
+            Rename-Item -Path $dir -NewName "$(Split-Path $dir -Leaf).old-$stamp" -ErrorAction Stop
+            $renamed += $dir
+        }
+    }
+    foreach ($svc in $svcs) { Start-Service -Name $svc -ErrorAction SilentlyContinue }
+    @{ step = 'reset_components'; ok = $true; output = "renamed: $($renamed -join ', ') (.old-$stamp)" }
+}
+
 function New-Session {
     $s = New-Object -ComObject Microsoft.Update.Session
     $s.ClientApplicationID = 'open-rmm'
@@ -490,6 +611,42 @@ Invoke-RmmModule @{
             try { $report.diagnostics = Get-Diagnostics $Params $true } catch { Send-RmmLog "diagnostics: $($_.Exception.Message)" 'warn' }
         }
         $report
+    }
+    repair  = {
+        param($Params, $Request)
+        $steps = @()
+        if (Get-Prop $Params 'reset_components') {
+            Send-RmmProgress 5 'azzeramento della cache di Windows Update'
+            $steps += Reset-WuComponents
+        }
+        $dismArgs = @('/Online', '/Cleanup-Image', '/RestoreHealth', '/English')
+        $source = [string](Get-Prop $Params 'source')
+        if ($source) {
+            if ($source -match '["\r\n]' -or $source.Length -gt 260) { throw "invalid source: $source" }
+            $dismArgs += @("/Source:$source", '/LimitAccess')
+        }
+        Send-RmmProgress 15 'DISM /RestoreHealth (anche 30 minuti)'
+        $dism = Invoke-Tool (Join-Path $env:SystemRoot 'System32\dism.exe') $dismArgs ([Text.Encoding]::UTF8)
+        $steps += @{ step = 'dism_restorehealth'; ok = $dism.ok; exit_code = $dism.exit_code; output = $dism.output }
+        Send-RmmLog "DISM $($dism.exit_code): $($dism.output)" $(if ($dism.ok) { 'info' } else { 'warn' })
+        $sfcOk = $true
+        $runSfc = Get-Prop $Params 'sfc'
+        if ($null -eq $runSfc) { $runSfc = $true }
+        # SFC repairs the system files from the component store: only once
+        # the store is sound.
+        if ($dism.ok -and $runSfc) {
+            Send-RmmProgress 60 'sfc /scannow'
+            $sfc = Invoke-Tool (Join-Path $env:SystemRoot 'System32\sfc.exe') @('/scannow') ([Text.Encoding]::Unicode)
+            $steps += @{ step = 'sfc'; ok = $sfc.ok; exit_code = $sfc.exit_code; output = $sfc.output }
+            Send-RmmLog "SFC $($sfc.exit_code): $($sfc.output)" $(if ($sfc.ok) { 'info' } else { 'warn' })
+            $sfcOk = $sfc.ok
+        }
+        if (-not $dism.ok) {
+            # 0x800F081F: no source with the files; 0x800F0906: download refused.
+            throw "DISM /RestoreHealth failed ($($dism.exit_code)): $(($dism.output -split "`n")[-1]). With 0x800F081F give a source of the same build (WIM:D:\sources\install.wim:1) or repair Windows with an in-place upgrade"
+        }
+        @{ repaired_at = (Get-Date).ToUniversalTime().ToString('o'); steps = $steps; ok = ($dism.ok -and $sfcOk)
+            note = 'Restart the computer, then install the updates again' }
     }
     logs    = {
         param($Params, $Request)

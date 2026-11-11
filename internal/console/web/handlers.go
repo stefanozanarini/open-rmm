@@ -454,8 +454,8 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := s.lang(r)
 	for _, j := range jobs {
-		if d.Query != "" && !contains(strings.Join([]string{d.Hosts[j.AgentID], j.Module, j.Action, string(j.State),
-			labelText(lang, string(j.State)), j.CreatedBy}, " "), d.Query) {
+		if d.Query != "" && !contains(strings.Join([]string{d.Hosts[j.AgentID], j.Module, j.Action, jobState(j),
+			labelText(lang, jobState(j)), j.CreatedBy}, " "), d.Query) {
 			continue
 		}
 		d.Jobs = append(d.Jobs, j)

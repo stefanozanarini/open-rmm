@@ -100,6 +100,9 @@ func placeholders(q string) string {
 func TestBlockerMessages(t *testing.T) {
 	for it, en := range map[string]string{
 		`Versione di Windows bloccata in UpdatePolicy\PolicyState (TargetReleaseVersion = 22H2) senza una policy che la imposti: probabilmente un residuo da rimuovere`: `Windows version pinned in UpdatePolicy\PolicyState (TargetReleaseVersion = 22H2) with no policy setting it: probably a leftover to remove`,
+		"Aggiornamenti bloccati: Server WSUS http://w:8530 raggiungibile ma il servizio non risponde (HTTP 503)":                                                        "Updates blocked: WSUS server http://w:8530 reachable but the service does not answer (HTTP 503)",
+		"Server WSUS http://w:8530 configurato: nessuna ricerca di aggiornamenti riuscita da 40 giorni":                                                                 "WSUS server http://w:8530 configured: no successful update search for 40 days",
+		"Il file hosts reindirizza i server di Windows Update: update.microsoft.com":                                                                                    "The hosts file redirects the Windows Update servers: update.microsoft.com",
 		"Aggiornamenti bloccati: Servizio bits disabilitato; Server WSUS http://w:8530 non raggiungibile":                                                               "Updates blocked: Service bits disabled; WSUS server http://w:8530 unreachable",
 		"Poco spazio libero su C: (7 GB)": "Low free space on C: (7 GB)",
 	} {

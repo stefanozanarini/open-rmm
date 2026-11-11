@@ -21,6 +21,7 @@ a { color:var(--accent); }
 section.warn { background:var(--warn); border:1px solid #f5d48f; padding:4px 16px 16px; }
 .badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; background:var(--b-grey); }
 .badge.pending, .badge.queued, .badge.sent { background:var(--b-yellow); }
+.badge.partial { background:var(--b-yellow); color:var(--b-warnfg); }
 .badge.active, .badge.succeeded, .badge.online { background:var(--b-green); color:var(--ok); }
 .badge.revoked, .badge.failed, .badge.rejected, .badge.expired { background:var(--b-red); color:var(--danger); }
 .badge.running, .badge.accepted, .badge.downloading, .badge.staged { background:var(--b-blue); }

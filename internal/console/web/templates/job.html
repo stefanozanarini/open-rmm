@@ -1,7 +1,7 @@
 {{define "content"}}
 {{with .Data}}
 <dl class="facts">
-  <dt>{{t "Stato"}}</dt><dd><span class="badge {{.Job.State}}">{{label .Job.State}}</span>{{if .Job.Progress}} {{.Job.Progress}}%{{end}} {{.Job.Message}}</dd>
+  <dt>{{t "Stato"}}</dt><dd>{{$st := jobState .Job}}<span class="badge {{$st}}">{{label $st}}</span>{{if .Job.Progress}} {{.Job.Progress}}%{{end}} {{.Job.Message}}{{with jobFailures .Job}} <strong>{{tf "%d elementi non riusciti: vedi il risultato" .}}</strong>{{end}}</dd>
   <dt>{{t "Agente"}}</dt><dd><a href="/agents/{{.Job.AgentID}}">{{if .Agent.Host.Hostname}}{{.Agent.Host.Hostname}}{{else}}{{.Job.AgentID}}{{end}}</a></dd>
   <dt>{{t "Modulo"}}</dt><dd>{{.Job.Module}} {{.Job.ModuleVersion}} · {{.Job.Action}}</dd>
   <dt>{{t "Creato"}}</dt><dd>{{fmtTime .Job.CreatedAt}} {{tf "da %s" .Job.CreatedBy}}</dd>

@@ -130,6 +130,38 @@
       "default": false
     }
   ],
+  "repair": [
+    {
+      "name": "source",
+      "type": "string",
+      "label": {
+        "it": "Sorgente dei file (facoltativa)",
+        "en": "File source (optional)"
+      },
+      "help": {
+        "it": "Un'immagine della stessa build, es. WIM:D:\\sources\\install.wim:1 o una cartella condivisa. Vuota: i file vengono scaricati da Windows Update.",
+        "en": "An image of the same build, e.g. WIM:D:\\sources\\install.wim:1 or a shared folder. Empty: the files are downloaded from Windows Update."
+      }
+    },
+    {
+      "name": "sfc",
+      "type": "bool",
+      "label": {
+        "it": "Verifica anche i file di sistema (sfc /scannow)",
+        "en": "Also check the system files (sfc /scannow)"
+      },
+      "default": true
+    },
+    {
+      "name": "reset_components",
+      "type": "bool",
+      "label": {
+        "it": "Azzera prima la cache di Windows Update (SoftwareDistribution, catroot2)",
+        "en": "First reset the Windows Update cache (SoftwareDistribution, catroot2)"
+      },
+      "default": false
+    }
+  ],
   "logs": [
     {
       "name": "days",

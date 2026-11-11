@@ -57,8 +57,8 @@ func (s *Server) handleActiveJobs(w http.ResponseWriter, r *http.Request) {
 			}
 			hosts[j.AgentID] = host
 		}
-		d := dockJob{ID: j.ID, Host: host, Action: j.Module + " · " + j.Action, State: string(j.State),
-			Label: labelText(lang, string(j.State)), Final: final}
+		d := dockJob{ID: j.ID, Host: host, Action: j.Module + " · " + j.Action, State: jobState(j),
+			Label: labelText(lang, jobState(j)), Final: final}
 		if !final {
 			d.Progress, d.Message = j.Progress, j.Message
 		} else if j.State != store.JobSucceeded {

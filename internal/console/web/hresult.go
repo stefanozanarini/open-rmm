@@ -33,6 +33,7 @@ var hresultTexts = map[string]string{
 	"0x80070002": "file non trovato (cache di Windows Update da pulire)",
 	"0x80070003": "percorso non trovato (cache di Windows Update da pulire)",
 	"0x800F0988": "pulizia dei componenti necessaria: DISM /StartComponentCleanup",
+	"0x800F0983": "archivio dei componenti senza un file di base: riparalo (Ripara Windows Update)",
 }
 
 // hresultText explains a failed installation: the code when known, the

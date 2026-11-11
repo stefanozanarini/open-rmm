@@ -108,6 +108,7 @@
     <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
     <input type="hidden" name="module" value="winupdate"><input type="hidden" name="action" value="logs">
     <button title="{{t "Eventi di Windows Update ed errori di CBS.log degli ultimi 7 giorni"}}">📄 {{t "Raccogli i log di Windows Update"}}</button></form>{{end}}
+  {{if and $.CanRun $u.WinupdateVersion (eq $u.OSModule "winupdate")}}<a class="button" href="/agents/{{$.Data.Agent.ID}}#act-winupdate-repair" title="{{t "Ripara l'archivio dei componenti (DISM, SFC) per errori come 0x800f0983 o 0x80073712"}}">🛠 {{t "Ripara Windows Update…"}}</a>{{end}}
   {{with $u.LogsJob}}<a href="/jobs/{{.ID}}">{{tf "log raccolti il %s" (fmtTime .CreatedAt)}}</a>{{if not .State.Final}} <span class="muted">({{label .State}})</span>{{end}}{{end}}
   <form method="get" action="{{if $.Data.Panel}}/agents{{else}}/agents/{{$.Data.Agent.ID}}{{end}}" class="inline">
     {{if $.Data.Panel}}<input type="hidden" name="agent" value="{{$.Data.Agent.ID}}"><input type="hidden" name="tab" value="patches">{{end}}
