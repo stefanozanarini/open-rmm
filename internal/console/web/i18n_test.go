@@ -100,6 +100,9 @@ func usedKeys(t *testing.T) map[string]bool {
 	for _, l := range dayNames {
 		keys[l] = keys[l] || false
 	}
+	for _, c := range invColumns {
+		keys[c.Label] = keys[c.Label] || false
+	}
 	for _, l := range helpTexts {
 		keys[l] = keys[l] || false
 	}

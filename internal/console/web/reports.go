@@ -36,6 +36,9 @@ type reportsData struct {
 	Sites                                          []store.Site
 	Searched                                       bool
 	Rows                                           []reportRow
+	// Columns: the inventory columns chosen (?col=), Choices all of them.
+	Columns []invColumn
+	Choices []columnChoice
 	// Upgrades: the applications matching the software filter that winget
 	// can upgrade on some of the computers found, with the action prepared
 	// for them.
@@ -58,6 +61,7 @@ type reportRow struct {
 	Model    string
 	User     string
 	Software []inventory.Software // installed applications that matched
+	Extra    []string             // values of the chosen columns
 	Seen     time.Time            // inventory date
 }
 
@@ -115,6 +119,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	default:
 		d.Tab = "dashboard"
 	}
+	d.Columns, d.Choices = selectedColumns(q["col"])
 	csvOut := q.Get("format") == "csv"
 	qq := q
 	qq.Del("format")
@@ -242,6 +247,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
+		row.Extra = columnValues(s.lang(r), d.Columns, a, inv)
 		d.Rows = append(d.Rows, row)
 	}
 	sort.Slice(d.Rows, func(i, j int) bool {
@@ -271,21 +277,27 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 				}
 			})
 		default:
-			s.writeCSV(w, "computers.csv", []string{"computer", "site", "operating_system", "model", "user", "software", "version", "inventory"},
-				func(add func(...string)) {
-					for _, row := range d.Rows {
-						seen := ""
-						if !row.Seen.IsZero() {
-							seen = row.Seen.UTC().Format(time.RFC3339)
-						}
-						if len(row.Software) == 0 {
-							add(row.Agent.Host.Hostname, row.Site, row.OS, row.Model, row.User, "", "", seen)
-						}
-						for _, sw := range row.Software {
-							add(row.Agent.Host.Hostname, row.Site, row.OS, row.Model, row.User, sw.Name, sw.Version, seen)
-						}
+			header := []string{"computer", "site", "operating_system", "model", "user", "software", "version", "inventory"}
+			for _, c := range d.Columns {
+				header = append(header, c.Key)
+			}
+			s.writeCSV(w, "inventory.csv", header, func(add func(...string)) {
+				for _, row := range d.Rows {
+					seen := ""
+					if !row.Seen.IsZero() {
+						seen = row.Seen.UTC().Format(time.RFC3339)
 					}
-				})
+					line := func(name, version string) {
+						add(append([]string{row.Agent.Host.Hostname, row.Site, row.OS, row.Model, row.User, name, version, seen}, row.Extra...)...)
+					}
+					if len(row.Software) == 0 {
+						line("", "")
+					}
+					for _, sw := range row.Software {
+						line(sw.Name, sw.Version)
+					}
+				}
+			})
 		}
 		return
 	}

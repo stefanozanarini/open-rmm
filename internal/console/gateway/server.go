@@ -62,6 +62,7 @@ type Server struct {
 
 	store     store.Store
 	ca        *pki.CA
+	releases  releaseFiles
 	log       *slog.Logger
 	heartbeat time.Duration
 	enrollLim *ipLimiter

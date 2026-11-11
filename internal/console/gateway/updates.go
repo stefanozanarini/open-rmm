@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,6 +16,75 @@ import (
 )
 
 const releaseChunkSize = 512 << 10
+
+const (
+	// releaseConcurrent bounds the release downloads served at once: when
+	// a ring is promoted every agent asks within minutes, and the core's
+	// memory is small.
+	releaseConcurrent = 16
+	// releaseQueue is how long a download waits for its turn; after it the
+	// agent retries at its next update check.
+	releaseQueue = 2 * time.Minute
+)
+
+// releaseFiles keeps one copy of each release file in memory, shared by
+// the downloads (a published release never changes).
+type releaseFiles struct {
+	mu    sync.Mutex
+	files map[string][]byte
+	slots chan struct{}
+}
+
+func (rf *releaseFiles) init() {
+	if rf.files == nil {
+		rf.files, rf.slots = map[string][]byte{}, make(chan struct{}, releaseConcurrent)
+	}
+}
+
+// get returns a file, loading it once. Files of other versions are
+// dropped: only the targeted releases are asked for.
+func (rf *releaseFiles) get(version, platform, name string, load func() ([]byte, error)) ([]byte, error) {
+	key := version + "|" + platform + "|" + name
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	rf.init()
+	if b, ok := rf.files[key]; ok {
+		return b, nil
+	}
+	b, err := load()
+	if err != nil {
+		return nil, err
+	}
+	if len(rf.files) >= 8 {
+		for k := range rf.files {
+			if !strings.HasPrefix(k, version+"|") {
+				delete(rf.files, k)
+			}
+		}
+	}
+	rf.files[key] = b
+	return b, nil
+}
+
+// acquire waits for a download slot.
+func (rf *releaseFiles) acquire(ctx context.Context) bool {
+	rf.mu.Lock()
+	rf.init()
+	slots := rf.slots
+	rf.mu.Unlock()
+	t := time.NewTimer(releaseQueue)
+	defer t.Stop()
+	select {
+	case slots <- struct{}{}:
+		return true
+	case <-t.C:
+		return false
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (rf *releaseFiles) release() { <-rf.slots }
 
 func platformOf(a store.Agent) string { return a.Host.OS + "/" + a.Host.Arch }
 
@@ -99,9 +170,15 @@ func (s *Server) GetAgentRelease(req *openrmmv1.GetAgentReleaseRequest, stream o
 	if !ok || r.Version != req.GetVersion() || r.Platform != req.GetPlatform() {
 		return status.Error(codes.PermissionDenied, "release not targeted for this agent")
 	}
+	if !s.releases.acquire(ctx) {
+		return status.Error(codes.ResourceExhausted, "too many downloads at once, retry later")
+	}
+	defer s.releases.release()
 	goos, _, _ := strings.Cut(r.Platform, "/")
 	for _, name := range []string{release.AgentFile(goos), release.WatchdogFile(goos)} {
-		data, err := s.store.GetReleaseFile(ctx, r.Version, r.Platform, name)
+		data, err := s.releases.get(r.Version, r.Platform, name, func() ([]byte, error) {
+			return s.store.GetReleaseFile(ctx, r.Version, r.Platform, name)
+		})
 		if err != nil {
 			s.log.Error("release file", "file", name, "err", err)
 			return status.Error(codes.Unavailable, "temporarily unavailable")

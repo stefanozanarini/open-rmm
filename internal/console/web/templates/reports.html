@@ -2,7 +2,7 @@
 {{with .Data}}
 <nav class="tabs" aria-label="{{t "Report"}}">
   <a href="/reports" {{if eq .Tab "dashboard"}}class="current"{{end}}>Dashboard</a>
-  <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Computer"}}</a>
+  <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Inventario"}}</a>
   <a href="/reports{{qs "tab" "os"}}" {{if eq .Tab "os"}}class="current"{{end}}>{{t "Sistemi operativi"}}</a>
   <a href="/reports{{qs "tab" "logons"}}" {{if eq .Tab "logons"}}class="current"{{end}}>{{t "Accessi"}}</a>
   <a href="/reports{{qs "tab" "cve"}}" {{if eq .Tab "cve"}}class="current"{{end}}>{{t "Vulnerabilità"}}</a>{{if eq .Tab "cve"}}{{help "section:cve"}}{{end}}
@@ -96,7 +96,7 @@
 {{end}}{{end}}
 
 {{if eq .Tab "computers"}}
-<p class="muted">{{t "Trova i computer per software installato, sistema operativo, utente, modello o sede, dai dati dell'ultimo inventario. I filtri si combinano; ogni campo cerca il testo contenuto, senza distinguere maiuscole e minuscole."}}</p>
+<p class="muted">{{t "Trova i computer per software installato, sistema operativo, utente, modello o sede, dai dati dell'ultimo inventario. I filtri si combinano; ogni campo cerca il testo contenuto, senza distinguere maiuscole e minuscole. Puoi aggiungere colonne dall'inventario ed esportare il risultato in CSV."}}</p>
 <form method="get" action="/reports" class="stack">
   <input type="hidden" name="tab" value="computers">
   <div class="grid2">
@@ -109,6 +109,10 @@
       {{range .Sites}}<option value="{{.ID}}"{{if eq $.Data.Site .ID}} selected{{end}}>{{.Name}}</option>{{end}}
       <option value="none"{{if eq .Site "none"}} selected{{end}}>{{t "Senza sede"}}</option></select></label>
   </div>
+  <details class="columns"{{if .Columns}} open{{end}}>
+    <summary>{{t "Colonne aggiuntive dall'inventario"}}{{with .Columns}} <span class="muted">({{len .}})</span>{{end}}</summary>
+    <div class="column-choices">{{range .Choices}}<label class="inline-check"><input type="checkbox" name="col" value="{{.Key}}"{{if .Selected}} checked{{end}}> {{t .Label}}</label>{{end}}</div>
+  </details>
   <div class="actions"><button class="primary">{{t "Cerca"}}</button> <a href="/reports{{qs "tab" "computers" "all" "1"}}">{{t "tutti i computer"}}</a></div>
 </form>
 {{if .Searched}}
@@ -118,12 +122,13 @@
   <p class="muted small">{{t "Apre l'azione già preparata: la controlli e la approvi con MFA una sola volta. Non sono inclusi i computer dove winget non vede l'applicazione (installata nel profilo dell'utente o winget assente)."}}</p></div>{{end}}
 {{if .Rows}}
 <table>
-<thead><tr><th>{{t "Computer"}}</th><th>{{t "Sede"}}</th><th>{{t "Sistema operativo"}}</th><th>{{t "Modello"}}</th><th>{{t "Utente"}}</th>{{if or .Software .Version}}<th>{{t "Software"}}</th>{{end}}<th>{{t "Inventario"}}</th></tr></thead>
+<thead><tr><th>{{t "Computer"}}</th><th>{{t "Sede"}}</th><th>{{t "Sistema operativo"}}</th><th>{{t "Modello"}}</th><th>{{t "Utente"}}</th>{{if or .Software .Version}}<th>{{t "Software"}}</th>{{end}}{{range .Columns}}<th>{{t .Label}}</th>{{end}}<th>{{t "Inventario"}}</th></tr></thead>
 <tbody>
 {{range .Rows}}<tr>
   <td><a href="/agents/{{.Agent.ID}}">{{.Agent.Host.Hostname}}</a>{{if eq .Agent.Status "pending"}} <span class="badge pending">{{label .Agent.Status}}</span>{{end}}</td>
   <td>{{.Site}}</td><td>{{.OS}}</td><td>{{.Model}}</td><td>{{.User}}</td>
   {{if or $.Data.Software $.Data.Version}}<td>{{range .Software}}{{.Name}} <span class="muted">{{.Version}}</span><br>{{end}}</td>{{end}}
+  {{range .Extra}}<td>{{.}}</td>{{end}}
   <td>{{if .Seen.IsZero}}<span class="muted">{{t "non ancora ricevuto"}}</span>{{else}}{{fmtTime .Seen}}{{end}}</td>
 </tr>{{end}}
 </tbody>
