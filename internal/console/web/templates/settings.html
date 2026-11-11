@@ -9,6 +9,14 @@
   <button class="primary">{{t "Salva"}}</button>
 </form>
 
+<h2 id="files">{{t "Trasferimento file"}}</h2>
+<p class="muted">{{t "Dimensione massima di un file scaricato o caricato con la gestione dei file. Vale per le sessioni aperte da ora in poi: il limite è scritto nel comando firmato e l'agente lo applica."}}</p>
+<form method="post" action="/settings/files" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>{{t "Limite per file (MB)"}} <input type="number" name="file_max_mb" min="1" max="{{.Data.FileMaxCap}}" value="{{.Data.FileMaxMB}}" {{if not .IsAdmin}}disabled{{end}}></label>
+  {{if .IsAdmin}}<button class="primary">{{t "Salva"}}</button>{{end}}
+</form>
+
 <h2 id="logo">{{t "Logo aziendale"}}</h2>
 <p class="muted">{{t "Compare in alto a destra in tutte le pagine di questo tenant. PNG, JPEG o WebP, al massimo 256 KB; meglio con sfondo trasparente e alto circa 40 pixel."}}</p>
 {{if .HasLogo}}<p><img class="logo-preview" src="/logo" alt="{{t "Logo aziendale"}}"></p>{{end}}

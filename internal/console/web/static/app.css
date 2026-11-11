@@ -241,3 +241,13 @@ fieldset.policy-action fieldset.window { border:1px solid var(--line); border-ra
 .jobdock ul { list-style:none; margin:6px 0 0; padding:0; }
 .jobdock li { padding:6px 0; border-top:1px solid var(--line); }
 .jobdock progress { display:block; width:100%; height:6px; margin-top:4px; }
+
+/* File manager */
+.files .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:8px; }
+.files input.wide { width:min(560px, 100%); }
+.files .inline-check { white-space:nowrap; }
+.files-table td:nth-child(2), .files-table td:nth-child(3) { white-space:nowrap; }
+.files-table button.link, .files-table a { margin-right:8px; }
+.files #fs-roots button { margin-left:4px; }
+ul.plain { list-style:none; padding:0; }
+.files-close { margin-top:24px; }

@@ -343,6 +343,15 @@
 </form>
 <p class="muted">{{t "Una sessione PowerShell su questo PC, approvata con MFA. Il PC deve consentirla con la policy locale (GPO) e ogni riga digitata è registrata."}}</p>
 {{end}}
+{{if and .CanRun .Data.Files (eq .Data.Agent.Status "active")}}
+<h2 id="act-files">{{t "File"}}</h2>
+<form method="post" action="/agents/{{.Data.Agent.ID}}/files" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>{{t "Durata"}} <select name="minutes"><option value="30">30 min</option><option value="60" selected>60 min</option><option value="120">120 min</option><option value="240">240 min</option></select></label>
+  <button class="primary">📁 {{t "Apri la gestione dei file"}}</button>
+</form>
+<p class="muted">{{t "Sfoglia le cartelle del PC, scarica e carica file, in una sessione approvata con MFA. Ogni file scaricato o caricato è registrato; le cartelle dell'agente non sono accessibili."}}</p>
+{{end}}
 {{if and .CanRun .Data.Packages (eq .Data.Agent.Status "active")}}
 <h2 id="install-software">{{t "Installa software"}}</h2>
 <form method="post" action="/agents/bulk" class="inline">

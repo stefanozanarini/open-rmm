@@ -425,6 +425,16 @@ A PowerShell session (bash on Linux) on one endpoint, in a terminal in the brows
 - **Audit**: session attached and detached, and **every line typed** (`shell.input`, rebuilt from the keystrokes) in the console's audit log; the job result records duration, bytes and how the session ended. Output is not recorded.
 - **Federation**: works from a central console too; the WebSocket is relayed over the link, the customer console audits the central operator.
 
+### 8.12 File management (`files`) ✅
+
+Browse the folders of one or more endpoints, download and upload files, from the browser (agent 1.1.0 or later).
+
+- **One MFA approval per session**, on one agent or on several at once (one signed job each), for N minutes (default 60, at most 240). Always available: no local opt-in (decision of 2026-11-11), unlike the shell. Policies can never schedule it and only the approving operator can use the session.
+- **The agent serves it itself** (`internal/filesession`), no module code runs: the `files` module only carries the `file_session` capability. The agent's own folders (configuration, keys, state, programs) are refused, also through links; uploads go to a temporary file next to the target and are put in place only when size and SHA-256 match; an existing file is replaced only on request.
+- **Limit per file**: set by the administrator (Settings → File transfer, default 1 GB, at most 16 GB), written in the signed job (`max_bytes`) and enforced by the agent.
+- **Path**: the same stream as the shell (agent → relay → core → broker → web console); inside it, JSON control messages and binary chunks of 256 KB. The console asks, the agent answers; downloads are paced by credits (16 chunks in flight), so nothing is dropped by the gateway. The web console holds one connection per session and serves plain HTTP requests: folder listings, downloads streamed to the browser, uploads read once and passed to every selected agent at the same time (nothing is stored on the console), the same path from several agents as a zip with a folder per computer.
+- **Audit**: every download (also in a zip), upload and new folder with agent, path, size and SHA-256; the job result records counts and bytes.
+
 ### 8.10 Further proposed plugins 📋
 
 | Priority | Plugin | Purpose |

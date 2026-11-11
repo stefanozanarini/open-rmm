@@ -231,6 +231,10 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 		s.fail(w, r, errors.New("signer returned no jobs"))
 		return
 	}
+	if s.isFileModule(r.Context(), req.GetModule(), req.GetModuleVersion()) {
+		http.Redirect(w, r, filesURL(created), http.StatusSeeOther)
+		return
+	}
 	if len(created) == 1 && s.isShellModule(r.Context(), req.GetModule(), req.GetModuleVersion()) {
 		http.Redirect(w, r, "/shell/"+created[0], http.StatusSeeOther)
 		return

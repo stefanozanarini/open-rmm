@@ -1,0 +1,16 @@
+{
+  "id": "files",
+  "version": "1.0.0",
+  "description": "Interactive file session: browse folders, download and upload files, for one MFA-approved session. Served by the agent itself (1.1.0 or later); the agent's own folders are out of reach.",
+  "protocol_version": 1,
+  "capabilities": ["file_session"],
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Files.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Files.ps1" },
+    "linux/amd64": { "type": "sh", "path": "files.sh" },
+    "linux/arm64": { "type": "sh", "path": "files.sh" }
+  },
+  "actions": {
+    "open": { "description": "Open a file session (params: minutes, at most 240; max_bytes per file)", "timeout_seconds": 14400 }
+  }
+}

@@ -101,7 +101,7 @@ func (s *Server) latestPolicyModules(ctx context.Context) ([]store.Module, map[s
 	mans := map[string]*modules.Manifest{}
 	for _, m := range best {
 		man, err := modules.ParseManifest(m.Manifest)
-		if err != nil || man.HasCapability(modules.CapAdHocScript) || man.HasCapability(modules.CapInteractiveShell) {
+		if err != nil || man.HasCapability(modules.CapAdHocScript) || man.Interactive() {
 			continue
 		}
 		out = append(out, m)

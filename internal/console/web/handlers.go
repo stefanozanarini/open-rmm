@@ -80,6 +80,7 @@ type agentData struct {
 	AD       *adPlace // computer object in Active Directory
 	Site     agentSite
 	Shell    bool // an interactive shell can be opened
+	Files    bool // a file session can be opened
 	// Packages of the library, to install from the agent page.
 	Packages []store.Package
 	// ADReader: this agent reads Active Directory every 24 hours.
@@ -172,6 +173,9 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 	}
 	if s.shell != nil && a.Status == store.AgentActive {
 		_, d.Shell = s.shellModuleFor(r, a)
+		if _, man, ok := s.fileModule(r); ok && s.shell != nil {
+			_, d.Files = man.Entrypoints[a.Host.OS+"/"+a.Host.Arch]
+		}
 	}
 	d.Outdated = map[string]string{}
 	if d.Inv != nil {
@@ -227,8 +231,8 @@ func (s *Server) runnableOn(r *http.Request, a store.Agent) ([]runnable, error) 
 		if err != nil {
 			continue
 		}
-		if _, ok := man.Entrypoints[platform]; !ok || man.HasCapability(modules.CapInteractiveShell) {
-			continue // shells open from their own button, one agent at a time
+		if _, ok := man.Entrypoints[platform]; !ok || man.Interactive() {
+			continue // shells and file sessions open from their own buttons
 		}
 		if man.ID == softwareModule {
 			continue // installs and removals have their own forms (package, installed application)
@@ -381,7 +385,7 @@ func (s *Server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if _, ok := man.Actions[action]; !ok || man.HasCapability(modules.CapInteractiveShell) {
+	if _, ok := man.Actions[action]; !ok || man.Interactive() {
 		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}

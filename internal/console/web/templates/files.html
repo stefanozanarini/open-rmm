@@ -1,0 +1,47 @@
+{{define "content"}}
+{{with .Data}}
+<div id="files" class="files" data-csrf="{{$.CSRF}}" data-max="{{.MaxBytes}}"
+  data-waiting="{{t "In attesa che l'agente apra la sessione…"}}" data-loading="{{t "Caricamento…"}}"
+  data-empty="{{t "Cartella vuota."}}" data-truncated="{{t "Elenco troncato: la cartella contiene troppi elementi."}}"
+  data-download="{{t "Scarica"}}" data-zip="{{t "da tutti (zip)"}}" data-folder="{{t "cartella"}}"
+  data-too-big="{{t "Il file supera il limite per file."}}" data-uploading="{{t "Caricamento in corso…"}}"
+  data-done="{{t "caricato"}}" data-failed="{{t "non riuscito"}}" data-no-target="{{t "Seleziona almeno un computer."}}">
+<p class="muted">{{tf "Limite per file: %s. Ogni file scaricato o caricato è registrato. Le cartelle dell'agente non sono accessibili." .Max}}</p>
+<div class="toolbar">
+  <label>{{t "Sfoglia"}} <select id="fs-browse">{{range .Sessions}}<option value="{{.Job.ID}}">{{.Agent.Host.Hostname}}</option>{{end}}</select></label>
+  {{if gt (len .Sessions) 1}}<span>{{t "Applica a:"}} {{range .Sessions}}<label class="inline-check"><input type="checkbox" class="fs-target" value="{{.Job.ID}}" checked> {{.Agent.Host.Hostname}}</label> {{end}}</span>
+  {{else}}{{range .Sessions}}<input type="checkbox" class="fs-target" value="{{.Job.ID}}" checked hidden>{{end}}{{end}}
+</div>
+<form id="fs-go" class="inline">
+  <button type="button" id="fs-up" title="{{t "Cartella superiore"}}">↑</button>
+  <input id="fs-path" spellcheck="false" aria-label="{{t "Percorso"}}" class="wide">
+  <button>{{t "Vai"}}</button>
+  <span id="fs-roots"></span>
+</form>
+<p id="fs-status" class="muted" role="status"></p>
+<table id="fs-table" class="files-table">
+<thead><tr><th>{{t "Nome"}}</th><th>{{t "Dimensione"}}</th><th>{{t "Modificato"}}</th><th></th></tr></thead>
+<tbody></tbody>
+</table>
+<h2>{{t "Carica in questa cartella"}}</h2>
+<form id="fs-upload" class="inline">
+  <input type="file" id="fs-file" required aria-label="{{t "File"}}">
+  <label class="inline-check"><input type="checkbox" id="fs-overwrite"> {{t "sovrascrivi se esiste"}}</label>
+  <button class="primary">{{t "Carica"}}</button>
+  <progress id="fs-progress" max="100" value="0" hidden></progress>
+</form>
+<ul id="fs-results" class="plain"></ul>
+<h2>{{t "Nuova cartella"}}</h2>
+<form id="fs-mkdir" class="inline">
+  <input id="fs-dirname" required aria-label="{{t "Nome della cartella"}}" placeholder="{{t "Nome della cartella"}}">
+  <button>{{t "Crea"}}</button>
+</form>
+</div>
+<form method="post" action="/files/close" class="inline files-close">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Sessions}}<input type="hidden" name="job" value="{{.Job.ID}}">{{end}}
+  <button class="danger">{{t "Chiudi la sessione"}}</button>
+</form>
+{{end}}
+<script src="/static/files.js" defer></script>
+{{end}}

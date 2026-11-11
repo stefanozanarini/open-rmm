@@ -175,7 +175,7 @@ func (p *Postgres) UpdateJob(ctx context.Context, tenantID, agentID, jobID strin
 		if u.State.Final() {
 			finished = &at
 			if len(u.Result) > 0 {
-				r := string(u.Result)
+				r := jsonbText(u.Result)
 				result = &r
 			}
 		}

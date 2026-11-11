@@ -6,7 +6,8 @@
 #
 #   { "expect": ["sep"],                      # failing when not installed
 #     "products": ["sep", "basecamp"],        # report only these
-#     "definitions": { "ztsa": { "services": ["MyService"], "required": ["MyService"] } } }
+#     "definitions": { "ztsa": { "services": ["MyService"], "required": ["MyService"],
+#                                "severity": "warning" } } }   # failing (default) | warning
 #
 # A required entry may list alternatives, "A|B": one of them must run
 # (service names changed between versions).
@@ -35,10 +36,12 @@ $catalog = [ordered]@{
     }
     ztsa     = @{
         name      = 'Trend Vision One Zero Trust Secure Access'
-        # 2.40: SWGMonitorService (ZTSA\ZTSAMonitorService.exe) and the
-        # network filter tm_netsrv.
-        services  = @('SWGMonitorService', 'tm_netsrv', 'TMSAM', 'TmSecureAccess', 'ZTSA')
+        # 2.40: SWGMonitorService (ZTSA\ZTSAMonitorService.exe). The network
+        # filter tm_netsrv is not listed: other Trend agents install it too.
+        services  = @('SWGMonitorService', 'TMSAM', 'TmSecureAccess', 'ZTSA')
         required  = @('SWGMonitorService|TMSAM|TmSecureAccess|ZTSA')
+        # Not essential: a stopped service is a warning, not a failure.
+        severity  = 'warning'
         uninstall = 'Secure Access Module|Zero Trust Secure Access'
     }
 }
@@ -99,7 +102,7 @@ Invoke-RmmModule @{
             if ($only.Count -gt 0 -and $only -notcontains $id) { continue }
             $def = $catalog[$id].Clone()
             $o = Get-Prop $overrides $id
-            foreach ($f in 'name', 'services', 'required', 'uninstall') {
+            foreach ($f in 'name', 'services', 'required', 'uninstall', 'severity') {
                 $v = Get-Prop $o $f
                 if ($null -ne $v) { $def[$f] = $v }
             }
@@ -133,7 +136,8 @@ Invoke-RmmModule @{
             }
             $label = "$($def.name) $($product.version)".Trim()
             if ($problems.Count -gt 0) {
-                $checks += @{ id = $id; status = 'failing'; summary = "${label}: $($problems -join ', ')" }
+                $sev = if ($def.severity -eq 'warning') { 'warning' } else { 'failing' }
+                $checks += @{ id = $id; status = $sev; summary = "${label}: $($problems -join ', ')" }
             }
             elseif (@($def.required).Count -eq 0 -and -not ($services | Where-Object { $_.running })) {
                 $checks += @{ id = $id; status = 'warning'; summary = "${label}: installato, nessun servizio noto in esecuzione (verificare i nomi dei servizi)" }

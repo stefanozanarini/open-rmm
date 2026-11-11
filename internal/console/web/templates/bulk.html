@@ -23,6 +23,16 @@
   <button>{{t "Salva"}}</button>
 </form>
 {{end}}
+{{if and $.CanRun .Files}}
+<h2>{{t "File"}}</h2>
+<form method="post" action="/files/open" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <label>{{t "Durata"}} <select name="minutes"><option value="30">30 min</option><option value="60" selected>60 min</option><option value="120">120 min</option><option value="240">240 min</option></select></label>
+  <button>📁 {{t "Apri la gestione dei file su questi computer"}}</button>
+</form>
+<p class="muted">{{t "Una sola approvazione MFA apre una sessione su ogni computer: carichi un file nella stessa cartella di tutti, o scarichi lo stesso file da tutti in uno zip."}}</p>
+{{end}}
 {{if .Commands}}
 {{with .For}}<p><span class="badge chk-warning">{{.}}</span> {{t "Azione preparata per correggere questa vulnerabilità: controlla agenti e parametri, poi approva."}}</p>{{end}}
 <details class="group" id="commands"{{if .Preset}} open{{end}}>

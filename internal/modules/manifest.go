@@ -35,6 +35,9 @@ const (
 	// CapInteractiveShell: the agent opens an interactive shell for the
 	// job; the module only provides the session's startup script.
 	CapInteractiveShell = "interactive_shell"
+	// CapFileSession: the agent serves an interactive file session (browse,
+	// download, upload) for the job; the module carries no code for it.
+	CapFileSession = "file_session"
 )
 
 // Execution contexts.
@@ -117,6 +120,12 @@ func (m *Manifest) HasCapability(c string) bool {
 	return false
 }
 
+// Interactive tells whether the module opens a session an operator works
+// in (shell, files): never a generic command nor a policy rule.
+func (m *Manifest) Interactive() bool {
+	return m.HasCapability(CapInteractiveShell) || m.HasCapability(CapFileSession)
+}
+
 // Validate checks the static parts of a manifest. complete requires the
 // fields filled in by Pack.
 func (m *Manifest) Validate(complete bool) error {
@@ -165,7 +174,7 @@ func (m *Manifest) Validate(complete bool) error {
 		}
 	}
 	for _, c := range m.Capabilities {
-		if c != CapAdHocScript && c != CapInteractiveShell {
+		if c != CapAdHocScript && c != CapInteractiveShell && c != CapFileSession {
 			return fmt.Errorf("unknown capability %q", c)
 		}
 	}

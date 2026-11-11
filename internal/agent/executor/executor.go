@@ -357,6 +357,16 @@ func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
 		log.Warn("ad-hoc script refused by local policy")
 		return reject(job, "ad-hoc scripts are disabled by local policy on this endpoint")
 	}
+	if m.HasCapability(modules.CapFileSession) {
+		if quiet {
+			return reject(job, "file sessions cannot be scheduled by policies")
+		}
+		if err := modules.VerifyFiles(m, inst.FilesDir); err != nil {
+			return reject(job, "module integrity check failed: %v", err)
+		}
+		send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_ACCEPTED})
+		return e.runFiles(job, send, log)
+	}
 	if m.HasCapability(modules.CapInteractiveShell) {
 		if quiet {
 			return reject(job, "interactive shells cannot be scheduled by policies")

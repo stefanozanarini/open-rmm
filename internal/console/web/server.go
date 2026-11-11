@@ -99,6 +99,7 @@ type Server struct {
 	fedVerifier  *authn.Verifier
 	uplink       *federation.Uplink
 	shell        openrmmv1.ShellBrokerServiceClient
+	files        fileHub
 	builder      openrmmv1.BuilderServiceClient
 	agentInstall AgentInstall
 	bundle       AgentBundle
@@ -315,6 +316,15 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /agents/{id}/firmware-tool", s.role(authn.RoleOperator, s.handleFirmwareTool))
 	mux.Handle("POST /agents/{id}/shell", s.role(authn.RoleOperator, s.handleOpenShell))
 	mux.Handle("GET /shell/{id}", s.role(authn.RoleOperator, s.handleShellPage))
+	mux.Handle("POST /agents/{id}/files", s.role(authn.RoleOperator, s.handleOpenFiles))
+	mux.Handle("POST /files/open", s.role(authn.RoleOperator, s.handleOpenFiles))
+	mux.Handle("GET /files", s.role(authn.RoleOperator, s.handleFilesPage))
+	mux.Handle("GET /files/zip", s.role(authn.RoleOperator, s.handleFilesZip))
+	mux.Handle("POST "+filesUploadPath, s.role(authn.RoleOperator, s.handleFilesUpload))
+	mux.Handle("POST /files/close", s.role(authn.RoleOperator, s.handleFilesClose))
+	mux.Handle("GET /files/{id}/list", s.role(authn.RoleOperator, s.handleFilesList))
+	mux.Handle("GET /files/{id}/download", s.role(authn.RoleOperator, s.handleFilesDownload))
+	mux.Handle("POST /files/{id}/mkdir", s.role(authn.RoleOperator, s.handleFilesMkdir))
 	mux.Handle("GET /shell/{id}/ws", s.role(authn.RoleOperator, s.handleShellSocket))
 	mux.Handle("GET /jobs", s.auth(s.handleJobs))
 	mux.Handle("GET /jobs/active.json", s.auth(s.handleActiveJobs))
@@ -357,6 +367,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /alerts/{id}/ack", s.role(authn.RoleOperator, s.handleAckAlert))
 	mux.Handle("GET /settings", s.role(authn.RoleAdmin, s.handleSettings))
 	mux.Handle("POST /settings", s.role(authn.RoleAdmin, s.handleSaveSettings))
+	mux.Handle("POST /settings/files", s.role(authn.RoleAdmin, s.handleSaveFileLimit))
 	mux.Handle("POST /settings/logo", s.role(authn.RoleAdmin, s.handleLogoUpload))
 	mux.Handle("GET /logo", s.auth(s.handleLogo))
 	mux.Handle("GET /policies", s.auth(s.handlePolicies))
@@ -395,7 +406,8 @@ func (s *Server) Handler() http.Handler {
 // secure sets the security headers on every response.
 func (s *Server) secure(next http.Handler) http.Handler {
 	// Scripts only from the console's own static files, never inline.
-	csp := "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; form-action 'self' " + s.idpHost +
+	// connect-src: app.js polls /jobs/active.json for the job dock.
+	csp := "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self' " + s.idpHost +
 		"; frame-ancestors 'none'; base-uri 'none'"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()

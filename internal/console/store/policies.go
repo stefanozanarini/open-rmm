@@ -220,7 +220,7 @@ func (p *Postgres) PutPolicyResult(ctx context.Context, r PolicyResult) error {
 	err := p.inTenant(ctx, r.TenantID, func(tx pgx.Tx) error {
 		var result *string
 		if len(r.Result) > 0 {
-			s := string(r.Result)
+			s := jsonbText(r.Result)
 			result = &s
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO policy_results (tenant_id, agent_id, policy_id, rule_id, policy_version,

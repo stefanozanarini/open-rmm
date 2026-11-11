@@ -1,6 +1,6 @@
 {
   "id": "trendmicro",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Status of the Trend Micro agents: Standard Endpoint Protection, Server & Workload Protection, Vision One endpoint sensor, Zero Trust Secure Access.",
   "protocol_version": 1,
   "entrypoints": {

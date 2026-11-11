@@ -84,8 +84,8 @@ func (h *shellHub) wait(ctx context.Context, job string) *shellSession {
 }
 
 // Shell is the agent side of an interactive session: allowed only for an
-// unfinished job of this agent whose module has the interactive_shell
-// capability.
+// unfinished job of this agent whose module has the interactive_shell (or
+// file_session) capability.
 func (s *Server) Shell(stream openrmmv1.AgentService_ShellServer) error {
 	ctx := stream.Context()
 	c, ok := callerFromContext(ctx)
@@ -160,7 +160,7 @@ func (s *Server) isShellModule(ctx context.Context, j store.Job) bool {
 		return false
 	}
 	man, err := modules.ParseManifest(mod.Manifest)
-	return err == nil && man.HasCapability(modules.CapInteractiveShell)
+	return err == nil && man.Interactive()
 }
 
 // ShellBroker serves the web console's side of the sessions (Unix socket

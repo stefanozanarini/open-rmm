@@ -37,6 +37,8 @@ type Settings struct {
 	// PilotManual turns off the default: every newly published agent
 	// release becomes the target of the pilot ring at once.
 	PilotManual bool `json:"pilot_manual,omitempty"`
+	// FileMaxMB is the largest file a file session transfers (0: 1024).
+	FileMaxMB int `json:"file_max_mb,omitempty"`
 }
 
 // Check statuses.

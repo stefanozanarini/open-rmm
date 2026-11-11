@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/stefanozanarini/tempra-rmm/internal/accesslog"
@@ -96,6 +97,9 @@ func (s *Server) handleAckAlert(w http.ResponseWriter, r *http.Request) {
 type settingsData struct {
 	Subnets  string
 	Defaults []string
+	// FileMaxMB: the largest file a file session transfers; FileMaxCap
+	// its upper bound.
+	FileMaxMB, FileMaxCap int
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +113,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	d := settingsData{Subnets: strings.Join(cur.RDPAllowedSubnets, "\n")}
+	d := settingsData{Subnets: strings.Join(cur.RDPAllowedSubnets, "\n"), FileMaxMB: int(fileMaxBytes(cur) >> 20), FileMaxCap: maxFileMaxMB}
 	for _, p := range accesslog.DefaultAllowed {
 		d.Defaults = append(d.Defaults, p.String())
 	}
@@ -150,6 +154,34 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	s.audit(r.Context(), t, op, "settings.updated", t, map[string]any{
 		"rdp_allowed_subnets": next.RDPAllowedSubnets, "previous": cur.RDPAllowedSubnets})
 	s.flash(w, r, s.T(r, "Impostazioni salvate."), "/settings")
+}
+
+// handleSaveFileLimit sets the largest file a file session transfers.
+func (s *Server) handleSaveFileLimit(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
+		return
+	}
+	op := sessionFrom(r.Context()).data.Operator
+	mb, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("file_max_mb")))
+	if err != nil || mb < 1 || mb > maxFileMaxMB {
+		s.flash(w, r, s.Tf(r, "Il limite deve essere tra 1 e %d MB.", maxFileMaxMB), "/settings#files")
+		return
+	}
+	cur, err := s.store.GetSettings(r.Context(), t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	prev := int(fileMaxBytes(cur) >> 20)
+	cur.FileMaxMB = mb
+	if err := s.store.PutSettings(r.Context(), t, cur, "operator:"+op.Username); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.audit(r.Context(), t, op, "settings.file_max_mb", t, map[string]any{"file_max_mb": mb, "previous": prev})
+	s.flash(w, r, s.T(r, "Impostazioni salvate."), "/settings#files")
 }
 
 // maxLogo bounds the company logo.

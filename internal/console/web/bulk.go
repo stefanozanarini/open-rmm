@@ -23,6 +23,8 @@ type bulkData struct {
 	// Preset: the action opened with its parameters filled in (?action=
 	// module.action&p.<name>=…), and why (?for=, e.g. a CVE).
 	Preset, For string
+	// Files: a file session can be opened on the selected agents.
+	Files bool
 }
 
 // selectedAgents returns the active agents listed in the "agent" values.
@@ -63,6 +65,14 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := bulkData{Agents: agents, Sites: sites}
+	if _, man, ok := s.fileModule(r); ok && s.shell != nil {
+		d.Files = true
+		for _, a := range agents {
+			if _, ok := man.Entrypoints[a.Host.OS+"/"+a.Host.Arch]; !ok {
+				d.Files = false
+			}
+		}
+	}
 	// Actions available on every selected agent's platform.
 	count := map[string]int{}
 	byKey := map[string]runnable{}
@@ -162,7 +172,7 @@ func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if _, ok := man.Actions[target[2]]; !ok || man.HasCapability(modules.CapInteractiveShell) {
+	if _, ok := man.Actions[target[2]]; !ok || man.Interactive() {
 		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}

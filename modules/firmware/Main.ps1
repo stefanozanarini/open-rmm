@@ -56,18 +56,19 @@ function Find-Tool([string[]]$Candidates) {
 # Normalized categories and severities.
 function ConvertTo-Category([string]$Type) {
     switch -Regex ($Type) {
-        'bios' { 'bios' }
-        'firmware' { 'firmware' }
-        'driver' { 'driver' }
-        'application|utility|software' { 'application' }
+        # break: "BIOS Firmware" matches two clauses, one value is wanted.
+        'bios' { 'bios'; break }
+        'firmware' { 'firmware'; break }
+        'driver' { 'driver'; break }
+        'application|utility|software' { 'application'; break }
         default { 'other' }
     }
 }
 
 function ConvertTo-Severity([string]$Value) {
     switch -Regex ($Value) {
-        'urgent|critical|security' { 'critical' }
-        'recommended' { 'recommended' }
+        'urgent|critical|security' { 'critical'; break }
+        'recommended' { 'recommended'; break }
         default { 'optional' }
     }
 }
