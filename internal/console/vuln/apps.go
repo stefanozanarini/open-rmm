@@ -25,37 +25,40 @@ type App struct {
 	// FromName takes the version from the name (first group) instead of
 	// the installer's version, which some products number differently.
 	FromName *regexp.Regexp
+	// Winget is the package that installs the application for every user,
+	// the fix for a copy installed in a user's profile.
+	Winget string
 }
 
 func re(s string) *regexp.Regexp { return regexp.MustCompile(s) }
 
 // Apps is the catalog.
 var Apps = []App{
-	{Label: "Google Chrome", CPE: "google:chrome", Name: re(`^Google Chrome$`)},
-	{Label: "Mozilla Firefox", CPE: "mozilla:firefox", Name: re(`^Mozilla Firefox(?: \(|$| \d)`)},
-	{Label: "Mozilla Firefox ESR", CPE: "mozilla:firefox_esr", Name: re(`^Mozilla Firefox ESR`)},
-	{Label: "Mozilla Thunderbird", CPE: "mozilla:thunderbird", Name: re(`^Mozilla Thunderbird`)},
+	{Label: "Google Chrome", CPE: "google:chrome", Name: re(`^Google Chrome$`), Winget: "Google.Chrome"},
+	{Label: "Mozilla Firefox", CPE: "mozilla:firefox", Name: re(`^Mozilla Firefox(?: \(|$| \d)`), Winget: "Mozilla.Firefox"},
+	{Label: "Mozilla Firefox ESR", CPE: "mozilla:firefox_esr", Name: re(`^Mozilla Firefox ESR`), Winget: "Mozilla.Firefox.ESR"},
+	{Label: "Mozilla Thunderbird", CPE: "mozilla:thunderbird", Name: re(`^Mozilla Thunderbird`), Winget: "Mozilla.Thunderbird"},
 	{Label: "Microsoft Edge", CPE: "microsoft:edge_chromium", Name: re(`^Microsoft Edge$`)},
-	{Label: "7-Zip", CPE: "7-zip:7-zip", Name: re(`^7-Zip \d`)},
-	{Label: "Notepad++", CPE: `notepad-plus-plus:notepad\+\+`, Name: re(`^Notepad\+\+`)},
-	{Label: "VLC media player", CPE: "videolan:vlc_media_player", Name: re(`^VLC media player`)},
-	{Label: "PuTTY", CPE: "simon_tatham:putty", Name: re(`^PuTTY release`)},
+	{Label: "7-Zip", CPE: "7-zip:7-zip", Name: re(`^7-Zip \d`), Winget: "7zip.7zip"},
+	{Label: "Notepad++", CPE: `notepad-plus-plus:notepad\+\+`, Name: re(`^Notepad\+\+`), Winget: "Notepad++.Notepad++"},
+	{Label: "VLC media player", CPE: "videolan:vlc_media_player", Name: re(`^VLC media player`), Winget: "VideoLAN.VLC"},
+	{Label: "PuTTY", CPE: "simon_tatham:putty", Name: re(`^PuTTY release`), Winget: "PuTTY.PuTTY"},
 	{Label: "WinRAR", CPE: "rarlab:winrar", Name: re(`^WinRAR \d`)},
-	{Label: "WinSCP", CPE: "winscp:winscp", Name: re(`^WinSCP \d`)},
+	{Label: "WinSCP", CPE: "winscp:winscp", Name: re(`^WinSCP \d`), Winget: "WinSCP.WinSCP"},
 	{Label: "FileZilla", CPE: "filezilla-project:filezilla_client", Name: re(`^FileZilla(?: Client)? \d`)},
-	{Label: "KeePass", CPE: "dominik_reichl:keepass", Name: re(`^KeePass Password Safe 2`)},
-	{Label: "Wireshark", CPE: "wireshark:wireshark", Name: re(`^Wireshark \d`)},
-	{Label: "Git", CPE: "git-scm:git", Name: re(`^Git$|^Git version \d`)},
+	{Label: "KeePass", CPE: "dominik_reichl:keepass", Name: re(`^KeePass Password Safe 2`), Winget: "DominikReichl.KeePass"},
+	{Label: "Wireshark", CPE: "wireshark:wireshark", Name: re(`^Wireshark \d`), Winget: "WiresharkFoundation.Wireshark"},
+	{Label: "Git", CPE: "git-scm:git", Name: re(`^Git$|^Git version \d`), Winget: "Git.Git"},
 	{Label: "Node.js", CPE: "nodejs:node.js", Name: re(`^Node\.js$`)},
 	{Label: "Python", CPE: "python:python", Name: re(`^Python 3\.\d+\.\d+ \(`), FromName: re(`^Python (3\.\d+\.\d+)`)},
 	{Label: "OpenVPN", CPE: "openvpn:openvpn", Name: re(`^OpenVPN \d`), FromName: re(`^OpenVPN (\d+\.\d+\.\d+)`)},
 	{Label: "TeamViewer", CPE: "teamviewer:teamviewer", Name: re(`^TeamViewer(?: \d+)?$`)},
 	{Label: "AnyDesk", CPE: "anydesk:anydesk", Name: re(`^AnyDesk$`)},
-	{Label: "Zoom Workplace", CPE: "zoom:workplace_desktop", Name: re(`^Zoom(?: Workplace)?(?: \(64-bit\))?$`)},
-	{Label: "Adobe Acrobat Reader", CPE: "adobe:acrobat_reader_dc", Name: re(`^Adobe Acrobat Reader`)},
+	{Label: "Zoom Workplace", CPE: "zoom:workplace_desktop", Name: re(`^Zoom(?: Workplace)?(?: \(64-bit\))?$`), Winget: "Zoom.Zoom"},
+	{Label: "Adobe Acrobat Reader", CPE: "adobe:acrobat_reader_dc", Name: re(`^Adobe Acrobat Reader`), Winget: "Adobe.Acrobat.Reader.64-bit"},
 	{Label: "Adobe Acrobat", CPE: "adobe:acrobat_dc", Name: re(`^Adobe Acrobat(?: DC)?(?: \(64-bit\))?$`)},
 	{Label: "Foxit PDF Reader", CPE: "foxit:pdf_reader", Name: re(`^Foxit (?:PDF )?Reader`)},
-	{Label: "LibreOffice", CPE: "libreoffice:libreoffice", Name: re(`^LibreOffice \d`)},
+	{Label: "LibreOffice", CPE: "libreoffice:libreoffice", Name: re(`^LibreOffice \d`), Winget: "TheDocumentFoundation.LibreOffice"},
 	{Label: "Citrix Workspace", CPE: "citrix:workspace", Name: re(`^Citrix Workspace`)},
 	{Label: "VMware Tools", CPE: "vmware:tools", Name: re(`^VMware Tools$`)},
 }
@@ -295,6 +298,7 @@ func appCVEs(ctx context.Context, st Store) (map[string][]AppCVE, error) {
 // InstalledApp is an application of the inventory.
 type InstalledApp struct {
 	Name, Version string
+	UserScope     bool // installed in a user's profile
 }
 
 // appVersion returns the catalog entry and the version of an installed

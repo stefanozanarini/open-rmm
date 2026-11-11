@@ -30,5 +30,19 @@
         "en": "Exclude (winget ids)"
       }
     }
+  ],
+  "install": [
+    {
+      "name": "ids",
+      "type": "list",
+      "label": {
+        "it": "Applicazioni (id winget)",
+        "en": "Applications (winget ids)"
+      },
+      "help": {
+        "it": "Uno per riga, es. Google.Chrome. Installate per tutti gli utenti; se già presenti vengono aggiornate.",
+        "en": "One per line, e.g. Google.Chrome. Installed for every user; upgraded when already present."
+      }
+    }
   ]
 }

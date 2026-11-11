@@ -7,6 +7,9 @@
 #
 # scan     applications with an available upgrade
 # upgrade  { "ids": ["Mozilla.Firefox"] } or { "all": true, "exclude": ["Oracle.JavaRuntimeEnvironment"] }
+# install  { "ids": ["Google.Chrome"] }: for every user (machine scope); an
+#          installed application is upgraded. Replaces copies installed in
+#          a user's profile, which winget cannot see as the system account.
 Import-Module (Join-Path $PSScriptRoot '_sdk/OpenRmm.psm1')
 
 $ErrorActionPreference = 'Stop'
@@ -132,6 +135,28 @@ Invoke-RmmModule @{
         }
         $report = New-Report $exe
         $report.upgraded = $results
+        $report
+    }
+    install = {
+        param($Params, $Request)
+        $exe = Find-Winget
+        $ids = Get-List $Params 'ids'
+        if ($ids.Count -eq 0) { throw 'no applications to install: give ids' }
+        # 0x8A15002B: no newer version, 0x8A150061: already installed.
+        $done = @(0, -1978335189, -1978335135)
+        $results = @()
+        $n = 0
+        foreach ($id in $ids) {
+            $id = [string]$id
+            if ($id -notmatch $idPattern) { throw "invalid package id: $id" }
+            $n++
+            Send-RmmProgress ([int](100 * $n / ($ids.Count + 1))) $id
+            $r = Invoke-Winget $exe @('install', '--id', $id, '--exact', '--silent', '--scope', 'machine',
+                '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
+            $results += @{ id = $id; exit_code = ('0x{0:X8}' -f $r.code); ok = ($done -contains $r.code); output = (($r.lines | Select-Object -Last 5) -join "`n") }
+        }
+        $report = New-Report $exe
+        $report.installed = $results
         $report
     }
 }

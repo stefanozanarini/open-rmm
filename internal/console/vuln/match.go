@@ -63,6 +63,7 @@ type Hit struct {
 	Installed         string // e.g. 26200.9711
 	Fix               string // e.g. KB5127648 (26200.9746)
 	Package           string // Linux: the package to update
+	UserScope         bool   // the application is installed in a user's profile
 }
 
 // Finding is a CVE with the endpoints it affects.
@@ -188,7 +189,7 @@ func (ix *Index) Match(eps []Endpoint) []Finding {
 					fix = app.Label + " " + fix
 				}
 				add(&CVE{ID: ac.ID, Title: ac.Title, CVSS: ac.CVSS, Released: ac.Released}, app.Label,
-					Hit{AgentID: ep.AgentID, Hostname: ep.Hostname, Installed: app.Label + " " + v, Fix: fix})
+					Hit{AgentID: ep.AgentID, Hostname: ep.Hostname, Installed: app.Label + " " + v, Fix: fix, UserScope: a.UserScope})
 			}
 		}
 		for _, p := range ep.Packages {

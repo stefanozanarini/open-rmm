@@ -38,7 +38,7 @@ func SourceOf(module, action string) string {
 	switch {
 	case (module == WindowsModule || module == OSUpdateModule) && (action == "scan" || action == "install"):
 		return SourceWindows
-	case module == WingetModule && (action == "scan" || action == "upgrade"):
+	case module == WingetModule && (action == "scan" || action == "upgrade" || action == "install"):
 		return SourceWinget
 	case module == FirmwareModule && (action == "scan" || action == "install" || action == FirmwareToolAction):
 		return SourceFirmware

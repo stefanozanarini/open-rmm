@@ -19,12 +19,13 @@
   · {{.Product}}{{if not .Released.IsZero}} · {{tf "pubblicata il %s" (isoDate .Released)}}{{end}}{{with .KEVAdded}} · {{tf "nel catalogo CISA dal %s" .}}{{end}}</p>
 <p>{{if eq .Product "Windows"}}<a href="https://msrc.microsoft.com/update-guide/vulnerability/{{.ID}}" target="_blank" rel="noopener noreferrer">Microsoft ↗</a> · {{end}}<a href="https://nvd.nist.gov/vuln/detail/{{.ID}}" target="_blank" rel="noopener noreferrer">NVD ↗</a></p>
 <h3>{{tf "Computer colpiti (%d)" (len .Hits)}}</h3>
+{{with $.Data.Vulns.FixNote}}<p class="muted">{{.}}</p>{{end}}
 {{if and $.CanRun $.Data.Vulns.FixURL}}<p><a class="button primary" href="{{$.Data.Vulns.FixURL}}">{{$.Data.Vulns.FixLabel}}</a>
   <span class="muted">{{t "Apre l'azione già preparata per i computer colpiti: la controlli e la approvi con MFA."}}</span></p>
-{{else if $.Data.Vulns.FixNote}}<p class="muted">{{$.Data.Vulns.FixNote}}</p>{{end}}
+{{end}}
 <table>
 <thead><tr><th>{{t "Computer"}}</th><th>{{t "Versione installata"}}</th><th>{{t "Correzione"}}</th></tr></thead>
-<tbody>{{range .Hits}}<tr><td><a href="/agents/{{.AgentID}}#patches">{{.Hostname}}</a></td><td>{{.Installed}}</td><td>{{or .Fix (t "nessuna correzione indicata")}}</td></tr>{{end}}</tbody>
+<tbody>{{range .Hits}}<tr><td><a href="/agents/{{.AgentID}}#patches">{{.Hostname}}</a></td><td>{{.Installed}}{{if .UserScope}} <span class="badge chk-warning">{{t "profilo utente"}}</span>{{end}}</td><td>{{or .Fix (t "nessuna correzione indicata")}}</td></tr>{{end}}</tbody>
 </table>
 {{else}}
 <div class="cards">

@@ -57,6 +57,13 @@ func TestConsoleVulnerabilities(t *testing.T) {
 	e.store.PutUpdateStatus(ctx, store.UpdateStatus{TenantID: e.tenant, AgentID: zip, Source: updates.SourceWinget, ScannedAt: now,
 		Data: []byte(`{"scanned_at":"` + now.UTC().Format(time.RFC3339) + `","upgrades":[{"name":"7-Zip 24.07 (x64)","id":"7zip.7zip","version":"24.07","available":"26.02"}]}`)})
 
+	// Chrome in a user's profile: winget (system account) cannot see it,
+	// the fix installs it for the whole computer.
+	chrome, _ := json.Marshal([]vuln.AppCVE{{ID: "CVE-2025-10585", Title: "Type confusion in V8", CVSS: 9.8,
+		Ranges: []vuln.VerRange{{EndExcl: "140.0.7339.185"}}}})
+	e.store.PutVulnFeed(ctx, store.VulnFeed{Key: "nvd/google:chrome", Data: chrome})
+	e.addWindowsAgent(t, "PC-CHROME", inventory.Software{Name: "Google Chrome", Version: "134.0.6998.166", Scope: "user"})
+
 	// Linux: the CVEs of a pending security update, with NVD's details.
 	lx := ids.NewUUID()
 	e.store.CreateAgent(ctx, store.Agent{TenantID: e.tenant, ID: lx, Status: store.AgentActive, CertFingerprint: lx,
@@ -87,12 +94,17 @@ func TestConsoleVulnerabilities(t *testing.T) {
 		!strings.Contains(body, "PCRE2 heap overflow") || !strings.Contains(body, "CVSS 8.1") {
 		t.Fatalf("linux detail: %s", body)
 	}
+	_, body = get(t, c, e.console.URL+"/reports?tab=cve&id=CVE-2025-10585")
+	if body = html.UnescapeString(body); !strings.Contains(body, "profilo utente") || !strings.Contains(body, "Installa per tutto il computer con winget") {
+		t.Fatalf("user-scope detail: %s", body)
+	}
 	// Fixing: the bulk form, opened on the action with its parameters.
 	fixLink := regexp.MustCompile(`href="(/agents/bulk\?[^"]+)"`)
 	for id, want := range map[string][]string{
 		"CVE-2026-1001":  {`name="p.classifications" value="security" checked`, `name="p.classifications" value="critical" checked`, "PC-MID, PC-OLD"},
 		"CVE-2026-14266": {">7zip.7zip</textarea>", "PC-ZIP"},
 		"CVE-2026-89156": {">libpcre2-8-0</textarea>", "SRV-UBUNTU"},
+		"CVE-2025-10585": {">Google.Chrome</textarea>", "PC-CHROME"},
 	} {
 		_, page := get(t, c, e.console.URL+"/reports?tab=cve&id="+id)
 		m := fixLink.FindStringSubmatch(page)

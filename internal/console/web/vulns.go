@@ -140,7 +140,7 @@ func (s *Server) vulnEndpoints(ctx context.Context, tenant string) ([]vuln.Endpo
 				}
 				if a.Host.OS == "windows" {
 					for _, sw := range parsed.Software {
-						ep.Apps = append(ep.Apps, vuln.InstalledApp{Name: sw.Name, Version: sw.Version})
+						ep.Apps = append(ep.Apps, vuln.InstalledApp{Name: sw.Name, Version: sw.Version, UserScope: sw.Scope == "user"})
 					}
 				}
 			}
@@ -271,6 +271,19 @@ func (s *Server) cveFix(ctx context.Context, lang, tenant string, f *vuln.Findin
 		// The winget ids the scans found on these computers for the
 		// application (e.g. Mozilla.Firefox.it).
 		app := vuln.AppByLabel(f.Product)
+		// A copy in a user's profile is out of reach of winget, which runs
+		// as the system account: installing the application for every user
+		// replaces it (and upgrades the computers that already have it).
+		userScope := false
+		for _, h := range f.Hits {
+			userScope = userScope || h.UserScope
+		}
+		if userScope && app.Winget != "" {
+			q.Set("action", updates.WingetModule+".install")
+			q.Set("p.ids", app.Winget)
+			return "/agents/bulk?" + q.Encode(), tr(lang, "Installa per tutto il computer con winget…"),
+				tr(lang, "Installata nel profilo dell'utente: winget, che gira con l'account di sistema, non la vede e non la può aggiornare. L'installazione per tutto il computer la sostituisce al prossimo accesso dell'utente.")
+		}
 		seen := map[string]bool{}
 		for _, h := range f.Hits {
 			list, err := s.store.ListUpdateStatus(ctx, tenant, h.AgentID)
@@ -294,6 +307,9 @@ func (s *Server) cveFix(ctx context.Context, lang, tenant string, f *vuln.Findin
 			}
 		}
 		if len(seen) == 0 {
+			if userScope {
+				return "", "", tr(lang, "Installata nel profilo dell'utente: winget, che gira con l'account di sistema, non la può aggiornare. Aggiornala dall'applicazione stessa o distribuisci la versione per tutto il computer dalla pagina Software.")
+			}
 			return "", "", tr(lang, "Nessun aggiornamento winget disponibile per questa applicazione sui computer colpiti: distribuisci la nuova versione dalla pagina Software.")
 		}
 		q.Set("action", updates.WingetModule+".upgrade")
