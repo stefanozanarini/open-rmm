@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -308,6 +309,17 @@ func csrfFrom(t *testing.T, body string) string {
 	return html.UnescapeString(m[1])
 }
 
+// lastJob returns the newest job of an agent: after an approval the console
+// goes back to the page the operator came from, not to the job.
+func lastJob(t *testing.T, st store.Store, tenant, agent string) store.Job {
+	t.Helper()
+	jobs, err := st.ListJobs(context.Background(), tenant, agent, 1)
+	if err != nil || len(jobs) == 0 {
+		t.Fatalf("no job for agent %s: %v", agent, err)
+	}
+	return jobs[0]
+}
+
 func (e *consoleEnv) login(t *testing.T, u opIdentity) (*http.Client, string) {
 	t.Helper()
 	e.idp.signIn(u)
@@ -333,7 +345,7 @@ func TestConsoleApproveAndRunJobWithStepUp(t *testing.T) {
 
 	target := "sysinfo|1.0.0|info"
 	code, body, final := post(t, c, agentURL+"/jobs", url.Values{"csrf": {csrf}, "target": {target}, "params": {"{}"}, "ttl_minutes": {"60"}})
-	if code != 200 || !strings.HasPrefix(final.Path, "/jobs/") {
+	if code != 200 || final.Path != strings.TrimPrefix(agentURL, e.console.URL) || !strings.Contains(body, "riquadro in basso a destra") {
 		t.Fatalf("run job: %d at %s: %s", code, final, body)
 	}
 	// The step-up forced a new sign-in.
@@ -344,7 +356,7 @@ func TestConsoleApproveAndRunJobWithStepUp(t *testing.T) {
 		t.Fatalf("step-up authorize params: %v", auth)
 	}
 
-	jobID := strings.TrimPrefix(final.Path, "/jobs/")
+	jobID := lastJob(t, e.store, e.tenant, path.Base(agentURL)).ID
 	j, err := e.store.GetJob(context.Background(), e.tenant, jobID)
 	if err != nil {
 		t.Fatal(err)

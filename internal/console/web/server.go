@@ -308,6 +308,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /shell/{id}", s.role(authn.RoleOperator, s.handleShellPage))
 	mux.Handle("GET /shell/{id}/ws", s.role(authn.RoleOperator, s.handleShellSocket))
 	mux.Handle("GET /jobs", s.auth(s.handleJobs))
+	mux.Handle("GET /jobs/active.json", s.auth(s.handleActiveJobs))
 	mux.Handle("GET /jobs/{id}", s.auth(s.handleJob))
 	mux.Handle("GET /modules", s.auth(s.handleModules))
 	mux.Handle("GET /updates", s.auth(s.handleUpdates))

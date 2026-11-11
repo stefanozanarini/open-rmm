@@ -144,7 +144,7 @@ func TestConsoleBulkCommandAndDeploy(t *testing.T) {
 	// One step-up, one signed job per agent.
 	code, body, final := post(t, c, e.console.URL+"/agents/bulk", url.Values{"csrf": {csrf}, "agent": {pc1, pc2},
 		"target": {"script|1.0.0|run"}, "script": {"Get-Date"}, "ttl_minutes": {"60"}})
-	if code != 200 || final.Path != "/jobs" || !strings.Contains(body, "2 comandi approvati") {
+	if code != 200 || final.Path != "/agents/bulk" || !strings.Contains(body, "2 comandi approvati") {
 		t.Fatalf("bulk run: %d at %s", code, final)
 	}
 	jobs, _ := e.store.ListJobs(ctx, e.tenant, "", 10)

@@ -21,6 +21,9 @@ type alertView struct {
 type alertsData struct {
 	All    bool
 	Alerts []alertView
+	// Agent filters the list to one computer (?agent=); Hostname is its
+	// name and Return the page to come back to after acknowledging.
+	Agent, Hostname, Return string
 }
 
 func (s *Server) alertViews(r *http.Request, tenant string, alerts []store.Alert) []alertView {
@@ -43,8 +46,14 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
-	d := alertsData{All: r.URL.Query().Get("all") == "1"}
-	alerts, err := s.store.ListAlerts(r.Context(), t, "", !d.All, 500)
+	q := r.URL.Query()
+	d := alertsData{All: q.Get("all") == "1", Return: "/alerts"}
+	if id := q.Get("agent"); ids.IsUUID(id) {
+		if a, err := s.store.GetAgent(r.Context(), t, id); err == nil {
+			d.Agent, d.Hostname, d.Return = a.ID, a.Host.Hostname, "/alerts?agent="+a.ID
+		}
+	}
+	alerts, err := s.store.ListAlerts(r.Context(), t, d.Agent, !d.All, 500)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -68,6 +77,8 @@ func (s *Server) handleAckAlert(w http.ResponseWriter, r *http.Request) {
 	op := sessionFrom(r.Context()).data.Operator
 	back := "/alerts"
 	if ret := r.PostFormValue("return"); strings.HasPrefix(ret, "/agents/") && ids.IsUUID(strings.TrimPrefix(ret, "/agents/")) {
+		back = ret
+	} else if ag, ok := strings.CutPrefix(ret, "/alerts?agent="); ok && ids.IsUUID(ag) {
 		back = ret
 	}
 	switch err := s.store.AcknowledgeAlert(r.Context(), t, id, "operator:"+op.Username, s.now()); {

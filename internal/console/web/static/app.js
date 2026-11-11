@@ -119,9 +119,105 @@
   window.addEventListener("scroll", close, { passive: true });
 })();
 
+// Collapsible groups remember whether they were closed (per browser);
+// data-keep-open (a filter of the group is active) keeps one open.
+(function () {
+  document.querySelectorAll("details[data-remember]").forEach(function (d) {
+    var key = "open-rmm." + d.dataset.remember;
+    try {
+      if (localStorage.getItem(key) === "closed" && !d.hasAttribute("data-keep-open")) d.open = false;
+    } catch (e) { /* storage unavailable: the default applies */ }
+    d.addEventListener("toggle", function () {
+      try { localStorage.setItem(key, d.open ? "open" : "closed"); } catch (e) { /* ignored */ }
+    });
+  });
+})();
+
 // Agents workspace: the scrolling list shows the selected agent.
 (function () {
   var list = document.querySelector(".list.scroll");
   var row = list && list.querySelector("tr.current");
   if (row) list.scrollTop = Math.max(0, row.offsetTop - list.clientHeight / 3);
+})();
+
+// Job dock: the operator's jobs in progress and just finished, in a corner
+// of every page (GET /jobs/active.json).
+(function () {
+  "use strict";
+  // Polls every 4 s while a job runs, every 30 s otherwise, and not while
+  // the tab is hidden.
+  var dock = document.getElementById("jobdock");
+  if (dock && window.fetch) {
+    var store = function (k, v) {
+      try { if (v === undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); } catch (e) { return null; }
+    };
+    var closed = {};
+    (store("jobdock.closed") || "").split(",").forEach(function (id) { if (id) closed[id] = true; });
+    var timer = null;
+    var el = function (tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    };
+    var render = function (jobs) {
+      jobs = jobs.filter(function (j) { return !(j.final && closed[j.id]); });
+      dock.replaceChildren();
+      if (!jobs.length) { dock.hidden = true; return false; }
+      var running = jobs.some(function (j) { return !j.final; });
+      var small = store("jobdock.small") === "1";
+      var head = el("div", "jobdock-head");
+      head.appendChild(el("strong", "", dock.dataset.title + " (" + jobs.length + ")"));
+      var all = el("a", "small", dock.dataset.all);
+      all.href = "/jobs";
+      head.appendChild(all);
+      var toggle = el("button", "link", small ? dock.dataset.show : dock.dataset.hide);
+      toggle.type = "button";
+      toggle.addEventListener("click", function () { store("jobdock.small", small ? "0" : "1"); poll(); });
+      head.appendChild(toggle);
+      if (!running) {
+        var close = el("button", "link", dock.dataset.close);
+        close.type = "button";
+        close.addEventListener("click", function () {
+          jobs.forEach(function (j) { closed[j.id] = true; });
+          store("jobdock.closed", Object.keys(closed).slice(-100).join(","));
+          dock.hidden = true;
+        });
+        head.appendChild(close);
+      }
+      dock.appendChild(head);
+      if (!small) {
+        var list = el("ul");
+        jobs.forEach(function (j) {
+          var li = el("li");
+          var a = el("a", "", j.host || j.id.slice(0, 8));
+          a.href = "/jobs/" + j.id;
+          li.appendChild(a);
+          li.appendChild(el("span", "muted small", " " + j.action + " "));
+          li.appendChild(el("span", "badge " + j.state, j.label));
+          if (!j.final && j.progress) {
+            var bar = el("progress");
+            bar.max = 100;
+            bar.value = j.progress;
+            li.appendChild(bar);
+          }
+          if (j.message) li.appendChild(el("div", "muted small", j.message));
+          list.appendChild(li);
+        });
+        dock.appendChild(list);
+      }
+      dock.hidden = false;
+      return running;
+    };
+    var poll = function () {
+      clearTimeout(timer);
+      if (document.hidden) return;
+      fetch(dock.dataset.src, { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (jobs) { timer = setTimeout(poll, render(jobs) ? 4000 : 30000); })
+        .catch(function () { timer = setTimeout(poll, 30000); });
+    };
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
+    poll();
+  }
 })();

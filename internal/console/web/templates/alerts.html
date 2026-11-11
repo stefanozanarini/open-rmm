@@ -17,11 +17,12 @@
 </table>
 {{end}}
 {{define "content"}}
+{{with .Data.Hostname}}<p>{{tf "Avvisi di %s." .}} <a href="/agents/{{$.Data.Agent}}">{{t "Apri l'agente"}}</a> · <a href="/alerts{{if $.Data.All}}?all=1{{end}}">{{t "tutti i computer"}}</a></p>{{end}}
 <div class="toolbar">
   <nav class="tabs">
-    <a href="/alerts" {{if not .Data.All}}class="current"{{end}}>{{t "Aperti"}}</a>
-    <a href="/alerts?all=1" {{if .Data.All}}class="current"{{end}}>{{t "Tutti"}}</a>
+    <a href="/alerts{{qs "agent" .Data.Agent}}" {{if not .Data.All}}class="current"{{end}}>{{t "Aperti"}}</a>
+    <a href="/alerts{{qs "all" "1" "agent" .Data.Agent}}" {{if .Data.All}}class="current"{{end}}>{{t "Tutti"}}</a>
   </nav>
 </div>
-{{if .Data.Alerts}}{{template "alertrows" (alertCtx . .Data.Alerts "/alerts")}}{{else}}<p class="muted">{{if .Data.All}}{{t "Nessun avviso."}}{{else}}{{t "Nessun avviso aperto."}}{{end}}</p>{{end}}
+{{if .Data.Alerts}}{{template "alertrows" (alertCtx . .Data.Alerts .Data.Return)}}{{else}}<p class="muted">{{if .Data.All}}{{t "Nessun avviso."}}{{else}}{{t "Nessun avviso aperto."}}{{end}}</p>{{end}}
 {{end}}

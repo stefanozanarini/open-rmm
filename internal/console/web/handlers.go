@@ -422,6 +422,9 @@ type jobsData struct {
 	Jobs []store.Job
 	// Hosts: agent id → host name, for the computer column.
 	Hosts map[string]string
+	// Filters: one computer (?agent=), and text in the computer name,
+	// module, action, state or author (?q=).
+	Agent, Query string
 }
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
@@ -430,7 +433,12 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
-	jobs, err := s.store.ListJobs(r.Context(), t, "", 200)
+	q := r.URL.Query()
+	d := jobsData{Query: strings.TrimSpace(q.Get("q"))}
+	if id := q.Get("agent"); ids.IsUUID(id) {
+		d.Agent = id
+	}
+	jobs, err := s.store.ListJobs(r.Context(), t, d.Agent, 500)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -440,11 +448,26 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	d := jobsData{Jobs: jobs, Hosts: make(map[string]string, len(agents))}
+	d.Hosts = make(map[string]string, len(agents))
 	for _, a := range agents {
 		d.Hosts[a.ID] = a.Host.Hostname
 	}
-	s.render(w, r, "jobs", s.T(r, "Job"), d)
+	lang := s.lang(r)
+	for _, j := range jobs {
+		if d.Query != "" && !contains(strings.Join([]string{d.Hosts[j.AgentID], j.Module, j.Action, string(j.State),
+			labelText(lang, string(j.State)), j.CreatedBy}, " "), d.Query) {
+			continue
+		}
+		d.Jobs = append(d.Jobs, j)
+		if len(d.Jobs) == 200 {
+			break
+		}
+	}
+	title := s.T(r, "Job")
+	if h := d.Hosts[d.Agent]; h != "" {
+		title = s.Tf(r, "Job di %s", h)
+	}
+	s.render(w, r, "jobs", title, d)
 }
 
 type jobData struct {

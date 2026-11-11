@@ -76,8 +76,18 @@ func TestConsoleLinuxUpdates(t *testing.T) {
 		t.Fatalf("install params: %s", all)
 	}
 	// The jobs list names the computer of each job.
-	if _, body := get(t, c, e.console.URL+"/jobs"); !strings.Contains(body, `<a href="/agents/`+pc+`">SRV-UBUNTU</a>`) {
+	other := e.addWindowsAgent(t, "PC-ALTRO")
+	e.store.CreateJob(ctx, store.Job{TenantID: e.tenant, ID: ids.NewUUID(), AgentID: other, Module: "osupdate", ModuleVersion: mod.Manifest.Version,
+		Action: "scan", Envelope: []byte("x"), CreatedBy: "console", ExpiresAt: time.Now().Add(time.Hour)})
+	if _, body := get(t, c, e.console.URL+"/jobs"); !strings.Contains(body, `<a href="/jobs?agent=`+pc+`"`) || !strings.Contains(body, "SRV-UBUNTU") ||
+		!strings.Contains(body, "PC-ALTRO") {
 		t.Fatalf("jobs list without the computer: %s", body)
+	}
+	if _, body := get(t, c, e.console.URL+"/jobs?agent="+pc); !strings.Contains(body, "Job di SRV-UBUNTU") || strings.Contains(body, "PC-ALTRO") {
+		t.Fatalf("jobs of one computer: %s", body)
+	}
+	if _, body := get(t, c, e.console.URL+"/jobs?q=altro"); !strings.Contains(body, "PC-ALTRO") || strings.Contains(body, ">SRV-UBUNTU<") {
+		t.Fatalf("jobs search: %s", body)
 	}
 
 	// The installations are listed on the agent page: Linux has no update

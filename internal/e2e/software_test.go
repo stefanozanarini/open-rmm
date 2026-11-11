@@ -153,10 +153,10 @@ func TestConsoleCatalogDeployAndUninstall(t *testing.T) {
 
 	// Uninstall from the software list of an endpoint.
 	_, body, u := post(t, c, e.console.URL+"/agents/"+pc2+"/uninstall", url.Values{"csrf": {csrf}, "name": {"Notepad++ (64-bit x64)"}, "version": {"8.6"}})
-	if !strings.HasPrefix(u.Path, "/jobs/") {
+	if !strings.Contains(body, "riquadro in basso a destra") {
 		t.Fatalf("uninstall: %s %s", u, body)
 	}
-	j, _ := e.store.GetJob(ctx, e.tenant, strings.TrimPrefix(u.Path, "/jobs/"))
+	j := lastJob(t, e.store, e.tenant, pc2)
 	if j.Action != "uninstall" || !strings.Contains(string(j.Params), `"name":"Notepad++ (64-bit x64)"`) {
 		t.Fatalf("uninstall job = %+v", j)
 	}

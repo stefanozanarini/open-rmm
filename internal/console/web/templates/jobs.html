@@ -1,12 +1,20 @@
 {{define "content"}}
-{{with .Data}}{{$hosts := .Hosts}}
+{{with .Data}}{{$hosts := .Hosts}}{{$d := .}}
+<form method="get" action="/jobs" class="toolbar">
+  {{with .Agent}}<input type="hidden" name="agent" value="{{.}}">{{end}}
+  <input type="search" name="q" value="{{.Query}}" placeholder="{{t "Computer, modulo, azione, stato, operatore"}}" aria-label="{{t "Cerca"}}">
+  <button>{{t "Cerca"}}</button>
+  {{if or .Agent .Query}}<a href="/jobs">{{t "tutti i job"}}</a>{{end}}
+  {{with .Agent}}<a href="/agents/{{.}}">{{t "Apri l'agente"}}</a>{{end}}
+</form>
 {{if .Jobs}}
 <table>
 <thead><tr><th>Job</th><th>{{t "Computer"}}</th><th>{{t "Modulo"}}</th><th>{{t "Azione"}}</th><th>{{t "Stato"}}</th><th>{{t "Creato"}}</th><th>{{t "Da"}}</th></tr></thead>
 <tbody>
 {{range .Jobs}}<tr>
   <td><a href="/jobs/{{.ID}}"><code>{{short .ID}}</code></a></td>
-  <td><a href="/agents/{{.AgentID}}">{{or (index $hosts .AgentID) (short .AgentID)}}</a></td>
+  <td><a href="/jobs?agent={{.AgentID}}" title="{{t "solo i job di questo computer"}}">{{or (index $hosts .AgentID) (short .AgentID)}}</a>
+    <a class="muted" href="/agents/{{.AgentID}}" title="{{t "Apri l'agente"}}">↗</a></td>
   <td>{{.Module}} {{.ModuleVersion}}</td>
   <td>{{.Action}}</td>
   <td><span class="badge {{.State}}">{{label .State}}</span></td>
@@ -15,6 +23,7 @@
 </tr>{{end}}
 </tbody>
 </table>
+{{else if or .Agent .Query}}<p class="muted">{{t "Nessun job corrisponde al filtro."}}</p>
 {{else}}{{template "jobrows" .Jobs}}{{end}}
 {{end}}
 {{end}}

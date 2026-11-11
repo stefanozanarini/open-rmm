@@ -227,18 +227,25 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 		})
 		created = append(created, j.ID)
 	}
-	switch len(created) {
-	case 0:
+	if len(created) == 0 {
 		s.fail(w, r, errors.New("signer returned no jobs"))
-	case 1:
-		if s.isShellModule(r.Context(), req.GetModule(), req.GetModuleVersion()) {
-			http.Redirect(w, r, "/shell/"+created[0], http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, "/jobs/"+created[0], http.StatusSeeOther)
-	default:
-		s.flashTo(w, r, sess, trf(lang, "%d comandi approvati e in coda.", len(created)), "/jobs")
+		return
 	}
+	if len(created) == 1 && s.isShellModule(r.Context(), req.GetModule(), req.GetModuleVersion()) {
+		http.Redirect(w, r, "/shell/"+created[0], http.StatusSeeOther)
+		return
+	}
+	// Back where the operator was: the jobs are followed in the corner
+	// panel (jobdock), not on a page that keeps reloading.
+	back := p.Return
+	if !strings.HasPrefix(back, "/") || strings.HasPrefix(back, "//") || strings.ContainsAny(back, "\\\r\n") {
+		back = "/jobs"
+	}
+	msg := tr(lang, "Comando approvato: l'andamento è nel riquadro in basso a destra.")
+	if len(created) > 1 {
+		msg = trf(lang, "%d comandi approvati e in coda: l'andamento è nel riquadro in basso a destra.", len(created))
+	}
+	s.flashTo(w, r, sess, msg, back)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

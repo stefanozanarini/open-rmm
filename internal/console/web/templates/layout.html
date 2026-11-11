@@ -67,6 +67,8 @@
 <h1>{{.Title}}</h1>
 {{template "content" .}}
 </main>
+{{if .Operator}}<aside id="jobdock" class="jobdock" hidden data-src="/jobs/active.json"
+  data-title="{{t "Job"}}" data-all="{{t "tutti i job"}}" data-hide="{{t "Riduci"}}" data-show="{{t "Mostra"}}" data-close="{{t "Chiudi"}}"></aside>{{end}}
 </body>
 </html>
 {{define "jobrows"}}

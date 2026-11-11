@@ -62,10 +62,10 @@ func TestConsoleFirmwareDashboardAndInstall(t *testing.T) {
 	}
 	// Drivers only by default; the BIOS needs the explicit choice.
 	_, _, final := post(t, c, e.console.URL+"/agents/"+pc+"/firmware", url.Values{"csrf": {csrf}, "types": {"driver", "bogus"}, "severity": {"critical"}})
-	if !strings.HasPrefix(final.Path, "/jobs/") {
+	if final.Path != "/agents/"+pc {
 		t.Fatalf("install: at %s", final)
 	}
-	j, _ := e.store.GetJob(ctx, e.tenant, strings.TrimPrefix(final.Path, "/jobs/"))
+	j := lastJob(t, e.store, e.tenant, pc)
 	env := &openrmmv1.SignedEnvelope{}
 	proto.Unmarshal(j.Envelope, env)
 	job := &openrmmv1.Job{}
@@ -95,10 +95,10 @@ func TestConsoleFirmwareToolInstall(t *testing.T) {
 		t.Fatalf("agent page: %s", body)
 	}
 	_, _, final := post(t, c, e.console.URL+"/agents/"+pc+"/firmware-tool", url.Values{"csrf": {csrf}})
-	if !strings.HasPrefix(final.Path, "/jobs/") {
+	if final.Path != "/agents/"+pc {
 		t.Fatalf("install-tool: at %s", final)
 	}
-	j, _ := e.store.GetJob(ctx, e.tenant, strings.TrimPrefix(final.Path, "/jobs/"))
+	j := lastJob(t, e.store, e.tenant, pc)
 	env := &openrmmv1.SignedEnvelope{}
 	proto.Unmarshal(j.Envelope, env)
 	job := &openrmmv1.Job{}

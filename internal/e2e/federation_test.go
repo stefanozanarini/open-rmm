@@ -122,7 +122,7 @@ func TestFederationFullOperations(t *testing.T) {
 	// A command: step-up on the central directory, signed by the customer's signer.
 	code, body, final := post(t, c, central.console.URL+"/agents/"+customer.agentID+"/jobs",
 		url.Values{"csrf": {csrf}, "target": {"sysinfo|1.0.0|info"}, "params": {"{}"}, "ttl_minutes": {"60"}})
-	if code != 200 || !strings.HasPrefix(final.Path, "/jobs/") {
+	if code != 200 || !strings.Contains(body, "riquadro in basso a destra") {
 		t.Fatalf("job through the link: %d at %s: %s", code, final, body)
 	}
 	central.idp.mu.Lock()
@@ -131,7 +131,7 @@ func TestFederationFullOperations(t *testing.T) {
 	if auth.Get("prompt") != "login" || !strings.HasPrefix(auth.Get("nonce"), "job.") {
 		t.Fatalf("step-up authorize params: %v", auth)
 	}
-	j, err := customer.store.GetJob(context.Background(), customer.tenant, strings.TrimPrefix(final.Path, "/jobs/"))
+	j, err := customer.store.GetJob(context.Background(), customer.tenant, lastJob(t, customer.store, customer.tenant, customer.agentID).ID)
 	if err != nil || !strings.Contains(j.CreatedBy, mspAdmin.Username) {
 		t.Fatalf("job = %+v, %v", j, err)
 	}
