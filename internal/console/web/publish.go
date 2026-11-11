@@ -373,7 +373,7 @@ func (s *Server) handlePublishModule(w http.ResponseWriter, r *http.Request) {
 	}
 	s.consume(r.Context(), w, sess)
 	s.syncAfterPublish(r.Context())
-	s.flash(w, r, s.Tf(r, "Modulo %s %s firmato e pubblicato.", m.ID, m.Version), "/modules")
+	s.flash(w, r, s.Tf(r, "Modulo %s %s firmato e pubblicato.", m.ID, m.Version)+s.staleNotice(r), "/modules")
 }
 
 // handlePublishBundledModules publishes the selected modules shipped with
@@ -424,7 +424,7 @@ func (s *Server) handlePublishBundledModules(w http.ResponseWriter, r *http.Requ
 	}
 	s.consume(r.Context(), w, sess)
 	s.syncAfterPublish(r.Context())
-	s.flash(w, r, s.Tf(r, "Moduli firmati e pubblicati: %s.", strings.Join(done, ", ")), "/modules")
+	s.flash(w, r, s.Tf(r, "Moduli firmati e pubblicati: %s.", strings.Join(done, ", "))+s.staleNotice(r), "/modules")
 }
 
 // publishModule packs a module source tree, has its manifest signed by the
@@ -747,4 +747,17 @@ func (mb ModuleBundle) Params(id, version string) []byte {
 		}
 	}
 	return nil
+}
+
+// staleNotice tells, after a publication, how many policies still use an
+// older version of a module (empty when none).
+func (s *Server) staleNotice(r *http.Request) string {
+	t, ok := tenantOf(r)
+	if !ok {
+		return ""
+	}
+	if n := s.stalePolicies(r, t); n > 0 {
+		return " " + s.Tf(r, "%d policy usano una versione precedente di un modulo: aprile in Deployment → Policy e salvale per passare all'ultima.", n)
+	}
+	return ""
 }

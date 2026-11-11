@@ -2,7 +2,7 @@
 <table class="agents">
 <thead><tr>{{if .Select}}<th></th>{{end}}<th>{{t "Nome"}}</th><th>{{t "Stato"}}</th><th>{{t "Sede"}}</th><th>{{t "Utente"}}</th><th>{{t "Modello"}}</th><th>{{t "Sistema"}}</th><th>Supremo</th><th>{{t "Ultimo contatto"}}</th></tr></thead>
 <tbody>
-{{range .Rows}}<tr data-agent="{{.ID}}" data-name="{{.Host.Hostname}}" data-status="{{.Status}}"{{if filesAgent .Host.AgentVersion}} data-files{{end}}{{if .Current}} class="current"{{end}}>
+{{range .Rows}}<tr data-agent="{{.ID}}" data-name="{{.Host.Hostname}}" data-status="{{.Status}}" data-os="{{.Host.OS}}"{{if filesAgent .Host.AgentVersion}} data-files{{end}}{{if .Current}} class="current"{{end}}>
   {{if $.Select}}<td><input type="checkbox" name="agent" value="{{.ID}}"{{if .Checked}} checked{{end}} aria-label="{{tf "seleziona %s" .Host.Hostname}}"></td>{{end}}
   <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}}
     <a href="{{rowLink $.View .ID}}">{{.Host.Hostname}}</a>{{if eq .Host.OSFamily "server"}} <span class="badge">server</span>{{end}}{{if eq .UpdateRing "pilot"}} <span class="badge pending" title="{{t "Anello aggiornamenti"}}">pilot</span>{{end}}
@@ -34,6 +34,7 @@
   <a role="menuitem" data-only-active data-tab="commands" data-hash="commands">›_ {{t "Esegui un comando…"}}</a>
   <a role="menuitem" data-only-active data-tab="commands" data-hash="act-script">{{t "Esegui uno script…"}}</a>
   <a role="menuitem" data-only-active data-tab="commands" data-hash="act-shell">{{t "Shell interattiva…"}}</a>
+  <a role="menuitem" data-only-active data-only-windows data-tab="commands" data-hash="act-message-send">💬 {{t "Invia un messaggio all'utente…"}}</a>
   <button type="button" role="menuitem" data-only-active data-only-files data-post="/agents/{id}/files">📁 {{t "Gestione dei file…"}}</button>
   <a role="menuitem" data-only-active data-tab="commands" data-hash="install-software">{{t "Installa software…"}}</a>
   <hr>

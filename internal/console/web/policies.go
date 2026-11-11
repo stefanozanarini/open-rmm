@@ -35,9 +35,58 @@ type formRule struct {
 type policyView struct {
 	store.PolicyVersion
 	Rules []policy.Rule
+	// Stale: modules of the rules with a newer published version.
+	Stale []staleModule
 }
 
-type policiesData struct{ Policies []policyView }
+type policiesData struct {
+	Policies []policyView
+	Stale    int // policies to update
+}
+
+// staleModule is a module a policy uses in an older version than the
+// newest published.
+type staleModule struct{ Module, From, To string }
+
+// staleModules lists the modules of rules with a newer published version.
+// A policy keeps the versions it was approved with: saving it again in
+// the editor moves it to the newest ones.
+func staleModules(rules []policy.Rule, latest map[string]string) []staleModule {
+	var out []staleModule
+	seen := map[string]bool{}
+	for _, r := range rules {
+		to, ok := latest[r.Module]
+		if !ok || seen[r.Module] || compareVersions(to, r.ModuleVersion) <= 0 {
+			continue
+		}
+		seen[r.Module] = true
+		out = append(out, staleModule{Module: r.Module, From: r.ModuleVersion, To: to})
+	}
+	return out
+}
+
+// stalePolicies counts the operator-made policies of tenant that use an
+// older module version than the newest published.
+func (s *Server) stalePolicies(r *http.Request, tenant string) int {
+	cur, err := s.store.CurrentPolicies(r.Context(), tenant)
+	if err != nil {
+		return 0
+	}
+	latest, err := s.latestModules(r)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, p := range cur {
+		if p.CreatedBy == "automatic" {
+			continue
+		}
+		if pol, err := policy.Parse(p.Document); err == nil && len(staleModules(pol.Rules, latest)) > 0 {
+			n++
+		}
+	}
+	return n
+}
 
 func (s *Server) handlePolicies(w http.ResponseWriter, r *http.Request) {
 	t, ok := tenantOf(r)
@@ -50,11 +99,23 @@ func (s *Server) handlePolicies(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	latest, err := s.latestModules(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var d policiesData
 	for _, p := range cur {
 		v := policyView{PolicyVersion: p}
 		if pol, err := policy.Parse(p.Document); err == nil {
 			v.Rules = pol.Rules
+			// The automatic collection is kept up to date by the console.
+			if p.CreatedBy != "automatic" {
+				v.Stale = staleModules(pol.Rules, latest)
+			}
+		}
+		if len(v.Stale) > 0 {
+			d.Stale++
 		}
 		d.Policies = append(d.Policies, v)
 	}

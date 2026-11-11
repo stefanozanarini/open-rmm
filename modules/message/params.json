@@ -1,0 +1,42 @@
+{
+  "send": [
+    {
+      "name": "title",
+      "type": "string",
+      "label": { "it": "Titolo", "en": "Title" },
+      "default": "IT"
+    },
+    {
+      "name": "text",
+      "type": "text",
+      "required": true,
+      "label": { "it": "Messaggio", "en": "Message" },
+      "help": { "it": "Al massimo 1000 caratteri.", "en": "At most 1000 characters." }
+    },
+    {
+      "name": "icon",
+      "type": "enum",
+      "label": { "it": "Icona", "en": "Icon" },
+      "options": [
+        { "value": "info", "label": { "it": "Informazione", "en": "Information" } },
+        { "value": "warning", "label": { "it": "Avviso", "en": "Warning" } },
+        { "value": "error", "label": { "it": "Errore", "en": "Error" } }
+      ],
+      "default": "info"
+    },
+    {
+      "name": "timeout_seconds",
+      "type": "int",
+      "label": { "it": "Chiudi dopo (secondi, 0 = mai)", "en": "Close after (seconds, 0 = never)" },
+      "default": 0,
+      "min": 0,
+      "max": 3600
+    },
+    {
+      "name": "wait",
+      "type": "bool",
+      "label": { "it": "Attendi che l'utente prema OK (il job resta aperto)", "en": "Wait for the user to press OK (the job stays open)" },
+      "default": false
+    }
+  ]
+}

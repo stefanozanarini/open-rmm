@@ -1,0 +1,13 @@
+{
+  "id": "message",
+  "version": "1.0.0",
+  "description": "Shows a message box to the users signed in on the computer (every active session), optionally waiting for them to press OK.",
+  "protocol_version": 1,
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "send": { "description": "Show a message to the signed-in users (params: title, text, icon, timeout_seconds, wait)", "timeout_seconds": 3700 }
+  }
+}

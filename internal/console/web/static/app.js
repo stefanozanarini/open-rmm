@@ -100,6 +100,9 @@
     var id = row.dataset.agent;
     menu = tpl.content.firstElementChild.cloneNode(true);
     menu.querySelector(".ctx-title").textContent = row.dataset.name || "";
+    menu.querySelectorAll("[data-only-windows]").forEach(function (el) {
+      if (row.dataset.os !== "windows") el.remove();
+    });
     menu.querySelectorAll("[data-only-files]").forEach(function (el) {
       if (!row.hasAttribute("data-files")) el.remove();
     });
