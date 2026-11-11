@@ -88,18 +88,38 @@ function Get-DcuPath($Params) {
         (Join-Path ${env:ProgramFiles(x86)} 'Dell\CommandUpdate\dcu-cli.exe'))
 }
 
-function Get-DellUpdates([string]$Dcu) {
-    $dir = Join-Path $env:OPENRMM_WORK_DIR 'dcu-report'
-    [void](New-Item -ItemType Directory -Path $dir -Force)
-    $out = & $Dcu /scan "-report=$dir" -silent 2>&1 | ForEach-Object { [string]$_ }
-    $code = $LASTEXITCODE
-    # 500: no updates found.
-    if ($code -ne 0 -and $code -ne 500) {
-        throw "dcu-cli /scan failed with exit code $code`: $((@($out) | Select-Object -Last 3) -join ' ')"
+# New-DcuDir creates a folder for the report and log of dcu-cli. DCU 5.x
+# refuses paths it treats as reserved (exit code 107), the module's work
+# folder among them: the folder is created under ProgramData\Dell, where
+# Dell allows them, with a new name and access for SYSTEM and
+# Administrators only, and removed afterwards.
+function New-DcuDir {
+    $dir = Join-Path $env:ProgramData ('Dell\open-rmm\' + [guid]::NewGuid().ToString('N'))
+    [void](New-Item -ItemType Directory -Path $dir)
+    $acl = New-Object System.Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    foreach ($sid in 'S-1-5-18', 'S-1-5-32-544') {
+        $id = New-Object System.Security.Principal.SecurityIdentifier($sid)
+        $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($id, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
     }
-    $file = Get-ChildItem -Path $dir -Filter '*.xml' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $file) { return @() }
-    [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw
+    Set-Acl -LiteralPath $dir -AclObject $acl
+    $dir
+}
+
+function Get-DellUpdates([string]$Dcu) {
+    $dir = New-DcuDir
+    try {
+        $out = & $Dcu /scan "-report=$dir" -silent 2>&1 | ForEach-Object { [string]$_ }
+        $code = $LASTEXITCODE
+        # 500: no updates found.
+        if ($code -ne 0 -and $code -ne 500) {
+            throw "dcu-cli /scan failed with exit code $code`: $((@($out) | Select-Object -Last 3) -join ' ')"
+        }
+        $file = Get-ChildItem -Path $dir -Filter '*.xml' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $file) { return @() }
+        [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw
+    }
+    finally { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
     $list = @()
     foreach ($u in @($xml.updates.update)) {
         if ($null -eq $u) { continue }
@@ -118,9 +138,14 @@ function Get-DellUpdates([string]$Dcu) {
 
 function Install-Dell([string]$Dcu, [string[]]$Types, [string]$Severity) {
     $sev = switch ($Severity) { 'critical' { 'security,critical' } 'recommended' { 'security,critical,recommended' } default { 'security,critical,recommended,optional' } }
-    $log = Join-Path $env:OPENRMM_WORK_DIR 'dcu-apply.log'
-    $out = & $Dcu /applyUpdates -silent -reboot=disable "-updateType=$($Types -join ',')" "-updateSeverity=$sev" -autoSuspendBitLocker=enable "-outputLog=$log" 2>&1 | ForEach-Object { [string]$_ }
-    $code = $LASTEXITCODE
+    $dir = New-DcuDir
+    try {
+        $log = Join-Path $dir 'dcu-apply.log'
+        $out = & $Dcu /applyUpdates -silent -reboot=disable "-updateType=$($Types -join ',')" "-updateSeverity=$sev" -autoSuspendBitLocker=enable "-outputLog=$log" 2>&1 | ForEach-Object { [string]$_ }
+        $code = $LASTEXITCODE
+        if (Test-Path -LiteralPath $log) { Copy-Item -LiteralPath $log -Destination (Join-Path $env:OPENRMM_WORK_DIR 'dcu-apply.log') -ErrorAction SilentlyContinue }
+    }
+    finally { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
     # 0 done, 1 and 5 reboot needed, 500 nothing to install.
     $reboot = $code -eq 1 -or $code -eq 5
     if ($code -ne 0 -and -not $reboot -and $code -ne 500) {

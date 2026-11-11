@@ -1,6 +1,6 @@
 {
   "id": "firmware",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "BIOS, firmware and driver updates with the vendor tools: Dell Command Update, Lenovo System Update and HP Image Assistant, which install-tool installs with winget. Other vendors are reported as not supported.",
   "protocol_version": 1,
   "entrypoints": {
