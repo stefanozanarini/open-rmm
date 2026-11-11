@@ -154,6 +154,8 @@ func funcs(lang string) template.FuncMap {
 		"th":           func(key string) template.HTML { return trHTML(lang, key) },
 		"msg":          func(s string) string { return trMessage(lang, s) },
 		"platformName": func(p string) string { return platformName(lang, p) },
+		"dayName":      func(d string) string { return tr(lang, dayNames[d]) },
+		"interval":     func(d string) string { return intervalName(lang, d) },
 		"checkLink": func(agentID string, panel bool, checkID string) *actionLink {
 			return checkAction(lang, agentID, panel, checkID)
 		},

@@ -17,6 +17,9 @@ import (
 
 type paramField struct {
 	modules.ParamSpec
+	// Prefix goes before the name in the field name (p.<prefix><name>):
+	// the policy editor has the fields of several actions in one form.
+	Prefix            string
 	Text, Help, Value string
 	MinS, MaxS        string // bounds of an int, "" when unbounded
 	Options           []paramOption

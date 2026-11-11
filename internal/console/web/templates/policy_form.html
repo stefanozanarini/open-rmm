@@ -1,8 +1,9 @@
 {{define "content"}}
 {{with .Data}}
-<form method="post" action="/policies" class="stack wide">
+<form method="post" action="/policies" class="stack wide policy-editor">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <input type="hidden" name="id" value="{{.ID}}">
+  {{if .JSON}}<input type="hidden" name="mode" value="json">{{end}}
   <label>{{t "Nome"}} <input name="name" value="{{.Name}}" maxlength="80" required></label>
   <label>{{t "Si applica a"}}
     <select name="applies_to">
@@ -11,6 +12,7 @@
       <option value="servers" {{if eq .AppliesTo "servers"}}selected{{end}}>{{t "Solo server"}}</option>
     </select>
   </label>
+{{if .JSON}}
   <label>{{t "Regole (JSON)"}}
     <textarea name="rules" rows="18" spellcheck="false">{{.Rules}}</textarea>
   </label>
@@ -19,6 +21,58 @@
     <p class="muted">{{th `Ogni regola indica il modulo (id e versione pubblicati), l'azione e l'intervallo (<code>15m</code>, <code>24h</code>; minimo 1m, massimo 7 giorni). Condizioni facoltative in <code>when</code>: <code>service_exists</code>, <code>file_exists</code>, <code>registry_key_exists</code> (<code>HKLM\…</code>), <code>os_family</code> (<code>client</code>/<code>server</code>), combinabili con <code>all</code>, <code>any</code>, <code>not</code>. Finestra facoltativa in <code>window</code>, nell'ora locale dell'endpoint: <code>{"days":["sat","sun"],"start":"22:00","end":"05:00"}</code> (giorni <code>mon</code>…<code>sun</code>, vuoto = ogni giorno; una fine prima dell'inizio attraversa la mezzanotte).`}}</p>
     <pre>{{.Example}}</pre>
   </details>
+  <p><a href="{{if .ID}}/policies/{{.ID}}{{else}}/policies/new{{end}}">{{t "Torna all'editor a moduli"}}</a> <span class="muted">{{t "(le modifiche al JSON non salvate vanno perse)"}}</span></p>
+{{else}}
+  <p class="muted">{{t "Spunta le azioni da eseguire periodicamente sugli agenti e scegli ogni quanto, dove e quando. Ogni azione usa l'ultima versione pubblicata del suo modulo."}}</p>
+  {{$weekdays := .Weekdays}}
+  {{range .Modules}}
+  <details class="module-card"{{if .Active}} open{{end}}>
+    <summary><strong>{{.ID}}</strong> <span class="muted">{{.Version}}</span>{{if .Active}} <span class="badge chk-ok">{{tf "%d attive" .Active}}</span>{{end}}
+      {{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</summary>
+    {{range .Actions}}{{$a := .}}
+    <fieldset class="policy-action">
+      <legend><label class="check"><input type="checkbox" name="on.{{.Key}}" value="1"{{if .On}} checked{{end}}> <strong>{{.Name}}</strong></label>
+        {{with .Description}}<span class="muted small">{{.}}</span>{{end}}</legend>
+      <div class="settings stack">
+        <div class="row">
+          <label>{{t "Ogni"}} <select name="every.{{.Key}}">{{range .EveryOptions}}<option value="{{.}}"{{if eq . $a.Every}} selected{{end}}>{{interval .}}</option>{{end}}</select></label>
+          <label>{{t "Esegui"}} <select name="cond.{{.Key}}">
+            <option value=""{{if eq .Cond ""}} selected{{end}}>{{t "su tutti gli agenti della policy"}}</option>
+            <option value="client"{{if eq .Cond "client"}} selected{{end}}>{{t "solo sui client"}}</option>
+            <option value="server"{{if eq .Cond "server"}} selected{{end}}>{{t "solo sui server"}}</option>
+            <option value="service_exists"{{if eq .Cond "service_exists"}} selected{{end}}>{{t "solo se esiste il servizio…"}}</option>
+            <option value="file_exists"{{if eq .Cond "file_exists"}} selected{{end}}>{{t "solo se esiste il file…"}}</option>
+            <option value="registry_key_exists"{{if eq .Cond "registry_key_exists"}} selected{{end}}>{{t "solo se esiste la chiave di registro…"}}</option>
+            {{if eq .Cond "json"}}<option value="json" selected>{{t "condizione avanzata"}}</option>{{end}}
+          </select></label>
+          <label>{{t "Servizio, file o chiave"}} <input name="condv.{{.Key}}" value="{{.CondValue}}" placeholder="{{t "es. ntrtscan, C:\\Programmi\\…, HKLM\\SOFTWARE\\…"}}"></label>
+        </div>
+        {{if eq .Cond "json"}}<label>{{t "Condizione avanzata (JSON)"}} <input name="condjson.{{.Key}}" value="{{.CondJSON}}" spellcheck="false"></label>{{end}}
+        <fieldset class="window"><legend>{{t "Solo in questa finestra (facoltativo, ora locale dell'agente)"}}</legend>
+          <div class="row">
+            {{range $weekdays}}<label class="check"><input type="checkbox" name="day.{{$a.Key}}.{{.}}" value="1"{{if index $a.Days .}} checked{{end}}> {{dayName .}}</label>{{end}}
+          </div>
+          <div class="row">
+            <label>{{t "dalle"}} <input type="time" name="start.{{.Key}}" value="{{.Start}}"></label>
+            <label>{{t "alle"}} <input type="time" name="end.{{.Key}}" value="{{.End}}"></label>
+          </div>
+          <p class="muted small">{{t "Nessun giorno spuntato: ogni giorno. Una fine prima dell'inizio attraversa la mezzanotte."}}</p>
+        </fieldset>
+        {{if .Known}}{{with .Fields}}<fieldset><legend>{{t "Parametri"}}</legend>{{template "param-fields" .}}</fieldset>{{end}}
+        {{else}}<label>{{t "Parametri (JSON, facoltativi)"}} <input name="pjson.{{.Key}}" value="{{.ParamsJSON}}" spellcheck="false"></label>{{end}}
+      </div>
+    </fieldset>
+    {{end}}
+  </details>
+  {{else}}<p class="muted">{{t "Nessun modulo pubblicato."}}</p>{{end}}
+  {{with .ExtraRules}}
+  <h3>{{t "Regole mantenute così come sono"}}</h3>
+  <p class="muted">{{t "Queste regole usano una versione del modulo o una combinazione che l'editor non mostra: restano invariate. Per cambiarle usa il JSON."}}</p>
+  <ul>{{range .}}<li><code>{{.Module}} {{.Version}}</code> · {{.Action}} · {{interval .Every}}</li>{{end}}</ul>
+  {{end}}
+  <input type="hidden" name="extra" value="{{.Extra}}">
+  <p><a href="{{if .ID}}/policies/{{.ID}}{{else}}/policies/new{{end}}?mode=json">{{t "Modifica come JSON (avanzato)"}}</a></p>
+{{end}}
   <p class="muted">{{t "Salvando, ti verrà chiesto di autenticarti di nuovo con Microsoft per approvare esattamente questa versione."}}</p>
   <button class="primary">{{t "Approva e salva"}}{{if .Version}} {{tf "(versione %d → nuova)" .Version}}{{end}}</button>
 </form>

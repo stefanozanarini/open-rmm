@@ -210,3 +210,15 @@ details.raw { margin-top:24px; }
 details.raw > summary { cursor:pointer; color:var(--muted); }
 a.button.small { padding:2px 10px; font-size:12px; white-space:nowrap; }
 div.failure { margin-top:4px; max-width:260px; }
+
+/* Policy editor: one card per module, an action's settings shown when it is switched on. */
+details.module-card { border:1px solid var(--line); border-radius:4px; background:var(--card); margin:6px 0; }
+details.module-card > summary { padding:8px 12px; }
+details.module-card[open] > summary { border-bottom:1px solid var(--line); }
+fieldset.policy-action { border:0; border-bottom:1px solid var(--line); margin:0; padding:10px 12px; }
+fieldset.policy-action:last-child { border-bottom:0; }
+fieldset.policy-action > legend { padding:0; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+fieldset.policy-action:has(> legend input:not(:checked)) > .settings { display:none; }
+fieldset.policy-action .settings { margin:8px 0 0 24px; }
+fieldset.policy-action .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+fieldset.policy-action fieldset.window { border:1px solid var(--line); border-radius:4px; padding:6px 10px; }

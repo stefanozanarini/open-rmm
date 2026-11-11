@@ -101,7 +101,8 @@ func TestConsoleSetupAndCodeSigning(t *testing.T) {
 	// The baseline policy is prefilled with the published modules only.
 	_, body = get(t, c, e.console.URL+"/policies/new?template=baseline")
 	body = html.UnescapeString(body)
-	if !strings.Contains(body, `"module": "inventory"`) || !strings.Contains(body, `"module": "accesslog"`) || strings.Contains(body, `"module": "winupdate"`) {
+	if !strings.Contains(body, `name="on.inventory.collect" value="1" checked`) || !strings.Contains(body, `name="on.accesslog.collect" value="1" checked`) ||
+		strings.Contains(body, `name="on.winupdate.`) {
 		t.Fatalf("baseline policy: %s", body)
 	}
 

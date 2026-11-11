@@ -557,7 +557,7 @@ func TestConsoleCreatesPolicyWithStepUp(t *testing.T) {
 	rules := `[{"id":"info","module":"sysinfo","version":"1.0.0","action":"info","every":"6h",
 	  "when":{"any":[{"service_exists":"ds_agent"},{"os_family":"server"}]}}]`
 	code, body, final := post(t, c, e.console.URL+"/policies", url.Values{"csrf": {csrf}, "name": {"Baseline"},
-		"applies_to": {"servers"}, "rules": {rules}})
+		"applies_to": {"servers"}, "mode": {"json"}, "rules": {rules}})
 	if code != 200 || final.Path != "/policies" || !strings.Contains(body, "Baseline") {
 		t.Fatalf("save policy: %d at %s: %s", code, final, body)
 	}
@@ -577,7 +577,7 @@ func TestConsoleCreatesPolicyWithStepUp(t *testing.T) {
 	}
 	// Editing creates version 2 of the same policy.
 	code, _, _ = post(t, c, e.console.URL+"/policies", url.Values{"csrf": {csrf}, "id": {p.ID}, "name": {"Baseline"},
-		"applies_to": {"all"}, "rules": {rules}})
+		"applies_to": {"all"}, "mode": {"json"}, "rules": {rules}})
 	if cur, _ = e.store.CurrentPolicies(context.Background(), e.tenant); code != 200 || cur[0].Version != 2 {
 		t.Fatalf("edit: %d, %+v", code, cur)
 	}
@@ -593,7 +593,7 @@ func TestConsoleRefusesAdHocModulesInPolicies(t *testing.T) {
 	publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "script"))
 	c, csrf := e.login(t, admin)
 	code, body, _ := post(t, c, e.console.URL+"/policies", url.Values{"csrf": {csrf}, "name": {"Bad"}, "applies_to": {"all"},
-		"rules": {`[{"id":"s","module":"script","version":"1.0.0","action":"run","every":"1h"}]`}})
+		"mode": {"json"}, "rules": {`[{"id":"s","module":"script","version":"1.0.0","action":"run","every":"1h"}]`}})
 	if code != 200 || !strings.Contains(html.UnescapeString(body), "non possono stare in una policy") {
 		t.Fatalf("ad-hoc module accepted in a policy form: %d", code)
 	}

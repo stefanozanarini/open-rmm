@@ -34,7 +34,7 @@ type formRule struct {
 
 type policyView struct {
 	store.PolicyVersion
-	Rules int
+	Rules []policy.Rule
 }
 
 type policiesData struct{ Policies []policyView }
@@ -54,7 +54,7 @@ func (s *Server) handlePolicies(w http.ResponseWriter, r *http.Request) {
 	for _, p := range cur {
 		v := policyView{PolicyVersion: p}
 		if pol, err := policy.Parse(p.Document); err == nil {
-			v.Rules = len(pol.Rules)
+			v.Rules = pol.Rules
 		}
 		d.Policies = append(d.Policies, v)
 	}
@@ -66,8 +66,30 @@ type policyFormData struct {
 	Name      string
 	AppliesTo string
 	Version   int64
-	Rules     string
-	Example   string
+	// JSON is the advanced editor: Rules is the JSON text.
+	JSON    bool
+	Rules   string
+	Example string
+	// The module editor: the cards, and the rules it keeps as they are
+	// (Extra, JSON in a hidden field).
+	Modules    []policyModuleView
+	ExtraRules []formRule
+	Extra      string
+	Weekdays   []string
+}
+
+// editorForm fills the module editor from rules.
+func (s *Server) editorForm(r *http.Request, d *policyFormData, rules []formRule) error {
+	mods, extra, err := s.policyEditor(r.Context(), s.lang(r), rules)
+	if err != nil {
+		return err
+	}
+	d.Modules, d.ExtraRules, d.Weekdays = mods, extra, weekdayOrder
+	if len(extra) > 0 {
+		b, _ := json.Marshal(extra)
+		d.Extra = string(b)
+	}
+	return nil
 }
 
 const exampleRules = `[
@@ -90,7 +112,7 @@ const exampleRules = `[
 
 func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 	t, _ := tenantOf(r)
-	d := policyFormData{AppliesTo: policy.AppliesAll, Rules: "[]", Example: exampleRules}
+	d := policyFormData{AppliesTo: policy.AppliesAll, Rules: "[]", Example: exampleRules, JSON: r.URL.Query().Get("mode") == "json"}
 	if r.URL.Query().Get("template") == "baseline" && r.PathValue("id") == "" {
 		rules, err := s.baselineRules(r)
 		if err != nil {
@@ -120,7 +142,15 @@ func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 				Every: ru.Every().String(), Params: ru.Params, When: ru.When, Window: ru.Window})
 		}
 		b, _ := json.MarshalIndent(rules, "", "  ")
-		d = policyFormData{ID: p.ID, Name: p.Name, AppliesTo: p.AppliesTo, Version: p.Version, Rules: string(b), Example: exampleRules}
+		d = policyFormData{ID: p.ID, Name: p.Name, AppliesTo: p.AppliesTo, Version: p.Version, Rules: string(b), Example: exampleRules, JSON: d.JSON}
+	}
+	if !d.JSON {
+		var rules []formRule
+		_ = json.Unmarshal([]byte(d.Rules), &rules)
+		if err := s.editorForm(r, &d, rules); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	title := "Nuova policy"
 	if d.ID != "" {
@@ -129,8 +159,22 @@ func (s *Server) handlePolicyForm(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "policy_form", s.T(r, title), d)
 }
 
+// formRules reads the rules of either editor.
+func (s *Server) formRules(r *http.Request) ([]formRule, error) {
+	if r.PostFormValue("mode") != "json" {
+		return s.editorRules(r)
+	}
+	var rules []formRule
+	dec := json.NewDecoder(strings.NewReader(r.PostFormValue("rules")))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&rules); err != nil {
+		return nil, errors.New(s.Tf(r, "regole: JSON non valido: %v", err))
+	}
+	return rules, nil
+}
+
 // buildPolicy turns the form into a validated, canonical policy document.
-func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request) (*policy.Policy, []byte, error) {
+func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request, rules []formRule) (*policy.Policy, []byte, error) {
 	id := r.PostFormValue("id")
 	version := int64(1)
 	if id != "" {
@@ -144,12 +188,6 @@ func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request
 		version = cur.Version + 1
 	} else {
 		id = ids.NewUUID()
-	}
-	var rules []formRule
-	dec := json.NewDecoder(strings.NewReader(r.PostFormValue("rules")))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&rules); err != nil {
-		return nil, nil, errors.New(s.Tf(r, "regole: JSON non valido: %v", err))
 	}
 	p := &policy.Policy{ID: id, TenantID: tenant, Name: strings.TrimSpace(r.PostFormValue("name")), Version: version,
 		AppliesTo: r.PostFormValue("applies_to")}
@@ -195,10 +233,23 @@ func (s *Server) handleSavePolicy(w http.ResponseWriter, r *http.Request) {
 		s.flash(w, r, s.T(r, "La raccolta automatica è mantenuta dalla console."), "/policies")
 		return
 	}
-	_, raw, err := s.buildPolicy(r.Context(), t, r)
+	rules, err := s.formRules(r)
+	var raw []byte
+	if err == nil {
+		_, raw, err = s.buildPolicy(r.Context(), t, r, rules)
+	}
 	if err != nil {
 		d := policyFormData{ID: r.PostFormValue("id"), Name: r.PostFormValue("name"), AppliesTo: r.PostFormValue("applies_to"),
-			Rules: r.PostFormValue("rules"), Example: exampleRules}
+			Rules: r.PostFormValue("rules"), Example: exampleRules, JSON: r.PostFormValue("mode") == "json"}
+		if cur, e := s.store.GetPolicy(r.Context(), t, d.ID); e == nil {
+			d.Version = cur.Version
+		}
+		if !d.JSON {
+			if e := s.editorForm(r, &d, rules); e != nil {
+				s.fail(w, r, e)
+				return
+			}
+		}
 		sess := sessionFrom(r.Context())
 		sess.data.Flash = s.Tf(r, "Policy non valida: %v", err)
 		s.render(w, r, "policy_form", s.T(r, "Policy"), d)

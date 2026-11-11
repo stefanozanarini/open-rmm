@@ -437,12 +437,12 @@
 
 {{define "param-fields"}}
 {{range .}}{{$f := .}}
-{{if eq .Type "bool"}}<label class="check"><input type="checkbox" name="p.{{.Name}}" value="true"{{if .Value}} checked{{end}}> {{.Text}}</label>
-{{else if eq .Type "enum"}}<label>{{.Text}} <select name="p.{{.Name}}">{{if not .Required}}<option value="">{{t "predefinito del modulo"}}</option>{{end}}{{range .Options}}<option value="{{.Value}}"{{if .Checked}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
-{{else if eq .Type "multi"}}<fieldset><legend>{{.Text}}</legend>{{range .Options}}<label class="check"><input type="checkbox" name="p.{{$f.Name}}" value="{{.Value}}"{{if .Checked}} checked{{end}}> {{.Label}}</label>{{end}}</fieldset>
-{{else if eq .Type "int"}}<label>{{.Text}} <input type="number" name="p.{{.Name}}" value="{{.Value}}"{{with .MinS}} min="{{.}}"{{end}}{{with .MaxS}} max="{{.}}"{{end}}{{if .Required}} required{{end}}></label>
-{{else if or (eq .Type "list") (eq .Type "text")}}<label>{{.Text}} <textarea name="p.{{.Name}}" rows="3" spellcheck="false"{{if .Required}} required{{end}}>{{.Value}}</textarea></label>
-{{else}}<label>{{.Text}} <input name="p.{{.Name}}" value="{{.Value}}"{{if .Required}} required{{end}}></label>{{end}}
+{{if eq .Type "bool"}}<label class="check"><input type="checkbox" name="p.{{.Prefix}}{{.Name}}" value="true"{{if .Value}} checked{{end}}> {{.Text}}</label>
+{{else if eq .Type "enum"}}<label>{{.Text}} <select name="p.{{.Prefix}}{{.Name}}">{{if not .Required}}<option value="">{{t "predefinito del modulo"}}</option>{{end}}{{range .Options}}<option value="{{.Value}}"{{if .Checked}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+{{else if eq .Type "multi"}}<fieldset><legend>{{.Text}}</legend>{{range .Options}}<label class="check"><input type="checkbox" name="p.{{$f.Prefix}}{{$f.Name}}" value="{{.Value}}"{{if .Checked}} checked{{end}}> {{.Label}}</label>{{end}}</fieldset>
+{{else if eq .Type "int"}}<label>{{.Text}} <input type="number" name="p.{{.Prefix}}{{.Name}}" value="{{.Value}}"{{with .MinS}} min="{{.}}"{{end}}{{with .MaxS}} max="{{.}}"{{end}}{{if .Required}} required{{end}}></label>
+{{else if or (eq .Type "list") (eq .Type "text")}}<label>{{.Text}} <textarea name="p.{{.Prefix}}{{.Name}}" rows="3" spellcheck="false"{{if .Required}} required{{end}}>{{.Value}}</textarea></label>
+{{else}}<label>{{.Text}} <input name="p.{{.Prefix}}{{.Name}}" value="{{.Value}}"{{if .Required}} required{{end}}></label>{{end}}
 {{with .Help}}<p class="muted small">{{.}}</p>{{end}}
 {{end}}
 {{end}}
