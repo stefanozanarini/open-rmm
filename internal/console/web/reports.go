@@ -4,13 +4,16 @@ import (
 	"encoding/csv"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/vuln"
 	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
+	"github.com/stefanozanarini/tempra-rmm/internal/updates"
 )
 
 // Reporting: questions over what the agents collected, answered from the
@@ -33,6 +36,10 @@ type reportsData struct {
 	Sites                                          []store.Site
 	Searched                                       bool
 	Rows                                           []reportRow
+	// Upgrades: the applications matching the software filter that winget
+	// can upgrade on some of the computers found, with the action prepared
+	// for them.
+	Upgrades []reportUpgrade
 	// Operating systems.
 	OS []osGroup
 	// Logons.
@@ -52,6 +59,12 @@ type reportRow struct {
 	User     string
 	Software []inventory.Software // installed applications that matched
 	Seen     time.Time            // inventory date
+}
+
+type reportUpgrade struct {
+	ID, Name, Available string
+	Count               int
+	URL                 string // bulk form, action and computers filled in
 }
 
 type osGroup struct {
@@ -234,6 +247,12 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(d.Rows, func(i, j int) bool {
 		return strings.ToLower(d.Rows[i].Agent.Host.Hostname) < strings.ToLower(d.Rows[j].Agent.Host.Hostname)
 	})
+	if d.Software != "" && len(d.Rows) > 0 && !csvOut {
+		if d.Upgrades, err = s.reportUpgrades(r, t, d.Software, d.Rows); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	for l, n := range osCount {
 		d.OS = append(d.OS, osGroup{Label: l, Count: n})
 	}
@@ -289,4 +308,40 @@ func (s *Server) writeCSV(w http.ResponseWriter, name string, header []string, r
 		_ = cw.Write(cells)
 	})
 	cw.Flush()
+}
+
+// reportUpgrades lists, per winget id, the computers found that winget can
+// upgrade for an application whose name contains software.
+func (s *Server) reportUpgrades(r *http.Request, t, software string, rows []reportRow) ([]reportUpgrade, error) {
+	_, perAgent, err := s.outdatedApps(r, t)
+	if err != nil {
+		return nil, err
+	}
+	var out []reportUpgrade
+	for id, agents := range perAgent {
+		u := reportUpgrade{ID: id}
+		q := url.Values{"action": {updates.WingetModule + ".upgrade"}, "p.ids": {id}}
+		for _, row := range rows {
+			app, ok := agents[row.Agent.ID]
+			if !ok || row.Agent.Status != store.AgentActive || !contains(app.Name, software) {
+				continue
+			}
+			u.Count++
+			q.Add("agent", row.Agent.ID)
+			if u.Name == "" || vuln.CompareVersions(app.Available, u.Available) > 0 {
+				u.Name, u.Available = app.Name, app.Available
+			}
+		}
+		if u.Count > 0 {
+			u.URL = "/agents/bulk?" + q.Encode()
+			out = append(out, u)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
 }

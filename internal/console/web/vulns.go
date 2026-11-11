@@ -278,11 +278,18 @@ func (s *Server) cveFix(ctx context.Context, lang, tenant string, f *vuln.Findin
 		for _, h := range f.Hits {
 			userScope = userScope || h.UserScope
 		}
-		if userScope && app.Winget != "" {
+		if userScope && app.Winget != "" && app.ReplacesUserCopy {
 			q.Set("action", updates.WingetModule+".install")
 			q.Set("p.ids", app.Winget)
 			return "/agents/bulk?" + q.Encode(), tr(lang, "Installa per tutto il computer con winget…"),
 				tr(lang, "Installata nel profilo dell'utente: winget, che gira con l'account di sistema, non la vede e non la può aggiornare. L'installazione per tutto il computer la sostituisce al prossimo accesso dell'utente.")
+		}
+		var userNote string
+		switch {
+		case userScope && app.Mozilla:
+			userNote = tr(lang, "Installata nel profilo dell'utente: winget, che gira con l'account di sistema, non la può aggiornare. Falla aggiornare all'utente (☰ → Guida → Informazioni). Non installarla per tutto il computer: la copia nel profilo resterebbe e la nuova aprirebbe un profilo vuoto (segnalibri e password restano in quello vecchio, che si riattiva da about:profiles).")
+		case userScope:
+			userNote = tr(lang, "Installata nel profilo dell'utente: winget, che gira con l'account di sistema, non la può aggiornare. Aggiornala dall'applicazione stessa o distribuisci la versione per tutto il computer dalla pagina Software.")
 		}
 		seen := map[string]bool{}
 		for _, h := range f.Hits {
@@ -307,13 +314,15 @@ func (s *Server) cveFix(ctx context.Context, lang, tenant string, f *vuln.Findin
 			}
 		}
 		if len(seen) == 0 {
-			if userScope {
-				return "", "", tr(lang, "Installata nel profilo dell'utente: winget, che gira con l'account di sistema, non la può aggiornare. Aggiornala dall'applicazione stessa o distribuisci la versione per tutto il computer dalla pagina Software.")
+			if userNote != "" {
+				return "", "", userNote
 			}
 			return "", "", tr(lang, "Nessun aggiornamento winget disponibile per questa applicazione sui computer colpiti: distribuisci la nuova versione dalla pagina Software.")
 		}
+		// The computers with a copy in a user's profile are in the action
+		// too: winget finds nothing to upgrade there, the note says why.
 		q.Set("action", updates.WingetModule+".upgrade")
-		label = tr(lang, "Aggiorna l'applicazione con winget…")
+		label, note = tr(lang, "Aggiorna l'applicazione con winget…"), userNote
 	default:
 		seen := map[string]bool{}
 		for _, h := range f.Hits {

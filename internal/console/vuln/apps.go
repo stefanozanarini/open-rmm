@@ -25,19 +25,24 @@ type App struct {
 	// FromName takes the version from the name (first group) instead of
 	// the installer's version, which some products number differently.
 	FromName *regexp.Regexp
-	// Winget is the package that installs the application for every user,
-	// the fix for a copy installed in a user's profile.
+	// Winget is the package that installs the application for every user.
 	Winget string
+	// ReplacesUserCopy: the installation for every user removes a copy in
+	// a user's profile and keeps its data (Chrome). Others (Firefox) leave
+	// both copies, and Firefox opens a new, empty profile.
+	ReplacesUserCopy bool
+	// Mozilla: profiles are tied to the installation (Firefox 67+).
+	Mozilla bool
 }
 
 func re(s string) *regexp.Regexp { return regexp.MustCompile(s) }
 
 // Apps is the catalog.
 var Apps = []App{
-	{Label: "Google Chrome", CPE: "google:chrome", Name: re(`^Google Chrome$`), Winget: "Google.Chrome"},
-	{Label: "Mozilla Firefox", CPE: "mozilla:firefox", Name: re(`^Mozilla Firefox(?: \(|$| \d)`), Winget: "Mozilla.Firefox"},
-	{Label: "Mozilla Firefox ESR", CPE: "mozilla:firefox_esr", Name: re(`^Mozilla Firefox ESR`), Winget: "Mozilla.Firefox.ESR"},
-	{Label: "Mozilla Thunderbird", CPE: "mozilla:thunderbird", Name: re(`^Mozilla Thunderbird`), Winget: "Mozilla.Thunderbird"},
+	{Label: "Google Chrome", CPE: "google:chrome", Name: re(`^Google Chrome$`), Winget: "Google.Chrome", ReplacesUserCopy: true},
+	{Label: "Mozilla Firefox", CPE: "mozilla:firefox", Name: re(`^Mozilla Firefox(?: \(|$| \d)`), Winget: "Mozilla.Firefox", Mozilla: true},
+	{Label: "Mozilla Firefox ESR", CPE: "mozilla:firefox_esr", Name: re(`^Mozilla Firefox ESR`), Winget: "Mozilla.Firefox.ESR", Mozilla: true},
+	{Label: "Mozilla Thunderbird", CPE: "mozilla:thunderbird", Name: re(`^Mozilla Thunderbird`), Winget: "Mozilla.Thunderbird", Mozilla: true},
 	{Label: "Microsoft Edge", CPE: "microsoft:edge_chromium", Name: re(`^Microsoft Edge$`)},
 	{Label: "7-Zip", CPE: "7-zip:7-zip", Name: re(`^7-Zip \d`), Winget: "7zip.7zip"},
 	{Label: "Notepad++", CPE: `notepad-plus-plus:notepad\+\+`, Name: re(`^Notepad\+\+`), Winget: "Notepad++.Notepad++"},

@@ -64,6 +64,13 @@ func TestConsoleVulnerabilities(t *testing.T) {
 	e.store.PutVulnFeed(ctx, store.VulnFeed{Key: "nvd/google:chrome", Data: chrome})
 	e.addWindowsAgent(t, "PC-CHROME", inventory.Software{Name: "Google Chrome", Version: "134.0.6998.166", Scope: "user"})
 
+	// Firefox in a user's profile: no machine-wide install (a new, empty
+	// profile), the note explains.
+	ff, _ := json.Marshal([]vuln.AppCVE{{ID: "CVE-2026-75874", Title: "Sandbox escape", CVSS: 10,
+		Ranges: []vuln.VerRange{{EndExcl: "154.0"}}}})
+	e.store.PutVulnFeed(ctx, store.VulnFeed{Key: "nvd/mozilla:firefox", Data: ff})
+	e.addWindowsAgent(t, "PC-FIREFOX", inventory.Software{Name: "Mozilla Firefox (x64 en-GB)", Version: "148.0", Scope: "user"})
+
 	// Linux: the CVEs of a pending security update, with NVD's details.
 	lx := ids.NewUUID()
 	e.store.CreateAgent(ctx, store.Agent{TenantID: e.tenant, ID: lx, Status: store.AgentActive, CertFingerprint: lx,
@@ -97,6 +104,11 @@ func TestConsoleVulnerabilities(t *testing.T) {
 	_, body = get(t, c, e.console.URL+"/reports?tab=cve&id=CVE-2025-10585")
 	if body = html.UnescapeString(body); !strings.Contains(body, "profilo utente") || !strings.Contains(body, "Installa per tutto il computer con winget") {
 		t.Fatalf("user-scope detail: %s", body)
+	}
+	_, body = get(t, c, e.console.URL+"/reports?tab=cve&id=CVE-2026-75874")
+	if body = html.UnescapeString(body); !strings.Contains(body, "PC-FIREFOX") || !strings.Contains(body, "about:profiles") ||
+		strings.Contains(body, "/agents/bulk?") {
+		t.Fatalf("user-scope Firefox: %s", body)
 	}
 	// Fixing: the bulk form, opened on the action with its parameters.
 	fixLink := regexp.MustCompile(`href="(/agents/bulk\?[^"]+)"`)

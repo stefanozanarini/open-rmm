@@ -113,6 +113,9 @@
 </form>
 {{if .Searched}}
 <p>{{tf "%d computer." (len .Rows)}}{{if .Rows}} <a href="/reports?{{.Query}}&amp;format=csv">{{t "Esporta CSV"}}</a>{{end}}</p>
+{{if and $.CanRun .Upgrades}}<div class="stack">{{range .Upgrades}}<p><a class="button primary" href="{{.URL}}">↑ {{t "Aggiorna questa applicazione…"}}</a>
+  {{.Name}} <code>{{.ID}}</code> → {{.Available}} · {{tf "aggiornabile con winget su %d dei computer trovati" .Count}}</p>{{end}}
+  <p class="muted small">{{t "Apre l'azione già preparata: la controlli e la approvi con MFA una sola volta. Non sono inclusi i computer dove winget non vede l'applicazione (installata nel profilo dell'utente o winget assente)."}}</p></div>{{end}}
 {{if .Rows}}
 <table>
 <thead><tr><th>{{t "Computer"}}</th><th>{{t "Sede"}}</th><th>{{t "Sistema operativo"}}</th><th>{{t "Modello"}}</th><th>{{t "Utente"}}</th>{{if or .Software .Version}}<th>{{t "Software"}}</th>{{end}}<th>{{t "Inventario"}}</th></tr></thead>
