@@ -55,6 +55,16 @@ type Inventory struct {
 	// privileged groups (Administrators and the operators groups) with
 	// their members (inventory 1.2.0).
 	PrivilegedGroups []PrivilegedGroup `json:"privileged_groups,omitempty"`
+	// PendingUpdates: browser updates downloaded and applied at the next
+	// browser restart (Chrome, Edge; inventory 1.3.0).
+	PendingUpdates []PendingUpdate `json:"pending_updates,omitempty"`
+}
+
+// PendingUpdate is an application update waiting for a restart of the
+// application. Name is the application's name in the installed software.
+type PendingUpdate struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 
 // PrivilegedGroup is a built-in group of the domain.
@@ -376,6 +386,12 @@ func (inv *Inventory) normalize() {
 		admins = append(admins, a)
 	}
 	inv.LocalAdmins = admins
+	if len(inv.PendingUpdates) > 10 {
+		inv.PendingUpdates = inv.PendingUpdates[:10]
+	}
+	for i := range inv.PendingUpdates {
+		inv.PendingUpdates[i].Name, inv.PendingUpdates[i].Version = clip(inv.PendingUpdates[i].Name), clip(inv.PendingUpdates[i].Version)
+	}
 	if len(inv.PrivilegedGroups) > 10 {
 		inv.PrivilegedGroups = inv.PrivilegedGroups[:10]
 	}

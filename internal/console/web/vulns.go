@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -140,7 +141,13 @@ func (s *Server) vulnEndpoints(ctx context.Context, tenant string) ([]vuln.Endpo
 				}
 				if a.Host.OS == "windows" {
 					for _, sw := range parsed.Software {
-						ep.Apps = append(ep.Apps, vuln.InstalledApp{Name: sw.Name, Version: sw.Version, UserScope: sw.Scope == "user"})
+						app := vuln.InstalledApp{Name: sw.Name, Version: sw.Version, UserScope: sw.Scope == "user"}
+						for _, pu := range parsed.PendingUpdates {
+							if strings.EqualFold(pu.Name, sw.Name) && sw.Scope != "user" {
+								app.Pending = pu.Version
+							}
+						}
+						ep.Apps = append(ep.Apps, app)
 					}
 				}
 			}
@@ -313,7 +320,32 @@ func (s *Server) cveFix(ctx context.Context, lang, tenant string, f *vuln.Findin
 				}
 			}
 		}
+		pending := 0
+		for _, h := range f.Hits {
+			if h.Pending != "" {
+				pending++
+			}
+		}
+		if pending > 0 {
+			userNote = strings.TrimSpace(fmt.Sprintf(tr(lang, "%d computer hanno già scaricato una versione corretta: si installa quando l'utente chiude e riapre l'applicazione."), pending) + " " + userNote)
+		}
 		if len(seen) == 0 {
+			// No winget upgrade: a package of the library, the newest,
+			// deployed on the affected computers (not for a Mozilla copy in
+			// a user's profile, see userNote).
+			if !(userScope && app.Mozilla) {
+				if pkg := s.libraryPackage(ctx, tenant, app); pkg != nil {
+					dq := url.Values{}
+					for _, h := range f.Hits {
+						if h.Pending == "" {
+							dq.Add("agent", h.AgentID)
+						}
+					}
+					return "/packages/" + pkg.SHA256 + "/deploy?" + dq.Encode(),
+						fmt.Sprintf(tr(lang, "Distribuisci %s %s dalla libreria…"), pkg.Name, pkg.Version),
+						strings.TrimSpace(tr(lang, "Nessun aggiornamento winget per questa applicazione: si usa il pacchetto della libreria Software.") + " " + userNote)
+				}
+			}
 			if userNote != "" {
 				return "", "", userNote
 			}
@@ -338,4 +370,24 @@ func (s *Server) cveFix(ctx context.Context, lang, tenant string, f *vuln.Findin
 		label = tr(lang, "Aggiorna i pacchetti…")
 	}
 	return "/agents/bulk?" + q.Encode(), label, ""
+}
+
+// libraryPackage returns the newest package of the library for a catalog
+// application: by winget id, or by the application's name.
+func (s *Server) libraryPackage(ctx context.Context, tenant string, app *vuln.App) *store.Package {
+	pkgs, err := s.store.ListPackages(ctx, tenant)
+	if err != nil {
+		return nil
+	}
+	var best *store.Package
+	for i := range pkgs {
+		p := &pkgs[i]
+		if !((app.Winget != "" && strings.EqualFold(p.WingetID, app.Winget)) || app.Name.MatchString(p.Name)) {
+			continue
+		}
+		if best == nil || vuln.CompareVersions(p.Version, best.Version) > 0 {
+			best = p
+		}
+	}
+	return best
 }

@@ -64,6 +64,9 @@ type Hit struct {
 	Fix               string // e.g. KB5127648 (26200.9746)
 	Package           string // Linux: the package to update
 	UserScope         bool   // the application is installed in a user's profile
+	// Pending: a fixed version is downloaded and applied at the next
+	// restart of the application (Chrome, Edge).
+	Pending string
 }
 
 // Finding is a CVE with the endpoints it affects.
@@ -188,8 +191,17 @@ func (ix *Index) Match(eps []Endpoint) []Finding {
 				if fix != "" {
 					fix = app.Label + " " + fix
 				}
+				pending := ""
+				if pv := leadingVersion.FindString(a.Pending); pv != "" {
+					pending = pv
+					for _, r := range ac.Ranges {
+						if r.Contains(pv) {
+							pending = ""
+						}
+					}
+				}
 				add(&CVE{ID: ac.ID, Title: ac.Title, CVSS: ac.CVSS, Released: ac.Released}, app.Label,
-					Hit{AgentID: ep.AgentID, Hostname: ep.Hostname, Installed: app.Label + " " + v, Fix: fix, UserScope: a.UserScope})
+					Hit{AgentID: ep.AgentID, Hostname: ep.Hostname, Installed: app.Label + " " + v, Fix: fix, UserScope: a.UserScope, Pending: pending})
 			}
 		}
 		for _, p := range ep.Packages {

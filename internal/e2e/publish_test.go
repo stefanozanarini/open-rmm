@@ -300,11 +300,11 @@ func TestConsolePublishBundledModules(t *testing.T) {
 	}
 	approvePublish(t, e, c, csrf, "/modules/publish", "module")
 	_, body, _ := post(t, c, e.console.URL+"/modules/publish/bundled", url.Values{"csrf": {csrf}, "passphrase": {installerPass},
-		"module": {"inventory@1.2.0", "winupdate@1.3.0"}})
-	if !strings.Contains(body, "Moduli firmati e pubblicati: inventory 1.2.0, winupdate 1.3.0") {
+		"module": {"inventory@1.3.0", "winupdate@1.3.0"}})
+	if !strings.Contains(body, "Moduli firmati e pubblicati: inventory 1.3.0, winupdate 1.3.0") {
 		t.Fatalf("publish: %s", body)
 	}
-	for id, v := range map[string]string{"inventory": "1.2.0", "winupdate": "1.3.0"} {
+	for id, v := range map[string]string{"inventory": "1.3.0", "winupdate": "1.3.0"} {
 		if _, err := e.store.GetModule(ctx, id, v); err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
@@ -312,7 +312,7 @@ func TestConsolePublishBundledModules(t *testing.T) {
 	if _, err := e.store.GetModule(ctx, "winget", "1.0.0"); err == nil {
 		t.Fatal("unselected module published")
 	}
-	if _, body := get(t, c, e.console.URL+"/modules"); strings.Contains(body, `value="inventory@1.2.0"`) {
+	if _, body := get(t, c, e.console.URL+"/modules"); strings.Contains(body, `value="inventory@1.3.0"`) {
 		t.Fatal("published module still offered")
 	}
 
@@ -331,7 +331,7 @@ func TestConsolePublishBundledModules(t *testing.T) {
 	for _, r := range p.Rules {
 		modules = append(modules, r.Module+"@"+r.ModuleVersion)
 	}
-	if strings.Join(modules, ",") != "inventory@1.2.0,winupdate@1.3.0" {
+	if strings.Join(modules, ",") != "inventory@1.3.0,winupdate@1.3.0" {
 		t.Fatalf("rules = %v", modules)
 	}
 	// Unchanged modules: no new version. Operators cannot edit it.

@@ -7,6 +7,9 @@
 #   { "expect": ["sep"],                      # failing when not installed
 #     "products": ["sep", "basecamp"],        # report only these
 #     "definitions": { "ztsa": { "services": ["MyService"], "required": ["MyService"] } } }
+#
+# A required entry may list alternatives, "A|B": one of them must run
+# (service names changed between versions).
 Import-Module (Join-Path $PSScriptRoot '_sdk/OpenRmm.psm1')
 
 $ErrorActionPreference = 'Stop'
@@ -26,14 +29,16 @@ $catalog = [ordered]@{
     }
     basecamp = @{
         name      = 'Trend Vision One Endpoint Basecamp'
-        services  = @('EndpointBasecamp')
-        required  = @('EndpointBasecamp')
+        services  = @('Trend Micro Endpoint Basecamp', 'EndpointBasecamp')
+        required  = @('Trend Micro Endpoint Basecamp|EndpointBasecamp')
         uninstall = 'Endpoint Basecamp|Trend Micro Endpoint Sensor'
     }
     ztsa     = @{
         name      = 'Trend Vision One Zero Trust Secure Access'
-        services  = @('TMSAM', 'TmSecureAccess', 'ZTSA')
-        required  = @()
+        # 2.40: SWGMonitorService (ZTSA\ZTSAMonitorService.exe) and the
+        # network filter tm_netsrv.
+        services  = @('SWGMonitorService', 'tm_netsrv', 'TMSAM', 'TmSecureAccess', 'ZTSA')
+        required  = @('SWGMonitorService|TMSAM|TmSecureAccess|ZTSA')
         uninstall = 'Secure Access Module|Zero Trust Secure Access'
     }
 }
@@ -117,8 +122,12 @@ Invoke-RmmModule @{
             }
             $problems = @()
             foreach ($r in @($def.required)) {
-                $st = $services | Where-Object { $_.name -eq $r } | Select-Object -First 1
-                if (-not $st -or -not $st.exists) { $problems += "servizio $r assente" }
+                $alts = @(([string]$r) -split '\|')
+                foreach ($a in $alts) { if (-not ($services | Where-Object { $_.name -eq $a })) { $services += Get-ServiceState $a } }
+                $cands = @($services | Where-Object { $alts -contains $_.name })
+                $st = @($cands | Where-Object { $_.running }) + @($cands | Where-Object { $_.exists }) + $cands | Select-Object -First 1
+                $r = $st.name
+                if (-not $st -or -not $st.exists) { $problems += "servizio $(([string]$alts[0])) assente" }
                 elseif (-not $st.running) { $problems += "servizio $r $($st.state)" }
                 elseif ($st.start_mode -eq 'Disabled') { $problems += "servizio $r disabilitato" }
             }

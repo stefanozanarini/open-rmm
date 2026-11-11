@@ -1,6 +1,6 @@
 {
   "id": "shell",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Interactive shell session (PowerShell on Windows), opened by the agent on a pseudo-terminal for one MFA-approved session. Needs the local policy AllowInteractiveShell.",
   "protocol_version": 1,
   "capabilities": ["interactive_shell"],

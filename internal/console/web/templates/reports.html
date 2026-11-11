@@ -25,7 +25,7 @@
 {{end}}
 <table>
 <thead><tr><th>{{t "Computer"}}</th><th>{{t "Versione installata"}}</th><th>{{t "Correzione"}}</th></tr></thead>
-<tbody>{{range .Hits}}<tr><td><a href="/agents/{{.AgentID}}#patches">{{.Hostname}}</a></td><td>{{.Installed}}{{if .UserScope}} <span class="badge chk-warning">{{t "profilo utente"}}</span>{{end}}</td><td>{{or .Fix (t "nessuna correzione indicata")}}</td></tr>{{end}}</tbody>
+<tbody>{{range .Hits}}<tr><td><a href="/agents/{{.AgentID}}#patches">{{.Hostname}}</a></td><td>{{.Installed}}{{if .UserScope}} <span class="badge chk-warning">{{t "profilo utente"}}</span>{{end}}{{with .Pending}} <span class="badge chk-ok" title="{{t "Aggiornamento scaricato: si installa quando l'utente chiude e riapre l'applicazione."}}">{{tf "%s pronto, manca il riavvio" .}}</span>{{end}}</td><td>{{or .Fix (t "nessuna correzione indicata")}}</td></tr>{{end}}</tbody>
 </table>
 {{else}}
 <div class="cards">

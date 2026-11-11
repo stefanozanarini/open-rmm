@@ -103,7 +103,7 @@ func TestShellSessionThroughBroker(t *testing.T) {
 		f, err := stream.Recv()
 		return f.GetData(), err
 	}
-	readUntil(t, recv, "open-rmm: interactive session")
+	readUntil(t, recv, "Tempra RMM: interactive session")
 	stream.Send(&openrmmv1.ShellFrame{Cols: 100, Rows: 40})
 	stream.Send(&openrmmv1.ShellFrame{Data: []byte("stty size; echo hello-$((40+2))\r")})
 	out := readUntil(t, recv, "hello-42")
@@ -248,7 +248,7 @@ func TestConsoleShell(t *testing.T) {
 		err := websocket.Message.Receive(ws, &b)
 		return b, err
 	}
-	readUntil(t, recv, "open-rmm: interactive session")
+	readUntil(t, recv, "Tempra RMM: interactive session")
 	in, _ := json.Marshal(map[string]string{"t": "i", "d": "echo hi-$((6*7))\r"})
 	websocket.Message.Send(ws, string(in))
 	readUntil(t, recv, "hi-42")
@@ -328,7 +328,7 @@ func TestFederatedShell(t *testing.T) {
 		err := websocket.Message.Receive(ws, &b)
 		return b, err
 	}
-	readUntil(t, recv, "open-rmm: interactive session")
+	readUntil(t, recv, "Tempra RMM: interactive session")
 	websocket.Message.Send(ws, `{"t":"i","d":"echo fed-$((40+2))\r"}`)
 	readUntil(t, recv, "fed-42")
 	websocket.Message.Send(ws, `{"t":"c"}`)

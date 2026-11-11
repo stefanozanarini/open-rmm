@@ -364,6 +364,24 @@ function Get-LocalAdmins {
     $out
 }
 
+# Get-PendingBrowserUpdates: Chrome and Edge download an update and switch
+# to it when the browser restarts; until then new_chrome.exe (new_msedge.exe)
+# waits next to the running one and the installed version stays the old.
+function Get-PendingBrowserUpdates {
+    $out = @()
+    foreach ($b in @(@('Google Chrome', 'Google\Chrome\Application\new_chrome.exe'), @('Microsoft Edge', 'Microsoft\Edge\Application\new_msedge.exe'))) {
+        foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+            if (-not $root) { continue }
+            $f = Join-Path $root $b[1]
+            if (Test-Path -LiteralPath $f) {
+                $out += @{ name = $b[0]; version = [string](Get-Item -LiteralPath $f).VersionInfo.ProductVersion }
+                break
+            }
+        }
+    }
+    $out
+}
+
 # Get-PrivilegedGroups: on a domain controller, the members of the domain's
 # built-in privileged groups, found by SID. Administrators normally holds
 # only Administrator, Domain Admins and Enterprise Admins; the operators
@@ -439,6 +457,7 @@ Invoke-RmmModule @{
         Send-RmmProgress 60 'software'
         $inv.software = @(Get-Section 'software' { Get-SoftwareInfo } @())
         $inv.remote_access = Get-Section 'remote_access' { Get-RemoteAccessInfo } @{}
+        $inv.pending_updates = @(Get-Section 'pending_updates' { Get-PendingBrowserUpdates } @())
         $inv.local_admins = @(Get-Section 'local_admins' { Get-LocalAdmins } @())
         $groups = @(Get-Section 'privileged_groups' { Get-PrivilegedGroups } @())
         if ($groups.Count) {

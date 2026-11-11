@@ -303,7 +303,8 @@ func appCVEs(ctx context.Context, st Store) (map[string][]AppCVE, error) {
 // InstalledApp is an application of the inventory.
 type InstalledApp struct {
 	Name, Version string
-	UserScope     bool // installed in a user's profile
+	UserScope     bool   // installed in a user's profile
+	Pending       string // version downloaded, applied at the next restart
 }
 
 // appVersion returns the catalog entry and the version of an installed
