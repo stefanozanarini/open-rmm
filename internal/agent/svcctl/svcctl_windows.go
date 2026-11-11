@@ -53,11 +53,22 @@ func (SCM) Start(name string) error {
 	}
 	defer m.Disconnect()
 	defer s.Close()
-	err = s.Start()
-	if errors.Is(err, syscall.Errno(1056)) { // ERROR_SERVICE_ALREADY_RUNNING
-		return nil
+	// The first start of a new executable can exceed the service manager's
+	// 30 seconds while an antivirus scans it (ERROR_SERVICE_REQUEST_TIMEOUT):
+	// the next attempts find it already scanned.
+	for attempt := 0; ; attempt++ {
+		err = s.Start()
+		if err == nil || errors.Is(err, syscall.Errno(1056)) { // ERROR_SERVICE_ALREADY_RUNNING
+			return nil
+		}
+		if !errors.Is(err, syscall.Errno(1053)) || attempt == 2 {
+			return err
+		}
+		time.Sleep(10 * time.Second)
+		if st, qerr := s.Query(); qerr == nil && (st.State == svc.Running || st.State == svc.StartPending) {
+			return nil
+		}
 	}
-	return err
 }
 
 func (SCM) Stop(name string, timeout time.Duration) error {

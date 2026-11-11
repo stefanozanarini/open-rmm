@@ -149,11 +149,29 @@ func writeVersion(versionsDir, version string, files map[string][]byte) error {
 			return err
 		}
 	}
-	if err := os.RemoveAll(final); err != nil {
-		return err
+	// An antivirus scanning the new executables keeps them open for a
+	// while, and Windows refuses to move or remove a folder with an open
+	// file ("Access is denied"): retry for a minute.
+	var err2 error
+	for i := 0; i < renameAttempts; i++ {
+		if i > 0 {
+			time.Sleep(renamePause)
+		}
+		if err2 = os.RemoveAll(final); err2 != nil {
+			continue
+		}
+		if err2 = os.Rename(tmp, final); err2 == nil {
+			return nil
+		}
 	}
-	return os.Rename(tmp, final)
+	return err2
 }
+
+// Retries of the last step of writeVersion.
+var (
+	renameAttempts = 20
+	renamePause    = 3 * time.Second
+)
 
 // ReportResult sends the outcome of the last update applied by the watchdog.
 func (u *Updater) ReportResult(s Session) {
