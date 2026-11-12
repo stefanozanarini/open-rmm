@@ -133,7 +133,7 @@ func (m siteMatcher) bySubnet(a store.Agent, ipv4 []string) (id, name string) {
 }
 
 var tabs = []struct{ ID, Label string }{
-	{"summary", "Riepilogo"}, {"checks", "Controlli"}, {"patches", "Patch"}, {"software", "Software"},
+	{"summary", "Riepilogo"}, {"checks", "Controlli"}, {"patches", "Patch"}, {"firmware", "Firmware"}, {"software", "Software"},
 	{"inventory", "Inventario"}, {"logons", "Accessi"}, {"policies", "Raccolte"}, {"history", "Cronologia"},
 	{"notes", "Note"}, {"commands", "Comandi"}, {"jobs", "Job"},
 }
@@ -566,7 +566,7 @@ var checkActions = map[string]struct{ tab, hash, label string }{
 	"osupdate/updates":  {"patches", "patches", "Installa gli aggiornamenti"},
 	"osupdate/reboot":   {"commands", "act-reboot-reboot", "Riavvia…"},
 	"winget/thirdparty": {"patches", "apps", "Aggiorna le applicazioni"},
-	"firmware/firmware": {"patches", "firmware", "Aggiorna BIOS, firmware e driver"},
+	"firmware/firmware": {"firmware", "firmware", "Aggiorna BIOS, firmware e driver"},
 }
 
 func checkAction(lang, agentID string, panel bool, checkID string) *actionLink {

@@ -10,7 +10,8 @@
 # Nothing here reboots: a needed reboot is recorded for the reboot module. Before a BIOS update BitLocker is suspended for one reboot,
 # or the next start would ask for the recovery key.
 #
-# scan
+# scan     the applicable updates and the versions installed now
+#          (components: BIOS, device firmware, drivers of the main devices)
 # install-tool  no parameters; workstations only
 # install  { "types": ["firmware", "driver"], "include_bios": false,
 #            "severity": "all" | "recommended" | "critical" }
@@ -241,6 +242,7 @@ function Read-HpiaReport([string]$Dir) {
             id       = [string](Get-Prop $sp 'Id' '')
             title    = [string](Get-Prop $sp 'Name' (Get-Prop $r 'TargetComponent' ''))
             version  = [string](Get-Prop $sp 'Version' (Get-Prop $r 'ReferenceVersion' ''))
+            installed_version = [string](Get-Prop $r 'TargetVersion' '')
             category = $category
             severity = ConvertTo-Severity ([string](Get-Prop $r 'RecommendationValue' ''))
             released = ConvertTo-IsoDate ([string](Get-Prop $sp 'ReleaseDate' ''))
@@ -296,9 +298,50 @@ function Suspend-BitLockerOnce {
     return $false
 }
 
+# ---- installed versions ----
+
+# Device classes whose drivers the vendor tools update (Windows class
+# names); Microsoft's inbox drivers are left out.
+$DriverClasses = 'DISPLAY', 'NET', 'MEDIA', 'BLUETOOTH', 'CAMERA', 'IMAGE', 'HDC', 'SCSIADAPTER', 'SYSTEM', 'USB',
+'BIOMETRIC', 'SMARTCARDREADER', 'SENSOR', 'MOUSE', 'KEYBOARD', 'HIDCLASS', 'EXTENSION', 'SOFTWARECOMPONENT', 'BATTERY'
+
+function ConvertTo-Day($Value) {
+    if ($Value -is [datetime]) { return $Value.ToUniversalTime().ToString('yyyy-MM-dd') }
+    ''
+}
+
+# Get-Components lists the versions installed now: the BIOS, the device
+# firmware (Windows class Firmware: system firmware, Intel ME, Thunderbolt,
+# docks) and the drivers of the main devices.
+function Get-Components {
+    $out = @()
+    $bios = Get-CimInstance Win32_BIOS -ErrorAction SilentlyContinue
+    if ($bios) {
+        $out += @{ category = 'bios'; name = 'BIOS'; version = ([string]$bios.SMBIOSBIOSVersion).Trim(); date = (ConvertTo-Day $bios.ReleaseDate)
+            provider = ([string]$bios.Manufacturer).Trim() }
+    }
+    $seen = @{}
+    $drivers = @(Get-CimInstance Win32_PnPSignedDriver -ErrorAction SilentlyContinue | Where-Object { $_.DeviceName -and $_.DriverVersion })
+    foreach ($d in $drivers) {
+        $class = ([string]$d.DeviceClass).ToUpperInvariant()
+        $provider = ([string]$d.DriverProviderName).Trim()
+        if ($class -eq 'FIRMWARE') { $cat = 'firmware' }
+        elseif ($class -in $DriverClasses -and $provider -notmatch '^Microsoft') { $cat = 'driver' }
+        else { continue }
+        $key = "$($d.DeviceName)|$($d.DriverVersion)"
+        if ($seen[$key]) { continue }
+        $seen[$key] = $true
+        $out += @{ category = $cat; name = ([string]$d.DeviceName).Trim(); version = [string]$d.DriverVersion; date = (ConvertTo-Day $d.DriverDate)
+            provider = $provider; class = [string]$d.DeviceClass }
+    }
+    $order = @{ bios = 0; firmware = 1; driver = 2 }
+    @($out | Sort-Object { $order[$_.category] }, { $_.name } | Select-Object -First 200)
+}
+
 function New-Report($Params) {
     $vendor = Get-Vendor
     $report = @{ scanned_at = (Get-Date).ToUniversalTime().ToString('o'); vendor = $vendor; supported = $false; updates = @() }
+    try { $report.components = @(Get-Components) } catch { Send-RmmLog "installed versions: $($_.Exception.Message)" 'warn' }
     switch ($vendor) {
         'dell' {
             $dcu = Get-DcuPath $Params
@@ -339,6 +382,12 @@ function New-Report($Params) {
             $report.checks = @(@{ id = 'firmware'; status = 'ok'; summary = "Produttore $vendor non supportato per gli aggiornamenti firmware" })
             return $report
         }
+    }
+    # The version each update replaces, when the tool does not say it: the
+    # BIOS is known.
+    $biosNow = @($report.components | Where-Object { $_.category -eq 'bios' } | Select-Object -First 1)
+    foreach ($u in $report.updates) {
+        if (-not $u.installed_version -and $u.category -eq 'bios' -and $biosNow.Count) { $u.installed_version = $biosNow[0].version }
     }
     $bios = @($report.updates | Where-Object { $_.category -eq 'bios' })
     $critical = @($report.updates | Where-Object { $_.severity -eq 'critical' })

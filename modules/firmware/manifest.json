@@ -1,14 +1,26 @@
 {
   "id": "firmware",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "BIOS, firmware and driver updates with the vendor tools: Dell Command Update, Lenovo System Update and HP Image Assistant, which install-tool installs with winget. Other vendors are reported as not supported.",
   "protocol_version": 1,
   "entrypoints": {
-    "windows/amd64": { "type": "powershell", "path": "Main.ps1" }
+    "windows/amd64": {
+      "type": "powershell",
+      "path": "Main.ps1"
+    }
   },
   "actions": {
-    "scan": { "description": "Applicable BIOS, firmware and driver updates", "timeout_seconds": 1800 },
-    "install-tool": { "description": "Install the vendor tool with winget when missing (workstations only); scan never installs", "timeout_seconds": 1800 },
-    "install": { "description": "Install updates by type; BIOS only when include_bios is set; never reboots", "timeout_seconds": 7200 }
+    "scan": {
+      "description": "Applicable BIOS, firmware and driver updates, and the versions installed now",
+      "timeout_seconds": 1800
+    },
+    "install-tool": {
+      "description": "Install the vendor tool with winget when missing (workstations only); scan never installs",
+      "timeout_seconds": 1800
+    },
+    "install": {
+      "description": "Install updates by type; BIOS only when include_bios is set; never reboots",
+      "timeout_seconds": 7200
+    }
   }
 }

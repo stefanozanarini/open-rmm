@@ -194,14 +194,36 @@
 </div>{{end}}
 {{else}}<p class="muted">{{tf "Nessuna applicazione da aggiornare (verificato il %s)." (fmtTime .ScannedAt)}}</p>{{end}}
 {{end}}
-{{with .Firmware}}
-<h3 id="firmware">{{t "BIOS, firmware e driver"}}</h3>
+{{with .Firmware}}<p class="muted">{{t "BIOS, firmware e driver del produttore:"}} <a href="{{if $.Data.Panel}}/agents?agent={{$.Data.Agent.ID}}&amp;tab=firmware{{else}}/agents/{{$.Data.Agent.ID}}{{end}}#firmware">{{t "vedi il tab Firmware"}}</a>{{with .Updates}} · {{tf "%d aggiornamenti disponibili" (len .)}}{{end}}</p>{{end}}
+{{if not .HasReport}}{{if eq .OSModule "osupdate"}}<p class="muted">{{th "Nessuna verifica ancora: pubblica il modulo <code>osupdate</code>, la raccolta automatica lo esegue ogni 24 ore."}}</p>
+{{else}}<p class="muted">{{th "Nessuna verifica ancora: pubblica i moduli <code>winupdate</code> e <code>winget</code>, la raccolta automatica li esegue ogni 24 ore, oppure usa «Cerca aggiornamenti ora»."}}</p>{{end}}
+{{if and $.CanRun .OSModuleVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
+  <input type="hidden" name="module" value="{{.OSModule}}"><input type="hidden" name="action" value="scan">
+  <button>↻ {{t "Cerca aggiornamenti ora"}}</button></form>{{end}}{{end}}
+{{end}}
+{{end}}
+
+{{define "agent-firmware"}}
+<h2 id="firmware">{{t "Firmware e driver"}}{{help "section:firmware"}}</h2>
+{{$fw := .Data.Updates.Firmware}}
+{{with .Data.Inv}}
+<dl class="facts">
+  <dt>{{t "Computer"}}</dt><dd>{{.System.Manufacturer}} {{.System.Model}}{{with .System.Serial}} · <code>{{.}}</code>{{end}}</dd>
+  <dt>BIOS</dt><dd>{{.Firmware.Version}}{{with .Firmware.Date}} <span class="muted">({{.}})</span>{{end}}</dd>
+</dl>
+{{end}}
+{{if eq .Data.Agent.Host.OS "windows"}}
+{{with $fw}}
 {{if .Supported}}
+<h3>{{t "Aggiornamenti disponibili dal produttore"}}</h3>
 <p class="muted">{{tf "%s · verificato il %s" .Tool (fmtTime .ScannedAt)}}</p>
 {{if .Updates}}
 <table>
-<thead><tr><th>{{t "Aggiornamento"}}</th><th>{{t "Versione"}}</th><th>{{t "Tipo"}}</th><th>{{t "Importanza"}}</th><th>{{t "Uscito"}}</th></tr></thead>
-<tbody>{{range .Updates}}<tr><td>{{.Title}}</td><td>{{.Version}}</td><td>{{if eq .Category "bios"}}<span class="badge chk-warning">BIOS</span>{{else}}{{label .Category}}{{end}}</td>
+<thead><tr><th>{{t "Aggiornamento"}}</th><th>{{t "Tipo"}}</th><th>{{t "Installata"}}</th><th>{{t "Disponibile"}}</th><th>{{t "Importanza"}}</th><th>{{t "Uscito"}}</th></tr></thead>
+<tbody>{{range .Updates}}<tr><td>{{.Title}}{{with .ID}} <span class="muted small">{{.}}</span>{{end}}</td>
+<td>{{if eq .Category "bios"}}<span class="badge chk-warning">BIOS</span>{{else}}{{label .Category}}{{end}}</td>
+<td>{{with .InstalledVersion}}{{.}}{{else}}<span class="muted">-</span>{{end}}</td><td>{{.Version}}</td>
 <td>{{if eq .Severity "critical"}}<span class="badge chk-failing">{{t "critico"}}</span>{{else}}{{label .Severity}}{{end}}</td><td>{{isoDate .Released}}</td></tr>{{end}}</tbody>
 </table>
 {{if and $.CanRun $.Data.Updates.FirmwareVersion}}
@@ -226,14 +248,19 @@
   <span class="muted">{{t "Con winget, poi verifica gli aggiornamenti. Richiede l'approvazione MFA; per installarlo su tutti i PC aggiungi a una policy l'azione firmware «install-tool»."}}</span>
 </form>{{end}}
 {{else}}<p class="muted">{{tf "Produttore %s non supportato per gli aggiornamenti firmware." .Vendor}}</p>{{end}}
-{{end}}
-{{if not .HasReport}}{{if eq .OSModule "osupdate"}}<p class="muted">{{th "Nessuna verifica ancora: pubblica il modulo <code>osupdate</code>, la raccolta automatica lo esegue ogni 24 ore."}}</p>
-{{else}}<p class="muted">{{th "Nessuna verifica ancora: pubblica i moduli <code>winupdate</code> e <code>winget</code>, la raccolta automatica li esegue ogni 24 ore, oppure usa «Cerca aggiornamenti ora»."}}</p>{{end}}
-{{if and $.CanRun .OSModuleVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
+{{if .Components}}
+<h3>{{t "Versioni installate"}}</h3>
+<table>
+<thead><tr><th>{{t "Tipo"}}</th><th>{{t "Componente"}}</th><th>{{t "Versione"}}</th><th>{{t "Data"}}</th><th>{{t "Fornitore"}}</th></tr></thead>
+<tbody>{{range .Components}}<tr><td>{{if eq .Category "bios"}}BIOS{{else}}{{label .Category}}{{end}}{{with .Class}} <span class="muted small">{{.}}</span>{{end}}</td><td>{{.Name}}</td><td><code class="small">{{.Version}}</code></td><td>{{.Date}}</td><td>{{.Provider}}</td></tr>{{end}}</tbody>
+</table>
+{{else}}<p class="muted">{{t "Le versioni installate di firmware e driver compaiono dopo una verifica con il modulo firmware 1.3.0 o successivo."}}</p>{{end}}
+{{else}}<p class="muted">{{th "Nessuna verifica ancora: pubblica il modulo <code>firmware</code>, la raccolta automatica lo esegue ogni 24 ore."}}</p>{{end}}
+{{if and $.CanRun $.Data.Updates.FirmwareVersion}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/collect" class="inline">
   <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
-  <input type="hidden" name="module" value="{{.OSModule}}"><input type="hidden" name="action" value="scan">
-  <button>↻ {{t "Cerca aggiornamenti ora"}}</button></form>{{end}}{{end}}
-{{end}}
+  <input type="hidden" name="module" value="firmware"><input type="hidden" name="action" value="scan">
+  <button>↻ {{t "Verifica ora"}}</button></form>{{end}}
+{{else}}<p class="muted">{{t "Gli aggiornamenti di firmware e driver dal produttore sono disponibili solo su Windows."}}</p>{{end}}
 {{end}}
 
 {{define "agent-inventory"}}

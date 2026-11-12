@@ -116,7 +116,7 @@ func TestConsolePatchView(t *testing.T) {
 	if _, body = get(t, c, e.console.URL+"/agents/"+busy); !strings.Contains(body, `href="/agents/`+busy+`#firmware"`) {
 		t.Fatalf("firmware check without action: %s", body)
 	}
-	if _, body = get(t, c, e.console.URL+"/agents?agent="+busy+"&tab=checks"); !strings.Contains(body, `href="/agents?agent=`+busy+`&amp;tab=patches#firmware"`) {
+	if _, body = get(t, c, e.console.URL+"/agents?agent="+busy+"&tab=checks"); !strings.Contains(body, `href="/agents?agent=`+busy+`&amp;tab=firmware#firmware"`) {
 		t.Fatalf("panel firmware check without action: %s", body)
 	}
 

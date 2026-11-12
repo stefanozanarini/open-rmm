@@ -399,13 +399,15 @@ func Score(s Summary, thirdParty int, now time.Time) int {
 
 // FirmwareUpdate is a BIOS, firmware, driver or vendor application update.
 type FirmwareUpdate struct {
-	ID        string     `json:"id,omitempty"`
-	Title     string     `json:"title"`
-	Version   string     `json:"version,omitempty"`
-	Category  string     `json:"category"` // bios | firmware | driver | application | other
-	Severity  string     `json:"severity"` // critical | recommended | optional
-	Released  *time.Time `json:"released,omitempty"`
-	SizeBytes int64      `json:"size_bytes,omitempty"`
+	ID      string `json:"id,omitempty"`
+	Title   string `json:"title"`
+	Version string `json:"version,omitempty"`
+	// InstalledVersion is the version it replaces, when known.
+	InstalledVersion string     `json:"installed_version,omitempty"`
+	Category         string     `json:"category"` // bios | firmware | driver | application | other
+	Severity         string     `json:"severity"` // critical | recommended | optional
+	Released         *time.Time `json:"released,omitempty"`
+	SizeBytes        int64      `json:"size_bytes,omitempty"`
 }
 
 // FirmwareReport is a normalized firmware result.
@@ -416,7 +418,22 @@ type FirmwareReport struct {
 	Tool        string           `json:"tool,omitempty"`
 	ToolMissing string           `json:"tool_missing,omitempty"`
 	Updates     []FirmwareUpdate `json:"updates"`
+	// Components are the versions installed now: BIOS, device firmware,
+	// drivers of the main devices (firmware 1.3.0).
+	Components []FirmwareComponent `json:"components,omitempty"`
 }
+
+// FirmwareComponent is an installed BIOS, device firmware or driver.
+type FirmwareComponent struct {
+	Category string `json:"category"` // bios | firmware | driver
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Date     string `json:"date,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	Class    string `json:"class,omitempty"`
+}
+
+const maxComponents = 300
 
 var (
 	fwCategories = map[string]bool{"bios": true, "firmware": true, "driver": true, "application": true, "other": true}
@@ -439,7 +456,7 @@ func ParseFirmware(raw []byte, now time.Time) (*FirmwareReport, error) {
 	}
 	out := r.Updates[:0]
 	for _, u := range r.Updates {
-		u.ID, u.Title, u.Version = clip(u.ID), clip(u.Title), clip(u.Version)
+		u.ID, u.Title, u.Version, u.InstalledVersion = clip(u.ID), clip(u.Title), clip(u.Version), clip(u.InstalledVersion)
 		if u.Title == "" {
 			continue
 		}
@@ -460,6 +477,23 @@ func ParseFirmware(raw []byte, now time.Time) (*FirmwareReport, error) {
 		return rank[out[i].Severity] < rank[out[j].Severity]
 	})
 	r.Updates = out
+	if len(r.Components) > maxComponents {
+		r.Components = r.Components[:maxComponents]
+	}
+	comps := r.Components[:0]
+	for _, c := range r.Components {
+		c.Name, c.Version, c.Date, c.Provider, c.Class = clip(c.Name), clip(c.Version), clip(c.Date), clip(c.Provider), clip(c.Class)
+		if c.Name == "" {
+			continue
+		}
+		switch c.Category {
+		case "bios", "firmware", "driver":
+		default:
+			c.Category = "driver"
+		}
+		comps = append(comps, c)
+	}
+	r.Components = comps
 	return r, nil
 }
 

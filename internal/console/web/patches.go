@@ -394,9 +394,7 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 	if err != nil {
 		return out, err
 	}
-	if out.Firmware != nil {
-		out.FirmwareVersion = latest[updates.FirmwareModule]
-	}
+	out.FirmwareVersion = latest[updates.FirmwareModule]
 	out.WinupdateVersion = latest["winupdate"]
 	out.CanCleanup = out.WinupdateVersion != "" && vuln.CompareVersions(out.WinupdateVersion, "1.4.0") >= 0
 	out.OSModule = updates.WindowsModule

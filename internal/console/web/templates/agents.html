@@ -118,6 +118,7 @@
   {{if eq $.Data.Tab "summary"}}{{template "agent-facts" $p}}{{template "agent-alerts" $p}}{{template "agent-checks" $p}}
   {{else if eq $.Data.Tab "checks"}}{{template "agent-alerts" $p}}{{template "agent-checks" $p}}
   {{else if eq $.Data.Tab "patches"}}{{template "agent-updates" $p}}
+  {{else if eq $.Data.Tab "firmware"}}{{template "agent-firmware" $p}}
   {{else if eq $.Data.Tab "software"}}{{template "agent-software" $p}}
   {{else if eq $.Data.Tab "inventory"}}{{template "agent-inventory" $p}}
   {{else if eq $.Data.Tab "logons"}}{{template "agent-logons" $p}}
