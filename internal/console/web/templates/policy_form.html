@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-<form method="post" action="/policies" class="stack wide policy-editor">
+<form method="post" action="/policies" class="stack wide policy-editor" novalidate>
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <input type="hidden" name="id" value="{{.ID}}">
   {{if .JSON}}<input type="hidden" name="mode" value="json">{{end}}

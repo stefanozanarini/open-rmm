@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/oauth2"
 
@@ -252,6 +253,9 @@ func (s *Server) buildPolicy(ctx context.Context, tenant string, r *http.Request
 	}
 	p := &policy.Policy{ID: id, TenantID: tenant, Name: strings.TrimSpace(r.PostFormValue("name")), Version: version,
 		AppliesTo: r.PostFormValue("applies_to")}
+	if p.Name == "" || utf8.RuneCountInString(p.Name) > 80 {
+		return nil, nil, errors.New(s.T(r, "Indica un nome per la policy (al massimo 80 caratteri)."))
+	}
 	for _, fr := range rules {
 		every, err := time.ParseDuration(fr.Every)
 		if err != nil {
