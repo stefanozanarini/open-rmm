@@ -23,7 +23,7 @@ import (
 const (
 	// MaxLifetime bounds expires-not_before: a stolen signed job is useless
 	// after at most this long, and the replay cache never grows past it.
-	MaxLifetime = 24 * time.Hour
+	MaxLifetime = 48 * time.Hour
 	// clockSkew tolerates small clock differences with the console.
 	clockSkew = 2 * time.Minute
 

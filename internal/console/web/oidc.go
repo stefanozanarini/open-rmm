@@ -18,6 +18,7 @@ import (
 	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/vuln"
 	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 )
 
@@ -56,6 +57,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 // startStepUp sends the operator to the identity provider to approve req.
 func (s *Server) startStepUp(w http.ResponseWriter, r *http.Request, sess *session, req *openrmmv1.JobRequest, ret string) {
+	s.capLegacyTTL(r.Context(), req)
 	raw, err := proto.Marshal(req)
 	if err != nil {
 		s.fail(w, r, err)
@@ -69,6 +71,27 @@ func (s *Server) startStepUp(w http.ResponseWriter, r *http.Request, sess *sessi
 		return
 	}
 	s.redirectStepUp(w, r, sess, p)
+}
+
+// Agents before 1.1.2 refuse jobs valid for more than 24 hours: a longer
+// validity is cut to 24 hours when one of the targets is older (before the
+// approval, which covers the validity).
+const (
+	legacyTTL       = 24 * 60 * 60
+	minLongTTLAgent = "1.1.2"
+)
+
+func (s *Server) capLegacyTTL(ctx context.Context, req *openrmmv1.JobRequest) {
+	if req.GetTtlSeconds() <= legacyTTL {
+		return
+	}
+	for _, id := range jobreq.Targets(req) {
+		a, err := s.store.GetAgent(ctx, req.GetTenantId(), id)
+		if err != nil || a.Host.AgentVersion == "" || vuln.CompareVersions(a.Host.AgentVersion, minLongTTLAgent) < 0 {
+			req.TtlSeconds = legacyTTL
+			return
+		}
+	}
 }
 
 func (s *Server) exchange(ctx context.Context, code, verifier string) (string, error) {

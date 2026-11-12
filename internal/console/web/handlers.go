@@ -409,7 +409,7 @@ func (s *Server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ttlMin, err := strconv.Atoi(r.PostFormValue("ttl_minutes"))
-	if err != nil || ttlMin < 5 || ttlMin > 24*60 {
+	if err != nil || ttlMin < 5 || ttlMin > 48*60 {
 		ttlMin = 60
 	}
 	req := &openrmmv1.JobRequest{
@@ -847,3 +847,9 @@ func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request) {
 	s.audit(r.Context(), t, sessionFrom(r.Context()).data.Operator, "token.revoked", id, nil)
 	s.flash(w, r, s.T(r, "Token revocato: nessun nuovo agente può registrarsi con esso."), safeReturn(r.PostFormValue("return"), "/tokens"))
 }
+
+// ttlOption is a validity offered for a job: how long it waits for a
+// computer that is off.
+type ttlOption struct{ Minutes, Label string }
+
+var ttlOptions = []ttlOption{{"15", "15 minuti"}, {"60", "1 ora"}, {"240", "4 ore"}, {"480", "8 ore"}, {"1440", "24 ore"}, {"2880", "48 ore"}}

@@ -162,6 +162,8 @@ func funcs(lang string) template.FuncMap {
 		"cvssClass":    cvssClass,
 		"jobState":     jobState,
 		"jobFailures":  jobFailures,
+		"lowDisk":      lowDisk,
+		"ttlOptions":   func() []ttlOption { return ttlOptions },
 		"isDell":       func(m string) bool { return strings.HasPrefix(strings.ToLower(strings.TrimSpace(m)), "dell") },
 		"lastJobs": func(jobs []store.Job, n int) []store.Job {
 			if len(jobs) > n {

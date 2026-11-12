@@ -20,13 +20,8 @@
   </tr>{{end}}
   </tbody>
   </table>
-  {{template "ttl"}}
+  {{template "ttl" "1440"}}
   <button class="primary">{{t "Approva e distribuisci"}}</button>
 </form>
 {{end}}
-{{end}}
-{{define "ttl"}}
-<label>{{t "Validità"}}
-  <select name="ttl_minutes"><option value="60">{{t "1 ora"}}</option><option value="480">{{t "8 ore"}}</option><option value="1440" selected>{{t "24 ore"}}</option></select>
-</label>
 {{end}}

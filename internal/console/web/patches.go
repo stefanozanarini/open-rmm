@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/vuln"
 	"github.com/stefanozanarini/tempra-rmm/internal/modules"
 	"github.com/stefanozanarini/tempra-rmm/internal/updates"
 )
@@ -246,8 +247,10 @@ type agentUpdates struct {
 	HiddenHistory    int // older installations left out (no search)
 	Query            string
 	WinupdateVersion string
-	OSModule         string
-	OSModuleVersion  string
+	// CanCleanup: the published winupdate frees disk space (1.4.0).
+	CanCleanup      bool
+	OSModule        string
+	OSModuleVersion string
 	// Installs are the latest osupdate installations (Linux), newest first:
 	// Linux has no update history of its own to show.
 	Installs []osInstall
@@ -395,6 +398,7 @@ func (s *Server) agentUpdates(r *http.Request, tenant, agent string) (agentUpdat
 		out.FirmwareVersion = latest[updates.FirmwareModule]
 	}
 	out.WinupdateVersion = latest["winupdate"]
+	out.CanCleanup = out.WinupdateVersion != "" && vuln.CompareVersions(out.WinupdateVersion, "1.4.0") >= 0
 	out.OSModule = updates.WindowsModule
 	if a, err := s.store.GetAgent(r.Context(), tenant, agent); err == nil && a.Host.OS == "linux" {
 		out.OSModule = updates.OSUpdateModule
@@ -588,4 +592,10 @@ func (s *Server) handleFirmwareInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
+}
+
+// lowDisk tells whether an alert or check is about little free space on
+// the system drive (winupdate blockers), which "Libera spazio" fixes.
+func lowDisk(summary string) bool {
+	return strings.Contains(summary, "Spazio libero insufficiente su") || strings.Contains(summary, "Poco spazio libero su")
 }

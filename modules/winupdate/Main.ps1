@@ -10,6 +10,10 @@
 # logs     collects what explains failed updates: Windows Update events,
 #          the errors in CBS.log (and optionally WindowsUpdate.log), the
 #          services, free space, pending operations, failed installations.
+# cleanup  frees space on the system drive: the Windows Update download
+#          cache, Disk Cleanup (cleanmgr: update cleanup, temporary and
+#          setup files, error reports) and DISM /StartComponentCleanup;
+#          when space stays low it lists what takes it.
 # repair   repairs the component store (DISM /RestoreHealth, optionally
 #          from a source of the same build) and the system files (SFC),
 #          optionally resetting the Windows Update cache first. Fixes
@@ -27,6 +31,9 @@
 #   { "classifications": ["security","critical","rollup","update","definition"],
 #     "exclude_kbs": ["KB5030000"], "include_kbs": [], "allow_managed": false,
 #     "max_age_days": 30 }
+# Parameters (cleanup):
+#   { "download_cache": true, "cleanmgr": true, "component_cleanup": true,
+#     "reset_base": false, "previous_installations": false }
 # Parameters (repair):
 #   { "source": "WIM:D:\sources\install.wim:1", "sfc": true, "reset_components": false }
 Import-Module (Join-Path $PSScriptRoot '_sdk/OpenRmm.psm1')
@@ -526,6 +533,112 @@ function Reset-WuComponents {
     @{ step = 'reset_components'; ok = $true; output = "renamed: $($renamed -join ', ') (.old-$stamp)" }
 }
 
+# ---- cleanup ----
+
+function Get-FreeBytes {
+    $d = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'" -ErrorAction SilentlyContinue
+    if ($d) { return [int64]$d.FreeSpace }
+    0
+}
+
+function Get-FolderBytes([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return [int64]0 }
+    $sum = (Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum
+    if ($sum) { return [int64]$sum }
+    [int64]0
+}
+
+function GB([int64]$Bytes) { [Math]::Round($Bytes / 1GB, 2) }
+
+# Clear-WuDownloads empties the Windows Update download cache (downloaded
+# again when needed) and removes what a previous cache reset left
+# (SoftwareDistribution.old-*, catroot2.old-*).
+function Clear-WuDownloads {
+    $before = Get-FreeBytes
+    $svcs = 'wuauserv', 'bits', 'dosvc'
+    foreach ($svc in $svcs) { Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue }
+    $removed = @()
+    try {
+        $dl = Join-Path $env:SystemRoot 'SoftwareDistribution\Download'
+        if (Test-Path $dl) {
+            Get-ChildItem -LiteralPath $dl -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            $removed += $dl
+        }
+        $old = @(Get-ChildItem -LiteralPath $env:SystemRoot -Directory -Filter 'SoftwareDistribution.old-*' -ErrorAction SilentlyContinue) +
+        @(Get-ChildItem -LiteralPath (Join-Path $env:SystemRoot 'System32') -Directory -Filter 'catroot2.old-*' -ErrorAction SilentlyContinue)
+        foreach ($d in $old) {
+            Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            $removed += $d.FullName
+        }
+    }
+    finally { foreach ($svc in $svcs) { Start-Service -Name $svc -ErrorAction SilentlyContinue } }
+    @{ step = 'download_cache'; ok = $true; freed_gb = (GB ((Get-FreeBytes) - $before)); output = ($removed -join ', ') }
+}
+
+# The Disk Cleanup (cleanmgr) categories run: what Windows Update and setup
+# leave behind and temporary files. Never the recycle bin, the Downloads
+# folder or driver packages.
+$cleanmgrCategories = @(
+    'Update Cleanup', 'Temporary Files', 'Temporary Setup Files', 'Windows Upgrade Log Files', 'Setup Log Files',
+    'Delivery Optimization Files', 'Windows Error Reporting Files', 'Windows Error Reporting System Archive Files',
+    'Windows Error Reporting System Queue Files', 'Windows Error Reporting Temp Files', 'System error memory dump files',
+    'System error minidump files', 'Old ChkDsk Files', 'Downloaded Program Files', 'Internet Cache Files', 'D3D Shader Cache'
+)
+# Removing the previous installation of Windows rules out going back to it.
+$cleanmgrPrevious = @('Previous Installations', 'Windows ESD installation files')
+
+# Invoke-Cleanmgr runs Disk Cleanup on the chosen categories (StateFlags
+# set for a private /sagerun profile, removed afterwards).
+function Invoke-Cleanmgr([bool]$Previous, [int]$TimeoutMinutes) {
+    $exe = Join-Path $env:SystemRoot 'System32\cleanmgr.exe'
+    if (-not (Test-Path $exe)) { return @{ step = 'cleanmgr'; ok = $false; output = 'cleanmgr.exe not installed (Server Core?)' } }
+    $root = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches'
+    $flag = 'StateFlags0477'
+    $cats = $cleanmgrCategories
+    if ($Previous) { $cats += $cleanmgrPrevious }
+    $set = @()
+    foreach ($c in $cats) {
+        $k = Join-Path $root $c
+        if (Test-Path $k) {
+            New-ItemProperty -Path $k -Name $flag -Value 2 -PropertyType DWord -Force | Out-Null
+            $set += $c
+        }
+    }
+    $before = Get-FreeBytes
+    try {
+        $p = Start-Process -FilePath $exe -ArgumentList '/sagerun:477' -PassThru -WindowStyle Hidden
+        if (-not $p.WaitForExit($TimeoutMinutes * 60000)) {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            return @{ step = 'cleanmgr'; ok = $false; freed_gb = (GB ((Get-FreeBytes) - $before)); output = "stopped after $TimeoutMinutes minutes" }
+        }
+    }
+    finally {
+        foreach ($c in $set) { Remove-ItemProperty -Path (Join-Path $root $c) -Name $flag -ErrorAction SilentlyContinue }
+    }
+    @{ step = 'cleanmgr'; ok = $true; freed_gb = (GB ((Get-FreeBytes) - $before)); output = ($set -join ', ') }
+}
+
+# Get-SpaceUsage lists what still takes space on the system drive, the
+# biggest first: user profiles, the recycle bin, hibernation and paging
+# files, the Windows Installer cache, temporary folders.
+function Get-SpaceUsage {
+    $sys = $env:SystemDrive + '\'
+    $items = @()
+    foreach ($f in 'hiberfil.sys', 'pagefile.sys', 'swapfile.sys', 'MEMORY.DMP') {
+        $p = if ($f -eq 'MEMORY.DMP') { Join-Path $env:SystemRoot $f } else { Join-Path $sys $f }
+        $i = Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+        if ($i) { $items += @{ path = $p; size_gb = (GB $i.Length) } }
+    }
+    $folders = @((Join-Path $sys '$Recycle.Bin'), (Join-Path $env:SystemRoot 'Installer'), (Join-Path $env:SystemRoot 'Temp'),
+        (Join-Path $env:SystemRoot 'SoftwareDistribution'), (Join-Path $sys 'Windows.old'), (Join-Path $sys '$WINDOWS.~BT'))
+    $folders += @(Get-ChildItem -LiteralPath (Join-Path $sys 'Users') -Directory -Force -ErrorAction SilentlyContinue |
+        Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } | ForEach-Object { $_.FullName })
+    foreach ($f in $folders) {
+        if (Test-Path -LiteralPath $f) { $items += @{ path = $f; size_gb = (GB (Get-FolderBytes $f)) } }
+    }
+    @($items | Where-Object { $_.size_gb -ge 0.1 } | Sort-Object { $_.size_gb } -Descending | Select-Object -First 15)
+}
+
 function New-Session {
     $s = New-Object -ComObject Microsoft.Update.Session
     $s.ClientApplicationID = 'open-rmm'
@@ -647,6 +760,37 @@ Invoke-RmmModule @{
         }
         @{ repaired_at = (Get-Date).ToUniversalTime().ToString('o'); steps = $steps; ok = ($dism.ok -and $sfcOk)
             note = 'Restart the computer, then install the updates again' }
+    }
+    cleanup = {
+        param($Params, $Request)
+        $flag = { param($n, $d) $v = Get-Prop $Params $n; if ($null -eq $v) { $d } else { [bool]$v } }
+        $start = Get-FreeBytes
+        $steps = @()
+        if (& $flag 'download_cache' $true) {
+            Send-RmmProgress 5 'svuotamento della cache di download di Windows Update'
+            $steps += Clear-WuDownloads
+        }
+        if (& $flag 'cleanmgr' $true) {
+            Send-RmmProgress 15 'Pulizia disco (cleanmgr, anche 30 minuti)'
+            $steps += Invoke-Cleanmgr (& $flag 'previous_installations' $false) 60
+        }
+        if (& $flag 'component_cleanup' $true) {
+            Send-RmmProgress 55 'DISM /StartComponentCleanup (anche 30 minuti)'
+            $dismArgs = @('/Online', '/Cleanup-Image', '/StartComponentCleanup', '/English')
+            if (& $flag 'reset_base' $false) { $dismArgs += '/ResetBase' }
+            $before = Get-FreeBytes
+            $dism = Invoke-Tool (Join-Path $env:SystemRoot 'System32\dism.exe') $dismArgs ([Text.Encoding]::UTF8)
+            $steps += @{ step = 'component_cleanup'; ok = $dism.ok; exit_code = $dism.exit_code; freed_gb = (GB ((Get-FreeBytes) - $before)); output = $dism.output }
+        }
+        foreach ($s in $steps) { Send-RmmLog "$($s.step): $($s.freed_gb) GB freed. $($s.output)" $(if ($s.ok) { 'info' } else { 'warn' }) }
+        $end = Get-FreeBytes
+        $r = @{ drive = $env:SystemDrive; free_before_gb = (GB $start); free_after_gb = (GB $end); freed_gb = (GB ($end - $start)); steps = $steps }
+        if ($end -lt 10GB) {
+            Send-RmmProgress 85 'analisi dello spazio occupato'
+            $r.space_usage = @(Get-SpaceUsage)
+            $r.note = 'Still little free space: see what takes it below (user profiles, recycle bin, hibernation file)'
+        }
+        $r
     }
     logs    = {
         param($Params, $Request)

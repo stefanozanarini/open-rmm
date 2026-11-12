@@ -168,9 +168,24 @@ func (ix *Index) Match(eps []Endpoint) []Finding {
 		}
 		f.Hits = append(f.Hits, h)
 	}
+	// The same applications recur on every computer: each name and version
+	// is matched against the catalog once.
+	type appKey struct{ name, version string }
+	type appMatch struct {
+		app *App
+		v   string
+		ok  bool
+	}
+	known := map[appKey]appMatch{}
 	for _, ep := range eps {
 		for _, a := range ep.Apps {
-			app, v, ok := appVersion(a)
+			k := appKey{a.Name, a.Version}
+			am, seen := known[k]
+			if !seen {
+				am.app, am.v, am.ok = appVersion(a)
+				known[k] = am
+			}
+			app, v, ok := am.app, am.v, am.ok
 			if !ok {
 				continue
 			}

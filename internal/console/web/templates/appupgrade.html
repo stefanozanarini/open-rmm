@@ -15,7 +15,7 @@
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <input type="hidden" name="target" value="winget|{{.Version}}|upgrade">
   <input type="hidden" name="p.ids" value="{{.ID}}">
-  <input type="hidden" name="ttl_minutes" value="1440">
+  {{template "ttl" "1440"}}
 <table>
 <thead><tr><th><input type="checkbox" data-check-all checked aria-label="{{t "seleziona tutti"}}"></th><th>{{t "Computer"}}</th><th>{{t "Sede"}}</th><th>{{t "Installata"}}</th><th>{{t "Disponibile"}}</th></tr></thead>
 <tbody>{{range .Targets}}<tr>

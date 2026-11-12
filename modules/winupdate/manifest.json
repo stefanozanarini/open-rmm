@@ -1,7 +1,7 @@
 {
   "id": "winupdate",
-  "version": "1.3.0",
-  "description": "Windows Update through the Windows Update Agent API: scan, install (never reboots), WSUS/Intune detection, settings that block updates (including an unresponsive WSUS server), logs of failed updates, component store repair.",
+  "version": "1.4.0",
+  "description": "Windows Update through the Windows Update Agent API: scan, install (never reboots), WSUS/Intune detection, settings that block updates (including an unresponsive WSUS server), logs of failed updates, component store repair, freeing disk space (download cache, Disk Cleanup, component cleanup).",
   "protocol_version": 1,
   "entrypoints": {
     "windows/amd64": {
@@ -21,6 +21,10 @@
     "install": {
       "description": "Download and install the selected updates (no reboot)",
       "timeout_seconds": 14400
+    },
+    "cleanup": {
+      "description": "Free space on the system drive: Windows Update download cache, Disk Cleanup (update cleanup, temporary files), DISM /StartComponentCleanup",
+      "timeout_seconds": 7200
     },
     "repair": {
       "description": "Repair the component store (DISM /RestoreHealth) and system files (SFC), optionally resetting the Windows Update cache",

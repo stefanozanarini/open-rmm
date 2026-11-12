@@ -119,7 +119,7 @@ func (s *Server) issue(r *openrmmv1.JobRequest, op string, now time.Time) (*open
 			Module: r.GetModule(), ModuleVersion: r.GetModuleVersion(), ModuleSha256: r.GetModuleSha256(),
 			Action: r.GetAction(), ParamsJson: r.GetParamsJson(), Packages: r.GetPackages(),
 			// The window starts a minute early for clock skew and lasts
-			// exactly ttl: agents refuse windows longer than 24 hours.
+			// exactly ttl: agents refuse windows longer than 48 hours (24 before 1.1.2).
 			NotBeforeUnix: now.Add(-time.Minute).Unix(), ExpiresUnix: now.Add(-time.Minute).Add(ttl).Unix(),
 			Nonce: ids.Random(16),
 		}

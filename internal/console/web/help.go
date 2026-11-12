@@ -36,7 +36,7 @@ var helpTexts = map[string]string{
 
 	"section:shell":    "Apre PowerShell (bash su Linux) sul computer per il tempo scelto, dopo l'approvazione MFA. Il computer deve consentirlo con la policy locale (GPO AllowInteractiveShell).",
 	"section:files":    "Apre la gestione dei file sul computer per il tempo scelto, dopo l'approvazione MFA. Serve l'agente 1.1.0 o successivo e il modulo files pubblicato.",
-	"section:blockers": "Impostazioni del computer che bloccano o limitano Windows Update: versione bloccata, server WSUS che non risponde, servizi disabilitati, pause, poco spazio. Vanno corrette sul computer o nella GPO che le imposta.",
+	"section:blockers": "Impostazioni del computer che bloccano o limitano Windows Update: versione bloccata, server WSUS che non risponde, servizi disabilitati, pause, poco spazio. Vanno corrette sul computer o nella GPO che le imposta; per lo spazio, \"Libera spazio…\" svuota la cache di Windows Update ed esegue la Pulizia disco.",
 	"section:cve":      "Le vulnerabilità sono calcolate confrontando l'inventario con i dati di Microsoft, NVD e CISA (scaricati ogni 6 ore). In cima quelle sfruttate attivamente. Apri una CVE per i computer colpiti e l'azione di correzione.",
 	"section:ring":     "pilot: riceve subito le nuove versioni dell'agente, per provarle su pochi computer. broad: le riceve dopo, quando la versione è promossa.",
 	"section:ad":       "Albero dei domini e delle OU di Active Directory: un clic filtra i computer di quella OU. I numeri contano i computer con l'agente.",

@@ -38,10 +38,15 @@
   <input type="hidden" name="tab" value="cve">
   <input type="search" name="q" value="{{.Query}}" placeholder="{{t "CVE, prodotto, computer o KB"}}" aria-label="{{t "Cerca"}}">
   <label class="check"><input type="checkbox" name="exploited" value="1"{{if .Exploited}} checked{{end}}> {{t "solo sfruttate"}}</label>
+  {{with .Sort}}<input type="hidden" name="sort" value="{{.}}">{{end}}
   <button>{{t "Cerca"}}</button>
 </form>
 <table>
-<thead><tr><th>CVE</th><th>{{t "Gravità"}}</th><th>{{t "Prodotto"}}</th><th>{{t "Computer"}}</th><th>{{t "Correzione"}}</th></tr></thead>
+<thead><tr><th>CVE</th>
+  <th><a class="sort" href="{{.SortURL "cvss"}}" title="{{t "Ordina per gravità"}}">{{t "Gravità"}}{{.SortMark "cvss"}}</a></th>
+  <th>{{t "Prodotto"}}</th>
+  <th><a class="sort" href="{{.SortURL "hosts"}}" title="{{t "Ordina per numero di computer"}}">{{t "Computer"}}{{.SortMark "hosts"}}</a></th>
+  <th>{{t "Correzione"}}</th></tr></thead>
 <tbody>{{range .Findings}}<tr>
   <td><a href="/reports{{qs "tab" "cve" "id" .ID}}">{{.ID}}</a>{{if .KEV}} <span class="badge chk-failing" title="{{t "sfruttata attivamente (CISA KEV)"}}">KEV</span>{{else if .Exploited}} <span class="badge chk-failing">{{t "sfruttata"}}</span>{{end}}</td>
   <td><span class="badge {{cvssClass .CVSS}}">{{cvssText .CVSS}}</span>{{with .Severity}} <span class="muted small">{{label .}}</span>{{end}}</td>
@@ -52,6 +57,7 @@
 </table>
 {{if gt .Shown (len .Findings)}}<p class="muted small">{{tf "Mostrate %d vulnerabilità su %d: affina la ricerca." (len .Findings) .Shown}}</p>{{end}}
 {{end}}
+{{if not .ComputedAt.IsZero}}<p class="muted small">{{tf "Vulnerabilità calcolate il %s dall'ultimo inventario dei computer; il calcolo si aggiorna in background ogni pochi minuti." (fmtTime .ComputedAt)}}</p>{{end}}
 <p class="muted small">{{tf "Fonti: aggiornamenti di sicurezza Microsoft (%d mesi), confrontati con la build di Windows di ogni computer; NVD per %d applicazioni note, confrontate con la versione installata; per Linux, le CVE degli aggiornamenti di sicurezza in sospeso (apt, dnf, zypper); catalogo CISA delle vulnerabilità sfruttate." .Months .Products}}</p>
 {{end}}
 {{end}}{{end}}

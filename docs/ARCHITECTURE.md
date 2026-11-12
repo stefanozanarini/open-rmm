@@ -158,6 +158,7 @@ The agent is updated only when the core↔module protocol changes or for core se
 A job is `{job_id, tenant_id, agent_id, module, version, module_sha256, action, params, not_before, expires, nonce}`, signed by `openrmm-signer`.
 
 - Queued in the database and delivered on the agent's stream as soon as it is connected and approved (`LISTEN/NOTIFY`, with a fallback check at every heartbeat).
+- Valid from 15 minutes up to 48 hours (chosen by the operator; updates default to 8 hours, application upgrades and deployments to 24): a computer off for longer never runs it and the job ends as expired. Agents refuse longer windows; agents before 1.1.2 refuse windows over 24 hours, so the console cuts the validity to 24 hours before the approval when a target is older. Policies, run by the agent on its own schedule, do not expire.
 - Final updates go through an on-disk outbox and are re-sent until the console acknowledges them.
 - A job delivered again after a reconnection is never re-run: the agent reports the state it knows.
 

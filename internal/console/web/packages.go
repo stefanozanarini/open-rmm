@@ -546,7 +546,7 @@ func (s *Server) handleDeployForm(w http.ResponseWriter, r *http.Request) {
 
 func ttlFrom(r *http.Request) int64 {
 	ttlMin, err := strconv.Atoi(r.PostFormValue("ttl_minutes"))
-	if err != nil || ttlMin < 5 || ttlMin > 24*60 {
+	if err != nil || ttlMin < 5 || ttlMin > 48*60 {
 		ttlMin = 60
 	}
 	return int64(ttlMin) * 60

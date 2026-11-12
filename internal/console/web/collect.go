@@ -350,6 +350,7 @@ var refreshAfter = map[[2]string][][2]string{
 	{"winget", "install"}:     {{"inventory", "collect"}, {"winget", "scan"}},
 	{"winupdate", "install"}:  {{"winupdate", "scan"}, {"inventory", "collect"}},
 	{"winupdate", "repair"}:   {{"winupdate", "scan"}},
+	{"winupdate", "cleanup"}:  {{"winupdate", "scan"}, {"inventory", "collect"}},
 	{"osupdate", "install"}:   {{"inventory", "collect"}}, // the install result is a scan
 }
 

@@ -24,7 +24,7 @@ import (
 const (
 	// MaxAgents bounds the agents one approval may target.
 	MaxAgents    = 500
-	MaxTTL       = 24 * time.Hour
+	MaxTTL       = 48 * time.Hour
 	MaxParams    = 1 << 20
 	nonceRandLen = 16
 )

@@ -44,6 +44,9 @@ var resultKeys = map[string]string{
 	"tool": "strumento", "tool_missing": "strumento mancante", "vendor": "produttore", "supported": "supportato",
 	"tool_install": "installazione dello strumento", "present": "già presente", "unsupported_vendor": "produttore non supportato",
 	"classifications": "classificazioni", "include_kbs": "KB da includere", "exclude_kbs": "KB da escludere", "allow_managed": "anche se gestito da WSUS o Intune", "pending_reboot": "riavvio in sospeso", "searcher": "ricerca",
+	"drive": "unità", "freed_gb": "liberati (GB)", "free_before_gb": "spazio libero prima (GB)", "free_after_gb": "spazio libero dopo (GB)",
+	"space_usage": "cosa occupa lo spazio", "size_gb": "dimensione (GB)", "steps": "passaggi", "step": "passaggio", "note": "nota",
+	"download_cache": "cache di download di Windows Update", "cleanmgr": "Pulizia disco", "component_cleanup": "pulizia dell'archivio dei componenti",
 }
 
 func resultLabel(lang, k string) string {
@@ -117,6 +120,12 @@ func jobOutcome(lang, module, action string, res map[string]any) string {
 			}
 		}
 		return trf(lang, "%d applicazioni aggiornate su %d.", ok, len(list))
+	case "winupdate/cleanup":
+		s := trf(lang, "Liberati %s GB su %s: ora %s GB liberi.", str("freed_gb"), str("drive"), str("free_after_gb"))
+		if _, has := res["space_usage"]; has {
+			s += " · " + tr(lang, "lo spazio resta poco: sotto, cosa lo occupa")
+		}
+		return s
 	case "winupdate/logs":
 		ev, _ := res["events"].([]any)
 		cbs, _ := res["cbs_log"].([]any)

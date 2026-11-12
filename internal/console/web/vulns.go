@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,8 +27,9 @@ import (
 const vulnCacheTTL = 10 * time.Minute
 
 type vulnCache struct {
-	mu sync.Mutex
-	ix *vuln.Index
+	mu      sync.Mutex
+	ix      *vuln.Index
+	matched map[string]*vulnMatch // by tenant
 }
 
 // RefreshVulns downloads the vulnerability sources that are missing or
@@ -43,6 +45,9 @@ func (s *Server) RefreshVulns(ctx context.Context) error {
 	}
 	s.vulns.mu.Lock()
 	s.vulns.ix = nil
+	for _, m := range s.vulns.matched {
+		m.at = time.Time{} // computed again at the next view
+	}
 	s.vulns.mu.Unlock()
 	return err
 }
@@ -105,11 +110,26 @@ func osUpdateReport(st store.UpdateStatus) *updates.WindowsReport {
 }
 
 // endpoints returns the approved agents of a tenant to check, with the
-// newest Windows build known (agent connection or inventory).
-func (s *Server) vulnEndpoints(ctx context.Context, tenant string) ([]vuln.Endpoint, error) {
-	agents, err := s.store.ListAgents(ctx, tenant)
+// newest Windows build known (agent connection or inventory). Inventories
+// and update reports are read with one query each.
+func (s *Server) vulnEndpoints(ctx context.Context, tenant string, agents []store.Agent) ([]vuln.Endpoint, error) {
+	invs, err := s.store.ListInventories(ctx, tenant)
 	if err != nil {
 		return nil, err
+	}
+	invOf := make(map[string][]byte, len(invs))
+	for _, inv := range invs {
+		invOf[inv.AgentID] = inv.Data
+	}
+	statuses, err := s.store.ListUpdateStatus(ctx, tenant, "")
+	if err != nil {
+		return nil, err
+	}
+	osReports := map[string][]*updates.WindowsReport{}
+	for _, st := range statuses {
+		if rep := osUpdateReport(st); rep != nil {
+			osReports[st.AgentID] = append(osReports[st.AgentID], rep)
+		}
 	}
 	var out []vuln.Endpoint
 	for _, a := range agents {
@@ -118,21 +138,17 @@ func (s *Server) vulnEndpoints(ctx context.Context, tenant string) ([]vuln.Endpo
 		}
 		ep := vuln.Endpoint{AgentID: a.ID, Hostname: a.Host.Hostname, OS: a.Host.OS, OSVersion: a.Host.OSVersion}
 		if a.Host.OS == "linux" {
-			if list, err := s.store.ListUpdateStatus(ctx, tenant, a.ID); err == nil {
-				for _, st := range list {
-					if rep := osUpdateReport(st); rep != nil {
-						for _, u := range rep.Updates {
-							if len(u.CVEs) > 0 {
-								ep.Packages = append(ep.Packages, vuln.PackageCVEs{Name: u.ID, Installed: u.Installed,
-									Version: u.Version, Severity: u.Severity, CVEs: u.CVEs})
-							}
-						}
+			for _, rep := range osReports[a.ID] {
+				for _, u := range rep.Updates {
+					if len(u.CVEs) > 0 {
+						ep.Packages = append(ep.Packages, vuln.PackageCVEs{Name: u.ID, Installed: u.Installed,
+							Version: u.Version, Severity: u.Severity, CVEs: u.CVEs})
 					}
 				}
 			}
 		}
-		if inv, err := s.store.GetInventory(ctx, tenant, a.ID); err == nil {
-			if parsed, err := inventory.Parse(inv.Data); err == nil {
+		if data, ok := invOf[a.ID]; ok {
+			if parsed, err := inventory.Parse(data); err == nil {
 				if a.Host.OS == "windows" && parsed.OS.Build != "" {
 					_, cur, _ := vuln.WindowsBuild(ep.OSVersion)
 					if _, rev, ok := vuln.WindowsBuild("build " + parsed.OS.Build); ok && rev > cur {
@@ -140,12 +156,14 @@ func (s *Server) vulnEndpoints(ctx context.Context, tenant string) ([]vuln.Endpo
 					}
 				}
 				if a.Host.OS == "windows" {
+					pending := map[string]string{}
+					for _, pu := range parsed.PendingUpdates {
+						pending[strings.ToLower(pu.Name)] = pu.Version
+					}
 					for _, sw := range parsed.Software {
 						app := vuln.InstalledApp{Name: sw.Name, Version: sw.Version, UserScope: sw.Scope == "user"}
-						for _, pu := range parsed.PendingUpdates {
-							if strings.EqualFold(pu.Name, sw.Name) && sw.Scope != "user" {
-								app.Pending = pu.Version
-							}
+						if sw.Scope != "user" {
+							app.Pending = pending[strings.ToLower(sw.Name)]
 						}
 						ep.Apps = append(ep.Apps, app)
 					}
@@ -157,14 +175,90 @@ func (s *Server) vulnEndpoints(ctx context.Context, tenant string) ([]vuln.Endpo
 	return out, nil
 }
 
+// vulnMatchTTL is how long the CVEs found on a tenant's computers are
+// shown without computing them again; after that the page still shows them
+// while they are computed in the background.
+const vulnMatchTTL = 3 * time.Minute
+
+// vulnMatch is the last matching of a tenant.
+type vulnMatch struct {
+	at         time.Time
+	agents     string         // the active agents it covers
+	all        []vuln.Finding // read only: copy before sorting
+	refreshing bool
+}
+
+// activeAgents identifies the set of active agents.
+func activeAgents(agents []store.Agent) string {
+	var ids []string
+	for _, a := range agents {
+		if a.Status == store.AgentActive {
+			ids = append(ids, a.ID)
+		}
+	}
+	sort.Strings(ids)
+	return strings.Join(ids, ",")
+}
+
+// vulnFindings returns the CVEs affecting a tenant's computers and when
+// they were computed. They are computed while the page waits the first
+// time and when computers were added or removed; otherwise older results
+// are shown while they are computed again in the background.
+func (s *Server) vulnFindings(ctx context.Context, tenant string, ix *vuln.Index) ([]vuln.Finding, time.Time, error) {
+	agents, err := s.store.ListAgents(ctx, tenant)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	set := activeAgents(agents)
+	s.vulns.mu.Lock()
+	m := s.vulns.matched[tenant]
+	if m != nil && m.agents == set {
+		if time.Since(m.at) > vulnMatchTTL && !m.refreshing {
+			m.refreshing = true
+			go func() {
+				bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+				defer cancel()
+				if _, _, err := s.matchVulns(bg, tenant, ix, agents, set); err != nil {
+					s.log.Warn("vulnerability matching", "tenant", tenant, "err", err)
+					s.vulns.mu.Lock()
+					m.refreshing = false
+					s.vulns.mu.Unlock()
+				}
+			}()
+		}
+		s.vulns.mu.Unlock()
+		return m.all, m.at, nil
+	}
+	s.vulns.mu.Unlock()
+	return s.matchVulns(ctx, tenant, ix, agents, set)
+}
+
+func (s *Server) matchVulns(ctx context.Context, tenant string, ix *vuln.Index, agents []store.Agent, set string) ([]vuln.Finding, time.Time, error) {
+	eps, err := s.vulnEndpoints(ctx, tenant, agents)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	m := &vulnMatch{at: time.Now(), agents: set, all: ix.Match(eps)}
+	s.vulns.mu.Lock()
+	if s.vulns.matched == nil {
+		s.vulns.matched = map[string]*vulnMatch{}
+	}
+	s.vulns.matched[tenant] = m
+	s.vulns.mu.Unlock()
+	return m.all, m.at, nil
+}
+
 // vulnData is the Vulnerabilities tab.
 type vulnData struct {
-	Ready      bool // sources downloaded
-	Months     int
-	Products   int // applications with NVD data
-	HasKEV     bool
-	Query      string
-	Exploited  bool // only exploited CVEs
+	Ready     bool // sources downloaded
+	Months    int
+	Products  int // applications with NVD data
+	HasKEV    bool
+	Query     string
+	Exploited bool // only exploited CVEs
+	// Sort: "" (urgency: exploited first, then score), cvss, cvss_asc,
+	// hosts or hosts_asc (affected computers).
+	Sort       string
 	Findings   []vuln.Finding
 	Total      int // findings before the filter
 	Shown      int
@@ -172,6 +266,7 @@ type vulnData struct {
 	KEVCount   int
 	Critical   int
 	Selected   *vuln.Finding // detail of one CVE
+	ComputedAt time.Time     // when the CVEs were matched
 	MaxFinding int
 	// How to fix the selected CVE: the bulk action form, prepared.
 	FixURL, FixLabel, FixNote string
@@ -183,6 +278,10 @@ func (s *Server) vulnReport(r *http.Request, tenant string) (*vulnData, error) {
 	ctx := r.Context()
 	q := r.URL.Query()
 	d := &vulnData{Query: strings.TrimSpace(q.Get("q")), Exploited: q.Get("exploited") == "1", MaxFinding: maxVulnRows}
+	switch q.Get("sort") {
+	case "cvss", "cvss_asc", "hosts", "hosts_asc":
+		d.Sort = q.Get("sort")
+	}
 	ix, err := s.vulnIndex(ctx)
 	if errors.Is(err, vuln.ErrNoData) {
 		return d, nil
@@ -191,11 +290,16 @@ func (s *Server) vulnReport(r *http.Request, tenant string) (*vulnData, error) {
 		return nil, err
 	}
 	d.Ready, d.Months, d.Products, d.HasKEV = true, ix.Months, ix.Products, ix.HasKEV
-	eps, err := s.vulnEndpoints(ctx, tenant)
+	cached, at, err := s.vulnFindings(ctx, tenant, ix)
 	if err != nil {
 		return nil, err
 	}
-	all := ix.Match(eps)
+	d.ComputedAt = at
+	all := cached
+	if d.Sort != "" {
+		all = append([]vuln.Finding(nil), cached...)
+		sortFindings(all, d.Sort)
+	}
 	d.Total = len(all)
 	affected := map[string]bool{}
 	for i := range all {
@@ -230,6 +334,52 @@ func (s *Server) vulnReport(r *http.Request, tenant string) (*vulnData, error) {
 		}
 	}
 	return d, nil
+}
+
+// sortFindings orders findings by score or by affected computers, the
+// urgency order (vuln.Sort) breaking ties.
+func sortFindings(fs []vuln.Finding, by string) {
+	sort.SliceStable(fs, func(i, j int) bool {
+		a, b := fs[i], fs[j]
+		switch by {
+		case "cvss":
+			return a.CVSS > b.CVSS
+		case "cvss_asc":
+			return a.CVSS < b.CVSS
+		case "hosts":
+			return len(a.Hits) > len(b.Hits)
+		case "hosts_asc":
+			return len(a.Hits) < len(b.Hits)
+		}
+		return false
+	})
+}
+
+// SortURL is the link of a column header: descending first, then
+// ascending, keeping the search.
+func (d *vulnData) SortURL(col string) string {
+	v := url.Values{"tab": {"cve"}, "sort": {col}}
+	if d.Sort == col {
+		v.Set("sort", col+"_asc")
+	}
+	if d.Query != "" {
+		v.Set("q", d.Query)
+	}
+	if d.Exploited {
+		v.Set("exploited", "1")
+	}
+	return "/reports?" + v.Encode()
+}
+
+// SortMark is the arrow of a column header.
+func (d *vulnData) SortMark(col string) string {
+	switch d.Sort {
+	case col:
+		return " ▼"
+	case col + "_asc":
+		return " ▲"
+	}
+	return ""
 }
 
 func hitsMatch(hs []vuln.Hit, q string) bool {

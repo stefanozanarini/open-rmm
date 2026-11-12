@@ -96,7 +96,7 @@
 <thead><tr><th>{{t "Effetto"}}</th><th>{{t "Dettaglio"}}</th><th>{{t "Dove"}}</th></tr></thead>
 <tbody>{{range .}}<tr>
   <td>{{if eq .Severity "block"}}<span class="badge chk-failing">{{t "blocca"}}</span>{{else if eq .Severity "limit"}}<span class="badge chk-warning">{{t "limita"}}</span>{{else}}<span class="badge">{{t "informazione"}}</span>{{end}}</td>
-  <td>{{msg .Summary}}</td>
+  <td>{{msg .Summary}}{{if and (eq .ID "disk_space") $.CanRun $.Data.Updates.CanCleanup}} <a class="button" href="/agents/{{$.Data.Agent.ID}}#act-winupdate-cleanup" title="{{t "Cache di Windows Update, Pulizia disco e pulizia dell'archivio dei componenti"}}">🧹 {{t "Libera spazio…"}}</a>{{end}}</td>
   <td>{{with .Path}}<code class="small">{{.}}</code>{{end}}{{with .Value}} = <code class="small">{{.}}</code>{{end}}</td>
 </tr>{{end}}</tbody>
 </table>
@@ -111,6 +111,7 @@
     <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="return" value="{{$.Data.Return}}">
     <input type="hidden" name="module" value="winupdate"><input type="hidden" name="action" value="logs">
     <button title="{{t "Eventi di Windows Update ed errori di CBS.log degli ultimi 7 giorni"}}">📄 {{t "Raccogli i log di Windows Update"}}</button></form>{{end}}
+  {{if and $.CanRun $u.CanCleanup (eq $u.OSModule "winupdate")}}<a class="button" href="/agents/{{$.Data.Agent.ID}}#act-winupdate-cleanup" title="{{t "Cache di Windows Update, Pulizia disco e pulizia dell'archivio dei componenti"}}">🧹 {{t "Libera spazio…"}}</a>{{end}}
   {{if and $.CanRun $u.WinupdateVersion (eq $u.OSModule "winupdate")}}<a class="button" href="/agents/{{$.Data.Agent.ID}}#act-winupdate-repair" title="{{t "Ripara l'archivio dei componenti (DISM, SFC) per errori come 0x800f0983 o 0x80073712"}}">🛠 {{t "Ripara Windows Update…"}}</a>{{end}}
   {{with $u.LogsJob}}<a href="/jobs/{{.ID}}">{{tf "log raccolti il %s" (fmtTime .CreatedAt)}}</a>{{if not .State.Final}} <span class="muted">({{label .State}})</span>{{end}}{{end}}
   <form method="get" action="{{if $.Data.Panel}}/agents{{else}}/agents/{{$.Data.Agent.ID}}{{end}}" class="inline">
@@ -121,7 +122,6 @@
 <form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" class="stack">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <input type="hidden" name="target" value="{{$u.OSModule}}|{{$u.OSModuleVersion}}|install">
-  <input type="hidden" name="ttl_minutes" value="480">
   {{if eq $u.OSModule "winupdate"}}{{range $u.Classifications}}<input type="hidden" name="p.classifications" value="{{.}}">{{end}}{{end}}
 <table class="patches">
 {{$linux := .Manager}}<thead><tr><th></th><th>{{t "Stato"}}</th><th>{{t "Gravità"}}</th><th>{{t "Aggiornamento"}}</th><th>{{if $linux}}{{t "Versione"}}{{else}}KB{{end}}</th>{{if not $linux}}<th>{{t "Data"}}</th>{{end}}</tr></thead>
@@ -137,16 +137,16 @@
 </tr>{{end}}</tbody>
 </table>
 {{with $u.HiddenHistory}}<p class="muted small">{{tf "Mostrate le ultime %d installazioni; altre %d più vecchie: cercale per nome o KB." maxHistory .}}</p>{{end}}
-{{if and $.CanRun $u.OSModuleVersion $u.Missing}}<div class="actions"><button class="primary">{{t "Installa i selezionati"}}</button>
+{{if and $.CanRun $u.OSModuleVersion $u.Missing}}<div class="actions">{{template "ttl" "480"}}<button class="primary">{{t "Installa i selezionati"}}</button>
   {{if .Manager}}<button form="os-security">{{t "Installa tutti gli aggiornamenti di sicurezza"}}</button> <button form="os-all">{{t "Installa tutti"}}</button>{{end}}
   <span class="muted">{{t "Richiede l'approvazione MFA. Il PC non viene riavviato: il riavvio necessario viene segnalato."}}</span></div>{{end}}
 </form>
 {{if and .Manager $.CanRun $u.OSModuleVersion $u.Missing}}<form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" id="os-security" hidden>
   <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="target" value="osupdate|{{$u.OSModuleVersion}}|install">
-  <input type="hidden" name="ttl_minutes" value="480"><input type="hidden" name="p.security_only" value="true"></form>
+  <input type="hidden" name="ttl_minutes" value="1440"><input type="hidden" name="p.security_only" value="true"></form>
 <form method="post" action="/agents/{{$.Data.Agent.ID}}/jobs" id="os-all" hidden>
   <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="target" value="osupdate|{{$u.OSModuleVersion}}|install">
-  <input type="hidden" name="ttl_minutes" value="480"></form>{{end}}
+  <input type="hidden" name="ttl_minutes" value="1440"></form>{{end}}
 {{else if $u.Query}}<p class="muted">{{t "Nessun aggiornamento corrisponde alla ricerca."}}</p>
 {{else if .Manager}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento del sistema mancante."}}</p>
 {{else}}<p><span class="badge chk-ok">{{t "aggiornato"}}</span> {{t "nessun aggiornamento di Windows mancante."}}</p>{{end}}
@@ -464,7 +464,7 @@
 {{end}}
 {{define "ttl"}}
 <label>{{t "Validità"}}
-  <select name="ttl_minutes"><option value="15">{{t "15 minuti"}}</option><option value="60" selected>{{t "1 ora"}}</option><option value="480">{{t "8 ore"}}</option><option value="1440">{{t "24 ore"}}</option></select>
+  {{$d := or . "60"}}<select name="ttl_minutes" title="{{t "Per quanto il comando resta valido se il computer è spento: oltre, scade senza essere eseguito"}}">{{range $o := ttlOptions}}<option value="{{$o.Minutes}}"{{if eq $o.Minutes $d}} selected{{end}}>{{t $o.Label}}</option>{{end}}</select>
 </label>
 {{end}}
 

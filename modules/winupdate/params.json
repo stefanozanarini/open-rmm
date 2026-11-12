@@ -130,6 +130,69 @@
       "default": false
     }
   ],
+  "cleanup": [
+    {
+      "name": "download_cache",
+      "type": "bool",
+      "label": {
+        "it": "Svuota la cache di download di Windows Update",
+        "en": "Empty the Windows Update download cache"
+      },
+      "help": {
+        "it": "SoftwareDistribution\\Download e i residui di un azzeramento precedente: gli aggiornamenti si riscaricano quando servono.",
+        "en": "SoftwareDistribution\\Download and what a previous reset left: updates are downloaded again when needed."
+      },
+      "default": true
+    },
+    {
+      "name": "cleanmgr",
+      "type": "bool",
+      "label": {
+        "it": "Pulizia disco di Windows (file di Windows Update, temporanei, di installazione, segnalazioni errori)",
+        "en": "Windows Disk Cleanup (Windows Update files, temporary and setup files, error reports)"
+      },
+      "help": {
+        "it": "Mai il cestino, la cartella Download o i pacchetti dei driver.",
+        "en": "Never the recycle bin, the Downloads folder or driver packages."
+      },
+      "default": true
+    },
+    {
+      "name": "component_cleanup",
+      "type": "bool",
+      "label": {
+        "it": "Pulisci l'archivio dei componenti (DISM /StartComponentCleanup)",
+        "en": "Clean up the component store (DISM /StartComponentCleanup)"
+      },
+      "default": true
+    },
+    {
+      "name": "reset_base",
+      "type": "bool",
+      "label": {
+        "it": "Rimuovi anche le versioni sostituite dei componenti (/ResetBase)",
+        "en": "Also remove superseded component versions (/ResetBase)"
+      },
+      "help": {
+        "it": "Libera più spazio ma gli aggiornamenti già installati non si potranno più disinstallare.",
+        "en": "Frees more space, but installed updates can no longer be uninstalled."
+      },
+      "default": false
+    },
+    {
+      "name": "previous_installations",
+      "type": "bool",
+      "label": {
+        "it": "Elimina l'installazione precedente di Windows (Windows.old)",
+        "en": "Delete the previous Windows installation (Windows.old)"
+      },
+      "help": {
+        "it": "Dopo non si potrà più tornare alla versione di Windows precedente.",
+        "en": "Afterwards going back to the previous Windows version is no longer possible."
+      },
+      "default": false
+    }
+  ],
   "repair": [
     {
       "name": "source",
