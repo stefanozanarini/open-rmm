@@ -3,7 +3,7 @@
 <nav class="tabs" aria-label="{{t "Report"}}">
   <a href="/reports" {{if eq .Tab "dashboard"}}class="current"{{end}}>Dashboard</a>
   <a href="/reports{{qs "tab" "software"}}" {{if eq .Tab "software"}}class="current"{{end}}>{{t "Inventario software"}}</a>
-  <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Ricerca computer"}}</a>
+  <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Inventario computer"}}</a>
   <a href="/reports{{qs "tab" "os"}}" {{if eq .Tab "os"}}class="current"{{end}}>{{t "Sistemi operativi"}}</a>
   <a href="/reports{{qs "tab" "logons"}}" {{if eq .Tab "logons"}}class="current"{{end}}>{{t "Accessi"}}</a>
   <a href="/reports{{qs "tab" "cve"}}" {{if eq .Tab "cve"}}class="current"{{end}}>{{t "Vulnerabilità"}}</a>{{if eq .Tab "cve"}}{{help "section:cve"}}{{end}}

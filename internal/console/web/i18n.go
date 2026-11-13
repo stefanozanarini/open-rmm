@@ -1552,7 +1552,7 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"Produttori più diffusi":                                    "Most common manufacturers",
 	"Produttori":                                                "Manufacturers",
 	"Raggruppa per":                                             "Group by",
-	"Ricerca computer":                                          "Computer search",
+	"Inventario computer":                                       "Computer inventory",
 	"Titoli":                                                    "Titles",
 	"Togli il filtro":                                           "Remove the filter",
 	"Utenti":                                                    "Users",
