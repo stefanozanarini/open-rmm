@@ -109,6 +109,9 @@ func usedKeys(t *testing.T) map[string]bool {
 	for _, o := range ttlOptions {
 		keys[o.Label] = keys[o.Label] || false
 	}
+	for _, v := range assignmentValidities {
+		keys[v.Label] = keys[v.Label] || false
+	}
 	for _, c := range invColumns {
 		keys[c.Label] = keys[c.Label] || false
 	}

@@ -19,10 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SignerService_SignJob_FullMethodName      = "/openrmm.v1.SignerService/SignJob"
-	SignerService_SignPolicy_FullMethodName   = "/openrmm.v1.SignerService/SignPolicy"
-	SignerService_SignBaseline_FullMethodName = "/openrmm.v1.SignerService/SignBaseline"
-	SignerService_SignCollect_FullMethodName  = "/openrmm.v1.SignerService/SignCollect"
+	SignerService_SignJob_FullMethodName           = "/openrmm.v1.SignerService/SignJob"
+	SignerService_SignPolicy_FullMethodName        = "/openrmm.v1.SignerService/SignPolicy"
+	SignerService_SignBaseline_FullMethodName      = "/openrmm.v1.SignerService/SignBaseline"
+	SignerService_SignCollect_FullMethodName       = "/openrmm.v1.SignerService/SignCollect"
+	SignerService_SignAssignment_FullMethodName    = "/openrmm.v1.SignerService/SignAssignment"
+	SignerService_SignAssignmentRun_FullMethodName = "/openrmm.v1.SignerService/SignAssignmentRun"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -32,9 +34,10 @@ const (
 // SignerService is exposed by openrmm-signer on a local socket. The signer
 // does not trust its caller: every request carries an operator's id_token,
 // freshly obtained from the identity provider for this very request, and the
-// signer verifies it on its own before signing. The one exception is the
+// signer verifies it on its own before signing. Two exceptions: the
 // automatic collection policy, which the signer checks against its fixed
-// content instead.
+// content instead; and SignAssignmentRun, which reuses an id_token-approved
+// SignAssignment from earlier, verified by the signer's own signature.
 type SignerServiceClient interface {
 	SignJob(ctx context.Context, in *SignJobRequest, opts ...grpc.CallOption) (*SignJobResponse, error)
 	// SignPolicy signs a policy document approved by an operator with a fresh
@@ -48,6 +51,16 @@ type SignerServiceClient interface {
 	// (the actions of the automatic collection) without an operator: no
 	// parameters, no packages, at most one hour, for a tenant of this console.
 	SignCollect(ctx context.Context, in *SignCollectRequest, opts ...grpc.CallOption) (*SignJobResponse, error)
+	// SignAssignment signs a permanent workflow assignment to a group,
+	// approved once by an administrator with a fresh MFA sign-in whose nonce
+	// is the assignment's fingerprint. The assignment pins an exact workflow
+	// revision, module version and parameters.
+	SignAssignment(ctx context.Context, in *SignAssignmentRequest, opts ...grpc.CallOption) (*SignAssignmentResponse, error)
+	// SignAssignmentRun issues signed jobs for an already-approved assignment
+	// on the targets the console names, without an operator: the signer
+	// verifies its own earlier signature over the assignment instead of a
+	// fresh id_token. It refuses once the assignment has expired.
+	SignAssignmentRun(ctx context.Context, in *SignAssignmentRunRequest, opts ...grpc.CallOption) (*SignJobResponse, error)
 }
 
 type signerServiceClient struct {
@@ -98,6 +111,26 @@ func (c *signerServiceClient) SignCollect(ctx context.Context, in *SignCollectRe
 	return out, nil
 }
 
+func (c *signerServiceClient) SignAssignment(ctx context.Context, in *SignAssignmentRequest, opts ...grpc.CallOption) (*SignAssignmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignAssignmentResponse)
+	err := c.cc.Invoke(ctx, SignerService_SignAssignment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) SignAssignmentRun(ctx context.Context, in *SignAssignmentRunRequest, opts ...grpc.CallOption) (*SignJobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SignJobResponse)
+	err := c.cc.Invoke(ctx, SignerService_SignAssignmentRun_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SignerServiceServer is the server API for SignerService service.
 // All implementations must embed UnimplementedSignerServiceServer
 // for forward compatibility.
@@ -105,9 +138,10 @@ func (c *signerServiceClient) SignCollect(ctx context.Context, in *SignCollectRe
 // SignerService is exposed by openrmm-signer on a local socket. The signer
 // does not trust its caller: every request carries an operator's id_token,
 // freshly obtained from the identity provider for this very request, and the
-// signer verifies it on its own before signing. The one exception is the
+// signer verifies it on its own before signing. Two exceptions: the
 // automatic collection policy, which the signer checks against its fixed
-// content instead.
+// content instead; and SignAssignmentRun, which reuses an id_token-approved
+// SignAssignment from earlier, verified by the signer's own signature.
 type SignerServiceServer interface {
 	SignJob(context.Context, *SignJobRequest) (*SignJobResponse, error)
 	// SignPolicy signs a policy document approved by an operator with a fresh
@@ -121,6 +155,16 @@ type SignerServiceServer interface {
 	// (the actions of the automatic collection) without an operator: no
 	// parameters, no packages, at most one hour, for a tenant of this console.
 	SignCollect(context.Context, *SignCollectRequest) (*SignJobResponse, error)
+	// SignAssignment signs a permanent workflow assignment to a group,
+	// approved once by an administrator with a fresh MFA sign-in whose nonce
+	// is the assignment's fingerprint. The assignment pins an exact workflow
+	// revision, module version and parameters.
+	SignAssignment(context.Context, *SignAssignmentRequest) (*SignAssignmentResponse, error)
+	// SignAssignmentRun issues signed jobs for an already-approved assignment
+	// on the targets the console names, without an operator: the signer
+	// verifies its own earlier signature over the assignment instead of a
+	// fresh id_token. It refuses once the assignment has expired.
+	SignAssignmentRun(context.Context, *SignAssignmentRunRequest) (*SignJobResponse, error)
 	mustEmbedUnimplementedSignerServiceServer()
 }
 
@@ -142,6 +186,12 @@ func (UnimplementedSignerServiceServer) SignBaseline(context.Context, *SignBasel
 }
 func (UnimplementedSignerServiceServer) SignCollect(context.Context, *SignCollectRequest) (*SignJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SignCollect not implemented")
+}
+func (UnimplementedSignerServiceServer) SignAssignment(context.Context, *SignAssignmentRequest) (*SignAssignmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignAssignment not implemented")
+}
+func (UnimplementedSignerServiceServer) SignAssignmentRun(context.Context, *SignAssignmentRunRequest) (*SignJobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SignAssignmentRun not implemented")
 }
 func (UnimplementedSignerServiceServer) mustEmbedUnimplementedSignerServiceServer() {}
 func (UnimplementedSignerServiceServer) testEmbeddedByValue()                       {}
@@ -236,6 +286,42 @@ func _SignerService_SignCollect_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_SignAssignment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignAssignmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).SignAssignment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_SignAssignment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).SignAssignment(ctx, req.(*SignAssignmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_SignAssignmentRun_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SignAssignmentRunRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).SignAssignmentRun(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_SignAssignmentRun_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).SignAssignmentRun(ctx, req.(*SignAssignmentRunRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SignerService_ServiceDesc is the grpc.ServiceDesc for SignerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -258,6 +344,14 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SignCollect",
 			Handler:    _SignerService_SignCollect_Handler,
+		},
+		{
+			MethodName: "SignAssignment",
+			Handler:    _SignerService_SignAssignment_Handler,
+		},
+		{
+			MethodName: "SignAssignmentRun",
+			Handler:    _SignerService_SignAssignmentRun_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

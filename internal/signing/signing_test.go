@@ -67,3 +67,34 @@ func TestKeyEncodingRoundTrip(t *testing.T) {
 		t.Fatal("short key accepted")
 	}
 }
+
+func TestSelfVerify(t *testing.T) {
+	s, _ := setup(t)
+	payload := []byte("assignment")
+	sig := s.Sign(DomainAssignment, payload)
+	if err := s.Verify(DomainAssignment, s.KeyID(), payload, sig); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Verify(DomainAssignment, s.KeyID(), []byte("assignmenT"), sig); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("tampered payload: %v", err)
+	}
+	if err := s.Verify(DomainJob, s.KeyID(), payload, sig); !errors.Is(err, ErrBadSignature) {
+		t.Fatalf("cross-domain signature accepted: %v", err)
+	}
+	if err := s.Verify(DomainAssignment, "unknown", payload, sig); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("unknown key: %v", err)
+	}
+	other, _ := NewSigner(ed25519mustGenerate(t))
+	if err := other.Verify(DomainAssignment, s.KeyID(), payload, sig); !errors.Is(err, ErrUnknownKey) {
+		t.Fatalf("another signer accepted a foreign key id: %v", err)
+	}
+}
+
+func ed25519mustGenerate(t *testing.T) ed25519.PrivateKey {
+	t.Helper()
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return priv
+}

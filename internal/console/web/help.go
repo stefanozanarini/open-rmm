@@ -38,13 +38,14 @@ var helpTexts = map[string]string{ // #nosec G101 -- help text, not credentials
 	"shell":       "Shell interattiva sul computer, a tempo. Ogni riga digitata è registrata nell'audit. Chiudi la sessione quando hai finito.",
 	"files":       "Gestione dei file: \"Sfoglia\" sceglie il computer di cui vedi le cartelle; \"Applica a\" decide su quali computer caricare un file o da quali scaricarlo in uno zip. Le cartelle dell'agente non sono accessibili e ogni file trasferito è registrato.",
 
-	"section:shell":    "Apre PowerShell (bash su Linux) sul computer per il tempo scelto, dopo l'approvazione MFA. Il computer deve consentirlo con la policy locale (GPO AllowInteractiveShell).",
-	"section:files":    "Apre la gestione dei file sul computer per il tempo scelto, dopo l'approvazione MFA. Serve l'agente 1.1.0 o successivo e il modulo files pubblicato.",
-	"section:blockers": "Impostazioni del computer che bloccano o limitano Windows Update: versione bloccata, server WSUS che non risponde, servizi disabilitati, pause, poco spazio. Vanno corrette sul computer o nella GPO che le imposta; per lo spazio, \"Libera spazio…\" svuota la cache di Windows Update ed esegue la Pulizia disco.",
-	"section:firmware": "Versioni di BIOS, firmware dei dispositivi e driver installate ora, e aggiornamenti offerti dallo strumento del produttore (Dell Command Update, Lenovo System Update, HP Image Assistant). L'installazione sceglie i tipi e l'importanza; il BIOS solo se spuntato, con il PC collegato alla corrente. Il PC non viene riavviato.",
-	"section:cve":      "Le vulnerabilità sono calcolate confrontando l'inventario con i dati di Microsoft, NVD e CISA (scaricati ogni 6 ore). In cima quelle sfruttate attivamente. Apri una CVE per i computer colpiti e l'azione di correzione.",
-	"section:ring":     "pilot: riceve subito le nuove versioni dell'agente, per provarle su pochi computer. broad: le riceve dopo, quando la versione è promossa.",
-	"section:ad":       "Albero dei domini e delle OU di Active Directory: un clic filtra i computer di quella OU. I numeri contano i computer con l'agente.",
+	"section:shell":      "Apre PowerShell (bash su Linux) sul computer per il tempo scelto, dopo l'approvazione MFA. Il computer deve consentirlo con la policy locale (GPO AllowInteractiveShell).",
+	"section:files":      "Apre la gestione dei file sul computer per il tempo scelto, dopo l'approvazione MFA. Serve l'agente 1.1.0 o successivo e il modulo files pubblicato.",
+	"section:blockers":   "Impostazioni del computer che bloccano o limitano Windows Update: versione bloccata, server WSUS che non risponde, servizi disabilitati, pause, poco spazio. Vanno corrette sul computer o nella GPO che le imposta; per lo spazio, \"Libera spazio…\" svuota la cache di Windows Update ed esegue la Pulizia disco.",
+	"section:firmware":   "Versioni di BIOS, firmware dei dispositivi e driver installate ora, e aggiornamenti offerti dallo strumento del produttore (Dell Command Update, Lenovo System Update, HP Image Assistant). L'installazione sceglie i tipi e l'importanza; il BIOS solo se spuntato, con il PC collegato alla corrente. Il PC non viene riavviato.",
+	"section:cve":        "Le vulnerabilità sono calcolate confrontando l'inventario con i dati di Microsoft, NVD e CISA (scaricati ogni 6 ore). In cima quelle sfruttate attivamente. Apri una CVE per i computer colpiti e l'azione di correzione.",
+	"section:ring":       "pilot: riceve subito le nuove versioni dell'agente, per provarle su pochi computer. broad: le riceve dopo, quando la versione è promossa.",
+	"section:ad":         "Albero dei domini e delle OU di Active Directory: un clic filtra i computer di quella OU. I numeri contano i computer con l'agente.",
+	"section:assignment": "Un'assegnazione permanente corre da sola sui computer del gruppo, compresi quelli che ci entrano dopo, senza chiedere una nuova approvazione MFA a ogni computer. L'amministratore approva una volta la revisione esatta del workflow, per quanto tempo vale e il tempo massimo di ogni singola esecuzione; scaduta l'assegnazione va riapprovata. Sospenderla non richiede MFA, riprenderla sì solo se non è scaduta.",
 }
 
 // helpHTML renders the "?" of a key in lang, or nothing.

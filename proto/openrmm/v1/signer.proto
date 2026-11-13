@@ -9,9 +9,10 @@ option go_package = "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1;openrm
 // SignerService is exposed by openrmm-signer on a local socket. The signer
 // does not trust its caller: every request carries an operator's id_token,
 // freshly obtained from the identity provider for this very request, and the
-// signer verifies it on its own before signing. The one exception is the
+// signer verifies it on its own before signing. Two exceptions: the
 // automatic collection policy, which the signer checks against its fixed
-// content instead.
+// content instead; and SignAssignmentRun, which reuses an id_token-approved
+// SignAssignment from earlier, verified by the signer's own signature.
 service SignerService {
   rpc SignJob(SignJobRequest) returns (SignJobResponse);
   // SignPolicy signs a policy document approved by an operator with a fresh
@@ -25,6 +26,16 @@ service SignerService {
   // (the actions of the automatic collection) without an operator: no
   // parameters, no packages, at most one hour, for a tenant of this console.
   rpc SignCollect(SignCollectRequest) returns (SignJobResponse);
+  // SignAssignment signs a permanent workflow assignment to a group,
+  // approved once by an administrator with a fresh MFA sign-in whose nonce
+  // is the assignment's fingerprint. The assignment pins an exact workflow
+  // revision, module version and parameters.
+  rpc SignAssignment(SignAssignmentRequest) returns (SignAssignmentResponse);
+  // SignAssignmentRun issues signed jobs for an already-approved assignment
+  // on the targets the console names, without an operator: the signer
+  // verifies its own earlier signature over the assignment instead of a
+  // fresh id_token. It refuses once the assignment has expired.
+  rpc SignAssignmentRun(SignAssignmentRunRequest) returns (SignJobResponse);
 }
 
 message SignCollectRequest {
@@ -90,4 +101,54 @@ message SignedJob {
   string job_id = 1;
   string agent_id = 2;
   bytes envelope = 3;
+}
+
+// AssignmentRequest is what an administrator approves once: a workflow
+// revision, pinned by module version, hash and parameters, allowed to run
+// automatically (SignAssignmentRun) on the targets the console names
+// later, until it expires. Its canonical hash is embedded in the nonce of
+// the step-up authentication, like JobRequest's.
+message AssignmentRequest {
+  string tenant_id = 1;
+  string workflow_id = 2;
+  int32 revision = 3;
+  string module = 4;
+  string module_version = 5;
+  bytes module_sha256 = 6;
+  string action = 7;
+  bytes params_json = 8;
+  repeated PackageRef packages = 9;
+  // Ceiling for the ttl_seconds of every job SignAssignmentRun issues.
+  int64 max_ttl_seconds = 10;
+  // SignAssignmentRun refuses once now is past this instant.
+  int64 expires_unix = 11;
+  // Random value chosen by the console per request, so that two identical
+  // assignments still have different hashes.
+  bytes request_nonce = 12;
+  // The group this assignment targets. Not enforced by the signer (it has
+  // no notion of groups or membership: the console alone resolves it to
+  // agent ids on each SignAssignmentRun), but part of what the
+  // administrator approves and later audits can see.
+  string group_id = 13;
+}
+
+message SignAssignmentRequest {
+  AssignmentRequest request = 1;
+  string id_token = 2;
+}
+
+message SignAssignmentResponse {
+  // Serialized SignedEnvelope carrying the canonical AssignmentRequest.
+  bytes envelope = 1;
+  string operator = 2;
+  int64 expires_unix = 3;
+}
+
+message SignAssignmentRunRequest {
+  // Serialized SignedEnvelope as returned by SignAssignment.
+  bytes assignment_envelope = 1;
+  // 1 to jobreq.MaxAgents distinct agent UUIDs.
+  repeated string agent_ids = 2;
+  // Capped by the assignment's max_ttl_seconds.
+  int64 ttl_seconds = 3;
 }

@@ -42,6 +42,7 @@ type Memory struct {
 	lastUsers   map[string]LastUser
 	groups      map[string]Group        // tenant/id
 	workflows   map[string]*memWorkflow // tenant/id
+	assignments map[string]Assignment   // tenant/id
 	vulnFeeds   map[string]VulnFeed
 }
 

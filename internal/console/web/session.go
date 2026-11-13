@@ -52,6 +52,9 @@ type Pending struct {
 	InstallerPlatform string `json:"installer_platform,omitempty"`
 	// For "publish": what is being published, module or release.
 	Publish string `json:"publish,omitempty"`
+	// For "assignment": the serialized AssignmentRequest being approved
+	// (it names the group it targets).
+	AssignmentReq []byte `json:"assignment_req,omitempty"`
 }
 
 // SessionData is stored server-side; the browser only holds a random id.

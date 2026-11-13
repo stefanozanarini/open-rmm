@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -64,16 +65,17 @@ type workflowsData struct {
 }
 
 type workflowData struct {
-	New       bool
-	W         store.Workflow
-	Doc       workflow.Document
-	Latest    int // newest revision; W.Revision may be an older one
-	Revisions []store.Workflow
-	Packages  []store.Package
-	Groups    []store.Group
-	Runs      []wfRun
-	Counts    map[string]int
-	Module    bool
+	New         bool
+	W           store.Workflow
+	Doc         workflow.Document
+	Latest      int // newest revision; W.Revision may be an older one
+	Revisions   []store.Workflow
+	Packages    []store.Package
+	Groups      []store.Group
+	Runs        []wfRun
+	Counts      map[string]int
+	Module      bool
+	Assignments []assignmentView
 	// Error: the posted workflow is not valid; the form shows it again.
 	Error string
 	// Editor choices.
@@ -82,12 +84,12 @@ type workflowData struct {
 
 // workflowRuns returns the latest run of each workflow on each computer,
 // by workflow id.
-func (s *Server) workflowRuns(r *http.Request, t string) (map[string][]wfRun, error) {
-	jobs, err := s.store.ListModuleJobs(r.Context(), t, workflow.ModuleID, maxWorkflowJobs)
+func (s *Server) workflowRuns(ctx context.Context, t string) (map[string][]wfRun, error) {
+	jobs, err := s.store.ListModuleJobs(ctx, t, workflow.ModuleID, maxWorkflowJobs)
 	if err != nil {
 		return nil, err
 	}
-	agents, err := s.store.ListAgents(r.Context(), t)
+	agents, err := s.store.ListAgents(ctx, t)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +147,7 @@ func (s *Server) handleWorkflows(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	runs, err := s.workflowRuns(r, t)
+	runs, err := s.workflowRuns(r.Context(), t)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -222,12 +224,16 @@ func (s *Server) handleWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Latest = d.Revisions[0].Revision
-	runs, err := s.workflowRuns(r, t)
+	runs, err := s.workflowRuns(r.Context(), t)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	d.Runs, d.Counts = runs[id], countRuns(runs[id])
+	if d.Assignments, err = s.assignmentsFor(r, t, id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err := s.workflowForm(r, t, &d); err != nil {
 		s.fail(w, r, err)
 		return

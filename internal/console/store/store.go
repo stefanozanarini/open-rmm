@@ -122,6 +122,7 @@ type Store interface {
 	LastUserStore
 	GroupStore
 	WorkflowStore
+	AssignmentStore
 	VulnFeedStore
 }
 

@@ -251,6 +251,21 @@ func run(log *slog.Logger) error {
 			}
 		}
 	}()
+	// Permanent workflow assignments: dispatch runs on the computers of
+	// their group that are due (new members, or a reassessment interval
+	// elapsed). Shortly after startup, then every 15 minutes.
+	go func() {
+		t := time.NewTicker(15 * time.Minute)
+		defer t.Stop()
+		for {
+			srv.RunAssignments(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
 
 	hs := &http.Server{
 		Addr:              env("OPENRMM_HTTP_LISTEN", ":8080"),

@@ -166,7 +166,13 @@ func funcs(lang string) template.FuncMap {
 		"jobFailures":  jobFailures,
 		"lowDisk":      lowDisk,
 		"ttlOptions":   func() []ttlOption { return ttlOptions },
-		"isDell":       func(m string) bool { return strings.HasPrefix(strings.ToLower(strings.TrimSpace(m)), "dell") },
+		"assignmentValidities": func() []struct {
+			Days  int
+			Label string
+		} {
+			return assignmentValidities
+		},
+		"isDell": func(m string) bool { return strings.HasPrefix(strings.ToLower(strings.TrimSpace(m)), "dell") },
 		"lastJobs": func(jobs []store.Job, n int) []store.Job {
 			if len(jobs) > n {
 				return jobs[:n]
@@ -386,6 +392,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /workflows/new", s.role(authn.RoleOperator, s.handleSaveWorkflow))
 	mux.Handle("GET /workflows/{id}", s.auth(s.handleWorkflow))
 	mux.Handle("POST /workflows/{id}", s.role(authn.RoleOperator, s.handleSaveWorkflow))
+	mux.Handle("POST /workflows/{id}/assignments", s.role(authn.RoleAdmin, s.handleCreateAssignment))
+	mux.Handle("POST /workflows/{id}/assignments/{aid}", s.role(authn.RoleAdmin, s.handleSetAssignmentActive))
 	mux.Handle("GET /groups", s.auth(s.handleGroups))
 	mux.Handle("POST /groups", s.role(authn.RoleOperator, s.handleCreateGroup))
 	mux.Handle("POST /groups/agents", s.role(authn.RoleOperator, s.handleGroupAgents))

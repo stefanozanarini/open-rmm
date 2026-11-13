@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -139,16 +140,16 @@ func (s *Server) findGroup(r *http.Request, t, id string) (store.Group, error) {
 }
 
 // tenantAgents is every agent of a tenant with the user shown for it.
-func (s *Server) tenantAgents(r *http.Request, t string) ([]groupAgent, error) {
-	agents, err := s.store.ListAgents(r.Context(), t)
+func (s *Server) tenantAgents(ctx context.Context, t string) ([]groupAgent, error) {
+	agents, err := s.store.ListAgents(ctx, t)
 	if err != nil {
 		return nil, err
 	}
-	sums, err := s.store.InventorySummaries(r.Context(), t)
+	sums, err := s.store.InventorySummaries(ctx, t)
 	if err != nil {
 		return nil, err
 	}
-	lastUsers, ttl := s.lastUsers(r.Context(), t)
+	lastUsers, ttl := s.lastUsers(ctx, t)
 	out := make([]groupAgent, 0, len(agents))
 	for _, a := range agents {
 		lu, has := lastUsers[a.ID]
@@ -194,7 +195,7 @@ func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	all, err := s.tenantAgents(r, t)
+	all, err := s.tenantAgents(r.Context(), t)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -226,7 +227,7 @@ func (s *Server) handleGroup(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	all, err := s.tenantAgents(r, t)
+	all, err := s.tenantAgents(r.Context(), t)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -401,7 +402,7 @@ func (s *Server) addFromForm(w http.ResponseWriter, r *http.Request, t string, g
 	names := strings.FieldsFunc(r.PostFormValue("names"), func(c rune) bool { return c == '\n' || c == '\r' || c == ',' || c == ';' })
 	switch {
 	case g.Kind == store.GroupComputer && len(names) > 0:
-		all, err := s.tenantAgents(r, t)
+		all, err := s.tenantAgents(r.Context(), t)
 		if err != nil {
 			s.fail(w, r, err)
 			return

@@ -172,6 +172,8 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		s.completeInstaller(w, r, sess, p, claims, s.verifier)
 	case "publish":
 		s.completePublish(w, r, sess, p, claims, s.verifier)
+	case "assignment":
+		s.completeAssignment(w, r, sess, p, claims, raw)
 	default:
 		http.Error(w, tr(lang, "accesso non valido"), http.StatusBadRequest)
 	}

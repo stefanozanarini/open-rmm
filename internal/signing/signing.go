@@ -23,6 +23,10 @@ const (
 	DomainModuleManifest Domain = "openrmm/module-manifest/v1"
 	DomainAgentRelease   Domain = "openrmm/agent-release/v1"
 	DomainPolicy         Domain = "openrmm/policy/v1"
+	// DomainAssignment signs a permanent workflow assignment to a group
+	// (internal/console/assignreq): distinct from DomainJob and
+	// DomainPolicy so a signed assignment can never be replayed as either.
+	DomainAssignment Domain = "openrmm/assignment/v1"
 )
 
 // MaxPayload bounds the payload size accepted for verification.
@@ -67,6 +71,24 @@ func (s *Signer) KeyID() string { return s.id }
 // Sign signs payload for domain d.
 func (s *Signer) Sign(d Domain, payload []byte) []byte {
 	return ed25519.Sign(s.key, message(d, payload))
+}
+
+// Verify checks a signature this signer produced earlier for domain d under
+// its own key, identified by keyID (its current KeyID, since the signer
+// never rotates mid-flight). Used to recheck something it signed itself,
+// such as a workflow assignment, without a Keyring of peers.
+func (s *Signer) Verify(d Domain, keyID string, payload, signature []byte) error {
+	if keyID != s.id {
+		return ErrUnknownKey
+	}
+	if len(payload) > MaxPayload {
+		return fmt.Errorf("%w: payload too large", ErrBadSignature)
+	}
+	pub, ok := s.key.Public().(ed25519.PublicKey)
+	if !ok || len(signature) != ed25519.SignatureSize || !ed25519.Verify(pub, message(d, payload), signature) {
+		return ErrBadSignature
+	}
+	return nil
 }
 
 // Keyring is a set of trusted public keys, each allowed for specific domains.

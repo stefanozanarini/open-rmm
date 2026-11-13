@@ -26,6 +26,37 @@
   <span class="muted small">{{fmtTime .UpdatedAt}} · {{.Author}}{{with .Comment}} — {{.}}{{end}}</span></li>{{end}}</ul>
 </section>
 </div>
+
+<h2>{{t "Assegnazioni permanenti"}} {{help "section:assignment"}}</h2>
+<p class="muted">{{t "Un'assegnazione permanente esegue questa revisione del workflow, approvata una volta con MFA, su tutti i computer del gruppo: anche quelli che vi entrano dopo. La console la rivaluta periodicamente, senza chiedere una nuova approvazione, finché non scade o la sospendi."}}</p>
+{{if .Assignments}}
+<table>
+<thead><tr><th>{{t "Gruppo"}}</th><th class="num">{{t "Revisione"}}</th><th>{{t "Scade il"}}</th><th>{{t "Stato"}}</th><th>{{t "Creata da"}}</th>{{if $.IsAdmin}}<th></th>{{end}}</tr></thead>
+<tbody>{{range .Assignments}}<tr>
+  <td>{{if .GroupName}}{{if eq .GroupKind "user"}}👤 {{end}}{{.GroupName}}{{else}}<span class="muted">{{t "gruppo eliminato"}}</span>{{end}}</td>
+  <td class="num">{{.Revision}}</td>
+  <td>{{fmtTime .ExpiresAt}}</td>
+  <td>{{if .Active}}<span class="badge succeeded">{{t "attiva"}}</span>{{else}}<span class="badge">{{t "sospesa"}}</span>{{end}}</td>
+  <td>{{.CreatedBy}}</td>
+  {{if $.IsAdmin}}<td>
+    <form method="post" action="/workflows/{{$.Data.W.ID}}/assignments/{{.ID}}" class="inline">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}">
+      {{if .Active}}<button name="do" value="pause">{{t "Sospendi"}}</button>{{else}}<button name="do" value="resume">{{t "Riprendi"}}</button>{{end}}
+    </form>
+  </td>{{end}}
+</tr>{{end}}</tbody>
+</table>
+{{else}}<p class="muted">{{t "Nessuna assegnazione permanente."}}</p>{{end}}
+{{if and $.IsAdmin .Module (not .New)}}
+<form method="post" action="/workflows/{{.W.ID}}/assignments" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label>{{t "Gruppo"}} <select name="group" required>{{range .Groups}}<option value="{{.ID}}">{{if eq .Kind "user"}}👤 {{end}}{{.Name}}</option>{{end}}</select></label>
+  <label>{{t "Validità dell'assegnazione"}} <select name="validity_days">{{range assignmentValidities}}<option value="{{.Days}}"{{if eq .Days 90}} selected{{end}}>{{t .Label}}</option>{{end}}</select></label>
+  {{template "ttl" "1440"}}
+  <p class="muted">{{tf "Approvi ora con MFA; esegue la revisione %d finché l'assegnazione non scade o la sospendi." .Latest}}</p>
+  <button class="primary">{{t "Crea l'assegnazione permanente…"}}</button>
+</form>
+{{end}}
 {{end}}
 
 <form method="post" action="/workflows/{{if .New}}new{{else}}{{.W.ID}}{{end}}" class="stack wide wf-edit" data-wf-editor>

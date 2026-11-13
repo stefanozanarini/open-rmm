@@ -76,7 +76,7 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		all, err := s.tenantAgents(r, t)
+		all, err := s.tenantAgents(r.Context(), t)
 		if err != nil {
 			s.fail(w, r, err)
 			return

@@ -12,6 +12,12 @@
 // is configured on the signer, from the central console's directory (with
 // its roles capped by the federation's maximum role).
 //
+// A permanent workflow assignment (SignAssignment, SignAssignmentRun) is the
+// one case where a job runs on the signer's own say-so afterwards: an
+// administrator still approves the assignment itself the same way, with a
+// fresh MFA token bound to its exact content, but once signed it is reused
+// to issue jobs for the targets the console names later, until it expires.
+//
 // None of this depends on the console being honest.
 package signer
 
@@ -33,6 +39,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/assignreq"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/authn"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
 	"github.com/stefanozanarini/tempra-rmm/internal/ids"
@@ -175,6 +182,109 @@ func (s *Server) SignCollect(_ context.Context, req *openrmmv1.SignCollectReques
 		return deny("collections carry no packages and last at most an hour")
 	}
 	return s.issue(r, "automatic (collection)", s.now())
+}
+
+// SignAssignment verifies an administrator's fresh MFA approval of a
+// permanent workflow assignment and signs it. Unlike SignJob, this
+// signature is not single-use for running jobs: SignAssignmentRun reuses it,
+// without an operator, until it expires (AssignmentRequest.expires_unix).
+// The one-time step-up token is still consumed here, like any other
+// approval, so it cannot also approve something else.
+func (s *Server) SignAssignment(ctx context.Context, req *openrmmv1.SignAssignmentRequest) (*openrmmv1.SignAssignmentResponse, error) {
+	r := req.GetRequest()
+	deny := func(reason string, err error) (*openrmmv1.SignAssignmentResponse, error) {
+		s.log.Warn("assignment signature refused", "reason", reason, "err", err, "tenant", r.GetTenantId(),
+			"workflow", r.GetWorkflowId())
+		return nil, status.Error(codes.PermissionDenied, reason)
+	}
+	now := s.now()
+	if err := assignreq.Validate(r, now); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	claims, v, err := s.verify(ctx, req.GetIdToken())
+	if err != nil {
+		return deny("operator authentication rejected", err)
+	}
+	if err := v.CheckFresh(claims, now); err != nil {
+		return deny("authentication too old", err)
+	}
+	if !assignreq.CheckAuthNonce(claims.Nonce, r) {
+		return deny("authentication was not issued for this assignment", authn.ErrNonce)
+	}
+	// A permanent assignment runs unattended for its whole validity, so it
+	// needs the Admin role, like a policy.
+	if !claims.HasRole(authn.RoleAdmin) {
+		return deny("only administrators may approve a permanent assignment", authn.ErrNoRole)
+	}
+	if !v.MayManage(claims, r.GetTenantId()) {
+		return deny("operator may not manage this tenant", authn.ErrNoTenant)
+	}
+	if err := s.used.add(claims.Nonce, now.Add(2*time.Hour), now); err != nil {
+		return deny("authentication already used", err)
+	}
+	payload, err := proto.Marshal(r)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "encode assignment")
+	}
+	env, err := proto.Marshal(&openrmmv1.SignedEnvelope{KeyId: s.signer.KeyID(), Payload: payload,
+		Signature: s.signer.Sign(signing.DomainAssignment, payload)})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "encode envelope")
+	}
+	op := operatorOf(claims, v)
+	s.log.Info("assignment signed", "workflow", r.GetWorkflowId(), "revision", r.GetRevision(), "tenant", r.GetTenantId(),
+		"operator", op, "expires_unix", r.GetExpiresUnix())
+	return &openrmmv1.SignAssignmentResponse{Envelope: env, Operator: op, ExpiresUnix: r.GetExpiresUnix()}, nil
+}
+
+// SignAssignmentRun issues signed jobs for an already-approved assignment,
+// without an operator: it verifies its own earlier signature over the
+// assignment instead of a fresh id_token, and that the assignment has not
+// expired. The console decides which targets are due for a run; this call
+// cannot change the module, action, parameters or packages approved in the
+// assignment, only the targets and a ttl capped by it.
+func (s *Server) SignAssignmentRun(_ context.Context, req *openrmmv1.SignAssignmentRunRequest) (*openrmmv1.SignJobResponse, error) {
+	deny := func(reason string, err error) (*openrmmv1.SignJobResponse, error) {
+		s.log.Warn("assignment run refused", "reason", reason, "err", err)
+		return nil, status.Error(codes.PermissionDenied, reason)
+	}
+	env := &openrmmv1.SignedEnvelope{}
+	if err := proto.Unmarshal(req.GetAssignmentEnvelope(), env); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid assignment envelope")
+	}
+	if err := s.signer.Verify(signing.DomainAssignment, env.GetKeyId(), env.GetPayload(), env.GetSignature()); err != nil {
+		return deny("assignment envelope does not carry a valid signature of this signer", err)
+	}
+	r := &openrmmv1.AssignmentRequest{}
+	if err := proto.Unmarshal(env.GetPayload(), r); err != nil {
+		return nil, status.Error(codes.Internal, "decode assignment")
+	}
+	now := s.now()
+	if err := assignreq.Validate(r, now); err != nil {
+		// The signer's own earlier output, so a failure here means its
+		// validation rules changed incompatibly since it was signed.
+		return deny("signed assignment no longer valid", err)
+	}
+	if now.Unix() >= r.GetExpiresUnix() {
+		return deny("assignment expired", fmt.Errorf("expired at %d", r.GetExpiresUnix()))
+	}
+	if err := assignreq.ValidateTargets(req.GetAgentIds(), assignreq.MaxAgents); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	ttl := req.GetTtlSeconds()
+	if ttl < 60 || ttl > r.GetMaxTtlSeconds() {
+		return nil, status.Error(codes.InvalidArgument, "ttl must be between 1 minute and the assignment's maximum")
+	}
+	jr := &openrmmv1.JobRequest{TenantId: r.GetTenantId(), AgentIds: req.GetAgentIds(), Module: r.GetModule(),
+		ModuleVersion: r.GetModuleVersion(), ModuleSha256: r.GetModuleSha256(), Action: r.GetAction(),
+		ParamsJson: r.GetParamsJson(), TtlSeconds: ttl, RequestNonce: jobreq.NewRequestNonce(), Packages: r.GetPackages()}
+	if len(jr.AgentIds) == 1 {
+		jr.AgentId, jr.AgentIds = jr.AgentIds[0], nil
+	}
+	if err := jobreq.Validate(jr); err != nil {
+		return nil, status.Error(codes.Internal, "built an invalid job: "+err.Error())
+	}
+	return s.issue(jr, fmt.Sprintf("automatic (workflow assignment, workflow %s rev. %d)", r.GetWorkflowId(), r.GetRevision()), now)
 }
 
 // usedTokens remembers consumed step-up nonces until their tokens expire.
