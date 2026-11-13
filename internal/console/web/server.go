@@ -243,6 +243,7 @@ func funcs(lang string) template.FuncMap {
 		"rowsCtx": func(d agentsData, rows []agentRow, sel bool) map[string]any {
 			return map[string]any{"Rows": rows, "Select": sel, "View": d}
 		},
+		"add": func(a, b int) int { return a + b },
 		// qs builds a query string from key/value pairs, skipping empty values.
 		"qs": func(kv ...string) string {
 			v := url.Values{}

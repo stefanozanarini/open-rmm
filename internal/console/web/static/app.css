@@ -205,6 +205,18 @@ table.hbars th { font-weight:400; text-align:left; width:45%; white-space:nowrap
 table.hbars td.lv { width:3em; text-align:right; }
 svg.hbar { width:100%; height:12px; display:block; }
 svg.hbar rect { fill:var(--bar); }
+.charts2 { grid-template-columns:repeat(auto-fill, minmax(420px, 1fr)); }
+svg.vbars { width:100%; height:auto; display:block; font-size:14px; }
+svg.vbars rect { fill:var(--bar); }
+svg.vbars a:hover rect, svg.vbars a:focus rect { opacity:.8; }
+svg.vbars line.grid { stroke:var(--line); stroke-width:1; }
+svg.vbars text { fill:var(--muted); }
+svg.vbars text.tick { text-anchor:end; }
+svg.vbars text.val { fill:var(--fg); text-anchor:middle; font-weight:600; }
+svg.vbars text.lbl { text-anchor:middle; }
+nav.tabs.sub { margin:12px 0 8px; }
+th.num, td.num { text-align:right; }
+p.filters .badge { margin-right:6px; }
 svg.hbar rect.cat-1 { fill:var(--cat-1); } svg.hbar rect.cat-2 { fill:var(--cat-2); }
 .viz.wide { grid-column:span 2; }
 @media (max-width:680px) { .viz.wide { grid-column:auto; } }

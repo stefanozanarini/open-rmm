@@ -29,6 +29,7 @@
     </div></details>
     <details class="menu"><summary>Reporting{{if .OpenAlerts}} <span class="badge sev-critical">{{.OpenAlerts}}</span>{{end}}</summary><div>
       <a href="/reports">Reporting</a>
+      <a href="/reports?tab=software">{{t "Inventario software"}}</a>
       <a href="/alerts">{{t "Avvisi"}}{{if .OpenAlerts}} <span class="badge sev-critical">{{.OpenAlerts}}</span>{{end}}</a>
       <a href="/audit">{{t "Attività"}}</a>
     </div></details>

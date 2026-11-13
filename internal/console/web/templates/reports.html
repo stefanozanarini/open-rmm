@@ -2,7 +2,8 @@
 {{with .Data}}
 <nav class="tabs" aria-label="{{t "Report"}}">
   <a href="/reports" {{if eq .Tab "dashboard"}}class="current"{{end}}>Dashboard</a>
-  <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Inventario"}}</a>
+  <a href="/reports{{qs "tab" "software"}}" {{if eq .Tab "software"}}class="current"{{end}}>{{t "Inventario software"}}</a>
+  <a href="/reports{{qs "tab" "computers"}}" {{if eq .Tab "computers"}}class="current"{{end}}>{{t "Ricerca computer"}}</a>
   <a href="/reports{{qs "tab" "os"}}" {{if eq .Tab "os"}}class="current"{{end}}>{{t "Sistemi operativi"}}</a>
   <a href="/reports{{qs "tab" "logons"}}" {{if eq .Tab "logons"}}class="current"{{end}}>{{t "Accessi"}}</a>
   <a href="/reports{{qs "tab" "cve"}}" {{if eq .Tab "cve"}}class="current"{{end}}>{{t "Vulnerabilità"}}</a>{{if eq .Tab "cve"}}{{help "section:cve"}}{{end}}
@@ -60,6 +61,73 @@
 {{if not .ComputedAt.IsZero}}<p class="muted small">{{tf "Vulnerabilità calcolate il %s dall'ultimo inventario dei computer; il calcolo si aggiorna in background ogni pochi minuti." (fmtTime .ComputedAt)}}</p>{{end}}
 <p class="muted small">{{tf "Fonti: aggiornamenti di sicurezza Microsoft (%d mesi), confrontati con la build di Windows di ogni computer; NVD per %d applicazioni note, confrontate con la versione installata; per Linux, le CVE degli aggiornamenti di sicurezza in sospeso (apt, dnf, zypper); catalogo CISA delle vulnerabilità sfruttate." .Months .Products}}</p>
 {{end}}
+{{end}}{{end}}
+
+{{if eq .Tab "software"}}{{with .SW}}
+<div class="viz-grid charts2">
+{{range .Charts}}
+<section class="viz">
+  <h3>{{.Title}}</h3><p class="muted small">{{.Sub}}</p>
+  {{if .Bars}}{{$ax := .Axis}}
+  <svg class="vbars" viewBox="{{.ViewBox}}" role="img" aria-label="{{.Title}}: {{range $i, $b := .Bars}}{{if $i}}, {{end}}{{$b.Full}} {{$b.Count}}{{end}}">
+    {{range .Ticks}}<line class="grid" x1="{{index $ax "Left"}}" x2="{{index $ax "Right"}}" y1="{{.Y}}" y2="{{.Y}}"></line><text class="tick" x="{{index $ax "Left"}}" dx="-6" y="{{.Y}}" dy="4">{{.Label}}</text>{{end}}
+    {{range .Bars}}<a href="{{.Link}}"><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}"><title>{{.Full}}: {{.Count}}</title></rect>
+      <text class="val" x="{{.CX}}" y="{{.Y}}" dy="-5">{{.Count}}</text>
+      <text class="lbl" x="{{.CX}}" y="{{index $ax "Label"}}">{{$cx := .CX}}{{range $i, $l := .Lines}}<tspan x="{{$cx}}"{{if $i}} dy="15"{{end}}>{{$l}}</tspan>{{end}}</text></a>{{end}}
+  </svg>
+  {{else}}<p class="muted">{{t "Nessun dato."}}</p>{{end}}
+</section>
+{{end}}
+</div>
+<nav class="tabs sub" aria-label="{{t "Raggruppa per"}}">
+  <a href="{{.ViewURL "publishers"}}" {{if eq .View "publishers"}}class="current"{{end}}>{{t "Produttori"}}</a>
+  <a href="{{.ViewURL "titles"}}" {{if eq .View "titles"}}class="current"{{end}}>{{t "Titoli"}}</a>
+  <a href="{{.ViewURL "versions"}}" {{if eq .View "versions"}}class="current"{{end}}>{{t "Versioni"}}</a>
+  <a href="{{.ViewURL "installs"}}" {{if eq .View "installs"}}class="current"{{end}}>{{t "Installazioni"}}</a>
+</nav>
+<form method="get" action="/reports" class="toolbar">
+  <input type="hidden" name="tab" value="software"><input type="hidden" name="view" value="{{.View}}">
+  {{if .HasPub}}<input type="hidden" name="pub" value="{{.Publisher}}">{{end}}{{if .HasTitle}}<input type="hidden" name="title" value="{{.Title}}">{{end}}{{if .HasVer}}<input type="hidden" name="ver" value="{{.Version}}">{{end}}
+  <input type="search" name="q" value="{{.Query}}" placeholder="{{if eq .View "installs"}}{{t "Produttore, applicazione, versione, computer o utente"}}{{else}}{{t "Produttore, applicazione o versione"}}{{end}}" aria-label="{{t "Cerca"}}">
+  <label class="check"><input type="checkbox" name="all" value="1"{{if .All}} checked{{end}}> {{t "anche componenti di sistema e aggiornamenti"}}</label>
+  <button>{{t "Cerca"}}</button>
+</form>
+{{if .Filtered}}<p class="filters">{{if .HasPub}}<a class="badge" href="{{.ClearURL "pub"}}" title="{{t "Togli il filtro"}}">{{t "Produttore"}}: {{or .Publisher "—"}} ✕</a> {{end}}{{if .HasTitle}}<a class="badge" href="{{.ClearURL "title"}}" title="{{t "Togli il filtro"}}">{{t "Applicazione"}}: {{.Title}} ✕</a> {{end}}{{if .HasVer}}<a class="badge" href="{{.ClearURL "ver"}}" title="{{t "Togli il filtro"}}">{{t "Versione"}}: {{or .Version "—"}} ✕</a>{{end}}</p>{{end}}
+<p>{{tf "%d righe, dall'ultimo inventario di %d computer." .Total .Computers}}{{if .Total}} <a href="{{.CSV}}">{{t "Esporta CSV"}}</a>{{end}}
+  {{if gt .Total (add (len .Rows) (len .Installs))}}<span class="muted">{{tf "Mostrate le prime %d: affina la ricerca o esporta il CSV." (add (len .Rows) (len .Installs))}}</span>{{end}}</p>
+{{if eq .View "installs"}}
+<table>
+<thead><tr><th><a class="sort" href="{{.SortURL "computer"}}">{{t "Computer"}}{{.SortMark "computer"}}</a></th><th><a class="sort" href="{{.SortURL "user"}}">{{t "Utente"}}{{.SortMark "user"}}</a></th>
+  <th><a class="sort" href="{{.SortURL "name"}}">{{t "Produttore"}}{{.SortMark "name"}}</a></th><th>{{t "Applicazione"}}</th><th>{{t "Versione"}}</th><th>{{t "Architettura"}}</th>
+  <th><a class="sort" href="{{.SortURL "installed"}}">{{t "Installata il"}}{{.SortMark "installed"}}</a></th></tr></thead>
+<tbody>{{range .Installs}}<tr>
+  <td><a href="/agents?agent={{.AgentID}}&amp;tab=software">{{.Hostname}}</a></td><td>{{.User}}</td><td>{{.Publisher}}</td><td>{{.Title}}{{if eq .Scope "user"}} <span class="badge chk-warning">{{t "profilo utente"}}</span>{{end}}</td>
+  <td>{{.Version}}</td><td>{{.Arch}}</td><td>{{.InstallDate}}</td>
+</tr>{{else}}<tr><td colspan="7" class="muted">{{t "Nessuna installazione trovata."}}</td></tr>{{end}}</tbody>
+</table>
+{{else}}
+<table>
+<thead><tr>
+  <th><a class="sort" href="{{.SortURL "name"}}">{{t "Produttore"}}{{.SortMark "name"}}</a></th>
+  {{if ne .View "publishers"}}<th>{{t "Applicazione"}}</th>{{end}}
+  {{if eq .View "versions"}}<th>{{t "Versione"}}</th>{{end}}
+  {{if eq .View "publishers"}}<th class="num"><a class="sort" href="{{.SortURL "titles"}}">{{t "Applicazioni"}}{{.SortMark "titles"}}</a></th>{{end}}
+  {{if ne .View "versions"}}<th class="num"><a class="sort" href="{{.SortURL "versions"}}">{{t "Versioni"}}{{.SortMark "versions"}}</a></th>{{end}}
+  <th class="num"><a class="sort" href="{{.SortURL "users"}}">{{t "Utenti"}}{{.SortMark "users"}}</a></th>
+  <th class="num"><a class="sort" href="{{.SortURL "computers"}}">{{t "Computer"}}{{.SortMark "computers"}}</a></th>
+</tr></thead>
+<tbody>{{$v := .View}}{{range .Rows}}<tr>
+  <td>{{if eq $v "publishers"}}<a href="{{.Link}}">{{or .Publisher "—"}}</a>{{else}}{{.Publisher}}{{end}}</td>
+  {{if ne $v "publishers"}}<td>{{if eq $v "titles"}}<a href="{{.Link}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</td>{{end}}
+  {{if eq $v "versions"}}<td><a href="{{.Link}}">{{or .Version "—"}}</a></td>{{end}}
+  {{if eq $v "publishers"}}<td class="num">{{.Titles}}</td>{{end}}
+  {{if ne $v "versions"}}<td class="num">{{.Versions}}</td>{{end}}
+  <td class="num">{{.Users}}</td>
+  <td class="num"><a href="{{.InstallsLink}}">{{.Computers}}</a></td>
+</tr>{{else}}<tr><td colspan="6" class="muted">{{t "Nessuna applicazione trovata."}}</td></tr>{{end}}</tbody>
+</table>
+{{end}}
+<p class="muted small">{{t "Utenti: utenti diversi collegati, o visti per ultimi, sui computer che hanno l'applicazione."}}</p>
 {{end}}{{end}}
 
 {{if eq .Tab "dashboard"}}{{with .Dash}}
