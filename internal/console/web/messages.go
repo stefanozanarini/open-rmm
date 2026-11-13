@@ -122,6 +122,7 @@ var serviceProblems = []message{
 	msg("servizio {} assente", "service ${1} missing"),
 	msg("servizio {} disabilitato", "service ${1} disabled"),
 	msg("servizio {} {}", "service ${1} ${2}"),
+	msg("non attivo secondo il Centro sicurezza di Windows", "not active according to the Windows Security Center"),
 }
 
 // trMessage translates a check or alert text into lang.
@@ -150,18 +151,23 @@ func trMessage(lang, s string) string {
 		}
 		return expand(m.en, groups)
 	}
-	// "<product>: servizio X assente, servizio Y Stopped" (trendmicro).
-	if name, list, ok := strings.Cut(s, ": "); ok && strings.HasPrefix(list, "servizio ") {
+	// "<product>: servizio X assente, servizio Y Stopped" or "<product>: non
+	// attivo secondo il Centro sicurezza di Windows" (trendmicro problems).
+	if name, list, ok := strings.Cut(s, ": "); ok {
 		parts := strings.Split(list, ", ")
+		matched := false
 		for i, p := range parts {
 			for _, m := range serviceProblems {
 				if g := m.re.FindStringSubmatch(p); g != nil {
 					parts[i] = expand(m.en, g)
+					matched = true
 					break
 				}
 			}
 		}
-		return name + ": " + strings.Join(parts, ", ")
+		if matched {
+			return name + ": " + strings.Join(parts, ", ")
+		}
 	}
 	return s
 }

@@ -87,6 +87,32 @@ function Get-ServiceState([string]$Name) {
     @{ name = $Name; exists = $true; state = [string]$svc.State; start_mode = [string]$svc.StartMode; running = ($svc.State -eq 'Running') }
 }
 
+# Windows Security Center (root\SecurityCenter2, AntiVirusProduct): the same
+# signal Windows itself uses to show an antivirus as active, so it catches
+# an agent whose service looks fine but is not actually protecting (Trend
+# Micro's own KA-0019467 uses this to check Apex One). Only present on
+# client Windows, not Server, and its productState bit layout is not
+# documented by Microsoft; only the best-corroborated byte is read here
+# (real-time protection: 00 off, 01 expired, 10 on, 11 snoozed), so this
+# only ever raises a problem on the unambiguous "00" (off). Returns 'on',
+# 'off', 'unknown' (present but undecodable), or $null (not registered, or
+# the namespace does not exist on this Windows edition).
+function Get-SecurityCenterAV([string]$NameMatch) {
+    try {
+        $av = @(Get-CimInstance -Namespace 'root\SecurityCenter2' -ClassName AntiVirusProduct -ErrorAction Stop |
+                Where-Object { $_.displayName -match $NameMatch })
+    }
+    catch { return $null } # no Security Center here (e.g. Windows Server)
+    if ($av.Count -eq 0) { return $null } # not registered under that name
+    $states = foreach ($p in $av) {
+        $hex = [Convert]::ToString([int64]$p.productState, 16).PadLeft(6, '0')
+        switch ($hex.Substring(2, 2)) { '10' { 'on' }; '00' { 'off' }; default { 'unknown' } }
+    }
+    if ($states -contains 'on') { return 'on' }
+    if ($states -contains 'off') { return 'off' }
+    return 'unknown'
+}
+
 Invoke-RmmModule @{
     status = {
         param($Params, $Request)
@@ -116,6 +142,10 @@ Invoke-RmmModule @{
                 version = if ($entry) { $entry.Version } else { '' }
                 services = $services
             }
+            if ($id -eq 'sep') {
+                $wsc = Get-SecurityCenterAV 'Trend Micro'
+                if ($wsc) { $product.security_center = $wsc }
+            }
             $products += $product
             if (-not $installed) {
                 if ($expect -contains $id) {
@@ -133,6 +163,12 @@ Invoke-RmmModule @{
                 if (-not $st -or -not $st.exists) { $problems += "servizio $(([string]$alts[0])) assente" }
                 elseif (-not $st.running) { $problems += "servizio $r $($st.state)" }
                 elseif ($st.start_mode -eq 'Disabled') { $problems += "servizio $r disabilitato" }
+            }
+            # The services look fine, but Windows Security Center says this
+            # antivirus is off: a known Apex One failure mode its services
+            # do not expose (Trend Micro KA-0019467).
+            if ($problems.Count -eq 0 -and $product.security_center -eq 'off') {
+                $problems += 'non attivo secondo il Centro sicurezza di Windows'
             }
             $label = "$($def.name) $($product.version)".Trim()
             if ($problems.Count -gt 0) {
