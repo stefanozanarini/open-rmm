@@ -57,6 +57,7 @@ func TestPreview(t *testing.T) {
 	}
 	publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "script"))
 	publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "software"))
+	publishTo(t, e.store, filepath.Join(repoRoot(t), "modules", "workflow"))
 	e.store.PutSite(ctx, store.Site{TenantID: e.tenant, ID: ids.NewUUID(), Name: "Bologna", Subnets: []string{"192.168.1.0/24"}})
 	e.store.PutSite(ctx, store.Site{TenantID: e.tenant, ID: ids.NewUUID(), Name: "Milano", Subnets: []string{"10.20.0.0/16"}})
 	e.store.AppendAudit(ctx, audit.Event{TenantID: e.tenant, Actor: "agent:x", Action: "agent.enrolled", Target: e.agentID,

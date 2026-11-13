@@ -20,6 +20,7 @@ import (
 	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
 	"github.com/stefanozanarini/tempra-rmm/internal/modules"
 	"github.com/stefanozanarini/tempra-rmm/internal/policy"
+	"github.com/stefanozanarini/tempra-rmm/internal/workflow"
 )
 
 // tenant returns the session's current tenant, checked against the tenants
@@ -246,8 +247,8 @@ func (s *Server) runnableOn(r *http.Request, a store.Agent) ([]runnable, error) 
 		if _, ok := man.Entrypoints[platform]; !ok || man.Interactive() {
 			continue // shells and file sessions open from their own buttons
 		}
-		if man.ID == softwareModule {
-			continue // installs and removals have their own forms (package, installed application)
+		if man.ID == softwareModule || man.ID == workflow.ModuleID {
+			continue // installs, removals and workflows have their own forms
 		}
 		sch, known := s.paramSchema(m, man)
 		for name, act := range man.Actions {
@@ -397,7 +398,7 @@ func (s *Server) handleRunJob(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if _, ok := man.Actions[action]; !ok || man.Interactive() {
+	if _, ok := man.Actions[action]; !ok || man.Interactive() || man.ID == workflow.ModuleID {
 		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}

@@ -121,6 +121,7 @@ type Store interface {
 	InstallerStore
 	LastUserStore
 	GroupStore
+	WorkflowStore
 	VulnFeedStore
 }
 

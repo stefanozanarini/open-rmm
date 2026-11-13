@@ -40,7 +40,8 @@ type Memory struct {
 	federation  *memFederation
 	installers  []Installer
 	lastUsers   map[string]LastUser
-	groups      map[string]Group // tenant/id
+	groups      map[string]Group        // tenant/id
+	workflows   map[string]*memWorkflow // tenant/id
 	vulnFeeds   map[string]VulnFeed
 }
 

@@ -90,6 +90,9 @@ type JobStore interface {
 	CreateJob(ctx context.Context, j Job) error
 	GetJob(ctx context.Context, tenantID, jobID string) (Job, error)
 	ListJobs(ctx context.Context, tenantID, agentID string, limit int) ([]Job, error)
+	// ListModuleJobs returns the newest jobs of a module, without their
+	// envelopes.
+	ListModuleJobs(ctx context.Context, tenantID, module string, limit int) ([]Job, error)
 	// DispatchableJobs returns queued or sent (but unanswered) jobs of an
 	// agent that have not expired, oldest first.
 	DispatchableJobs(ctx context.Context, tenantID, agentID string, now time.Time) ([]Job, error)

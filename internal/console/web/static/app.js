@@ -243,3 +243,65 @@
     poll();
   }
 })();
+
+// Workflow editor: adds, removes and moves steps and rules from the
+// <template>s of the page, shows the fields of the chosen type, and keeps
+// the steps' order fields in page order (the server sorts by them).
+(function () {
+  var form = document.querySelector("form[data-wf-editor]");
+  if (!form) return;
+  var steps = form.querySelector("[data-wf-steps]");
+  var stepTpl = document.getElementById("wf-step-tpl");
+  var ruleTpl = document.getElementById("wf-rule-tpl");
+  var next = 1000; // indexes of new rows, past those of the server
+
+  function box(el) { return el.closest("[data-wf-rule], [data-wf-step]"); }
+
+  // Fields of a step or a rule (not of the rules inside a step).
+  function showType(b) {
+    var t = b.querySelector("[data-wf-type]").value;
+    b.querySelectorAll("[data-for]").forEach(function (el) {
+      if (box(el) === b) el.hidden = el.getAttribute("data-for").split(" ").indexOf(t) < 0;
+    });
+  }
+
+  function fromTemplate(tpl, placeholder, value) {
+    var div = document.createElement("div");
+    div.innerHTML = tpl.innerHTML.split(placeholder).join(value);
+    return div.firstElementChild;
+  }
+
+  function number() {
+    Array.prototype.forEach.call(steps.children, function (s, i) {
+      s.querySelector("[data-wf-num]").textContent = (i + 1) + ".";
+      s.querySelector("[data-wf-order]").value = i;
+    });
+  }
+
+  form.addEventListener("change", function (e) {
+    if (e.target.matches("[data-wf-type]")) showType(box(e.target));
+  });
+  form.addEventListener("click", function (e) {
+    var b = e.target.closest("button[type=button]");
+    if (!b) return;
+    var s = box(b);
+    if (b.matches("[data-wf-add-step]")) {
+      var n = fromTemplate(stepTpl, "__S__", String(next++));
+      steps.appendChild(n);
+      n.querySelector("select").focus();
+    } else if (b.matches("[data-wf-add-rule]")) {
+      var c = b.closest("[data-wf-conds]");
+      c.querySelector("[data-wf-rules]").appendChild(fromTemplate(ruleTpl, "__P__", c.getAttribute("data-wf-conds") + ".r." + next++));
+      var none = s && s.querySelector(".wf-when > summary .muted"); // "(none: …)" no longer true
+      if (none) none.remove();
+    } else if (b.matches("[data-wf-remove]")) {
+      s.remove();
+    } else if (b.matches("[data-wf-up]") && s.previousElementSibling) {
+      steps.insertBefore(s, s.previousElementSibling);
+    } else if (b.matches("[data-wf-down]") && s.nextElementSibling) {
+      steps.insertBefore(s.nextElementSibling, s);
+    }
+    number();
+  });
+  number();
+})();

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -454,13 +455,19 @@ type deployData struct {
 }
 
 func (s *Server) softwareModule(ctx context.Context) (*modules.Manifest, store.Module, error) {
+	return s.publishedModule(ctx, softwareModule)
+}
+
+// publishedModule returns the manifest and the module of the newest
+// published version of a module.
+func (s *Server) publishedModule(ctx context.Context, id string) (*modules.Manifest, store.Module, error) {
 	mods, err := s.store.ListModules(ctx)
 	if err != nil {
 		return nil, store.Module{}, err
 	}
 	var best *modules.Manifest
 	for _, m := range mods {
-		if m.ID != softwareModule {
+		if m.ID != id {
 			continue
 		}
 		man, err := modules.ParseManifest(m.Manifest)
@@ -472,7 +479,7 @@ func (s *Server) softwareModule(ctx context.Context) (*modules.Manifest, store.M
 		}
 	}
 	if best == nil {
-		return nil, store.Module{}, errors.New("publish the software module first")
+		return nil, store.Module{}, fmt.Errorf("publish the %s module first", id)
 	}
 	full, err := s.store.GetModule(ctx, best.ID, best.Version)
 	if err != nil {

@@ -1,0 +1,70 @@
+{{define "content"}}
+{{with .Data}}
+{{if not .Module}}<p class="flash">{{t "Per eseguire i workflow pubblica il modulo workflow dalla pagina Moduli."}}</p>{{end}}
+{{with .Error}}<p class="flash error">{{.}}</p>{{end}}
+{{if not .New}}
+<p>{{tf "Revisione %d" .W.Revision}} · <span class="muted">{{tf "salvata da %s il %s" .W.Author (fmtTime .W.UpdatedAt)}}{{with .W.Comment}} — {{.}}{{end}}</span>
+  · <a href="/workflows">{{t "Tutti i workflow"}}</a></p>
+{{if ne .W.Revision .Latest}}<p class="flash">{{tf "Stai guardando la revisione %d. Salvando crei la revisione %d a partire da questa; le distribuzioni usano sempre l'ultima." .W.Revision (add .Latest 1)}}</p>{{end}}
+
+<div class="wf-top">
+<section>
+<h2>{{t "Distribuzione"}}</h2>
+<p>{{template "wf-counts" .Counts}}</p>
+{{if and $.CanRun .Module}}
+<form method="get" action="/agents/bulk" class="inline">
+  <input type="hidden" name="workflow" value="{{.W.ID}}">
+  {{if .Groups}}<select name="group" aria-label="{{t "Gruppo"}}">{{range .Groups}}<option value="{{.ID}}">{{if eq .Kind "user"}}👤 {{end}}{{.Name}}</option>{{end}}</select>
+  <button class="primary">{{t "Distribuisci al gruppo…"}}</button>{{end}}
+</form>
+<p class="muted small">{{t "Oppure seleziona i computer nella lista agenti e scegli \"Esegui un workflow\" in \"Azioni sui selezionati\". Ogni distribuzione va approvata con MFA."}} <a href="/agents">{{t "Lista agenti"}}</a></p>
+{{end}}
+</section>
+<section>
+<h2>{{t "Revisioni"}}</h2>
+<ul class="wf-revs">{{range .Revisions}}<li{{if eq .Revision $.Data.W.Revision}} class="current"{{end}}><a href="/workflows/{{.ID}}?rev={{.Revision}}">{{tf "Revisione %d" .Revision}}</a>{{if eq .Revision $.Data.Latest}} <span class="badge succeeded">{{t "corrente"}}</span>{{end}}
+  <span class="muted small">{{fmtTime .UpdatedAt}} · {{.Author}}{{with .Comment}} — {{.}}{{end}}</span></li>{{end}}</ul>
+</section>
+</div>
+{{end}}
+
+<form method="post" action="/workflows/{{if .New}}new{{else}}{{.W.ID}}{{end}}" class="stack wide wf-edit" data-wf-editor>
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label>{{t "Nome"}} <input name="name" value="{{.W.Name}}" required maxlength="64" placeholder="7-Zip"></label>
+  <label>{{t "Descrizione"}} <input name="description" value="{{.W.Description}}" maxlength="1000"></label>
+
+  <h2>{{t "Rilevamento"}}</h2>
+  <p class="muted">{{t "Se le regole valgono il computer è già conforme e nessun passo viene eseguito; dopo i passi devono valere, altrimenti la distribuzione risulta in errore. Senza regole i passi vengono sempre eseguiti."}}</p>
+  {{template "wf-conds" (dict "P" "d" "C" .Doc.Detection "D" .)}}
+
+  <h2>{{t "Passi"}}</h2>
+  <p class="muted">{{t "Eseguiti in ordine come SYSTEM. Nei percorsi, negli argomenti, negli URL e nei corpi le variabili d'ambiente vengono sostituite (%COMPUTERNAME%, %ProgramFiles%); la cartella di lavoro, dove finiscono i file scaricati, è %RMM_WORK%."}}</p>
+  <div data-wf-steps>{{range $i, $s := .Doc.Steps}}{{template "wf-step" (dict "I" $i "S" $s "D" $.Data)}}{{end}}</div>
+  <button type="button" data-wf-add-step>+ {{t "Aggiungi un passo"}}</button>
+
+  {{if $.CanRun}}
+  <label>{{t "Commento alla revisione"}} <input name="comment" maxlength="1000" placeholder="{{t "cosa cambia rispetto alla revisione precedente"}}"></label>
+  <div class="actions">
+    <button class="primary">{{if .New}}{{t "Crea il workflow"}}{{else}}{{tf "Salva come revisione %d" (add .Latest 1)}}{{end}}</button>
+    {{if not .New}}<button name="delete" value="1" class="danger" formnovalidate>{{t "Elimina il workflow"}}</button>{{end}}
+  </div>
+  {{end}}
+</form>
+<template id="wf-step-tpl">{{template "wf-step" (dict "I" "__S__" "S" blankStep "D" .)}}</template>
+<template id="wf-rule-tpl">{{template "wf-rule" (dict "P" "__P__" "R" blankRule "D" .)}}</template>
+
+{{if .Runs}}
+<h2>{{tf "Computer (%d)" (len .Runs)}}</h2>
+<table>
+<thead><tr><th>{{t "Computer"}}</th><th class="num">{{t "Revisione"}}</th><th>{{t "Stato"}}</th><th>{{t "Data"}}</th><th>Job</th></tr></thead>
+<tbody>{{range .Runs}}<tr>
+  <td>{{if .Hostname}}<a href="/agents/{{.AgentID}}">{{.Hostname}}</a>{{else}}<code>{{short .AgentID}}</code>{{end}}</td>
+  <td class="num">{{.Revision}}</td>
+  <td>{{template "wf-state" .State}}{{with .Job.Error}} <span class="muted small">{{.}}</span>{{end}}</td>
+  <td>{{fmtTime .Job.CreatedAt}}</td>
+  <td><a href="/jobs/{{.Job.ID}}"><code>{{short .Job.ID}}</code></a></td>
+</tr>{{end}}</tbody>
+</table>
+{{end}}
+{{end}}
+{{end}}

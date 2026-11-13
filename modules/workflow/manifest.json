@@ -1,0 +1,14 @@
+{
+  "id": "workflow",
+  "version": "1.0.0",
+  "description": "Runs a software distribution workflow of the console: detection rules, then scripts, commands, downloads, HTTP calls and installations, each under its conditions (registry, files, applications, Active Directory groups of the user and of the computer). Refused where the local policy AllowAdHocScripts is 0.",
+  "protocol_version": 1,
+  "capabilities": ["adhoc_script"],
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Main.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Main.ps1" }
+  },
+  "actions": {
+    "run": { "description": "Run params.workflow and return the outcome of each step", "timeout_seconds": 14400 }
+  }
+}

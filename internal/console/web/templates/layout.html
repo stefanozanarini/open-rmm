@@ -21,7 +21,10 @@
     </div></details>
     <a href="/jobs">{{t "Job"}}</a>
     <a href="/patches">{{t "Patch"}}</a>
-    <a href="/packages">Software</a>
+    <details class="menu"><summary>Software</summary><div>
+      <a href="/packages">{{t "Libreria"}}</a>
+      <a href="/workflows">{{t "Workflow"}}</a>
+    </div></details>
     <details class="menu"><summary>{{t "Distribuzione"}}</summary><div>
       {{if .CanRun}}<a href="/agent-installer">{{t "Installer"}}</a>{{end}}
       <a href="/updates">{{t "Versioni agente"}}</a>

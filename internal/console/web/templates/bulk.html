@@ -82,6 +82,17 @@
   <button class="primary">{{t "Approva ed esegui lo script"}}</button>
 </form>
 {{end}}
+{{if .Workflows}}
+<h2 id="workflow">{{t "Esegui un workflow"}}</h2>
+<form method="post" action="/agents/bulk" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <label>{{t "Workflow"}} <select name="workflow">{{range .Workflows}}<option value="{{.ID}}"{{if eq .ID $.Data.Workflow}} selected{{end}}>{{.Name}} · {{tf "revisione %d" .Revision}}</option>{{end}}</select></label>
+  {{template "ttl" "1440"}}
+  <p class="muted">{{t "Esegue l'ultima revisione: i computer già conformi alle regole di rilevamento non eseguono nessun passo."}}</p>
+  <button class="primary">{{t "Approva ed esegui"}}</button>
+</form>
+{{end}}
 {{if .Packages}}
 <h2>{{t "Installa software"}}</h2>
 <form method="post" action="/agents/bulk" class="stack">

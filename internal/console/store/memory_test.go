@@ -865,3 +865,50 @@ func testGroups(t *testing.T, s Store) {
 		t.Fatalf("after delete: %+v", list)
 	}
 }
+
+func TestWorkflows(t *testing.T) { testWorkflows(t, NewMemory()) }
+
+func testWorkflows(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	w := Workflow{TenantID: tenant.ID, ID: ids.NewUUID(), Name: "7-Zip", Document: []byte(`{"steps":[1]}`), Comment: "first", Author: "anna"}
+	if rev, err := s.SaveWorkflow(ctx, w); err != nil || rev != 1 {
+		t.Fatalf("save = %d, %v", rev, err)
+	}
+	if _, err := s.SaveWorkflow(ctx, Workflow{TenantID: tenant.ID, ID: ids.NewUUID(), Name: "7-Zip", Document: []byte(`{}`), Author: "bob"}); err != ErrWorkflowExists {
+		t.Fatalf("duplicate name: %v", err)
+	}
+	w.Name, w.Description, w.Document, w.Comment, w.Author = "7-Zip x64", "archiver", []byte(`{"steps":[2]}`), "second", "bob"
+	if rev, err := s.SaveWorkflow(ctx, w); err != nil || rev != 2 {
+		t.Fatalf("save 2 = %d, %v", rev, err)
+	}
+	list, err := s.ListWorkflows(ctx, tenant.ID)
+	if err != nil || len(list) != 1 || list[0].Revision != 2 || list[0].Name != "7-Zip x64" || list[0].CreatedBy != "anna" ||
+		list[0].Author != "bob" || string(list[0].Document) != `{"steps": [2]}` && string(list[0].Document) != `{"steps":[2]}` {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+	first, err := s.GetWorkflow(ctx, tenant.ID, w.ID, 1)
+	if err != nil || first.Comment != "first" || first.Name != "7-Zip x64" || !strings.Contains(string(first.Document), "1") {
+		t.Fatalf("revision 1 = %+v, %v", first, err)
+	}
+	if latest, _ := s.GetWorkflow(ctx, tenant.ID, w.ID, 0); latest.Revision != 2 {
+		t.Fatalf("latest = %+v", latest)
+	}
+	if _, err := s.GetWorkflow(ctx, tenant.ID, w.ID, 3); err != ErrNotFound {
+		t.Fatalf("missing revision: %v", err)
+	}
+	revs, err := s.WorkflowRevisions(ctx, tenant.ID, w.ID)
+	if err != nil || len(revs) != 2 || revs[0].Revision != 2 || revs[1].Author != "anna" {
+		t.Fatalf("revisions = %+v, %v", revs, err)
+	}
+	if other, _ := s.ListWorkflows(ctx, ids.NewUUID()); len(other) != 0 {
+		t.Fatal("workflow visible from another tenant")
+	}
+	if err := s.DeleteWorkflow(ctx, tenant.ID, w.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetWorkflow(ctx, tenant.ID, w.ID, 0); err != ErrNotFound {
+		t.Fatalf("deleted: %v", err)
+	}
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
 	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 	"github.com/stefanozanarini/tempra-rmm/internal/modules"
+	"github.com/stefanozanarini/tempra-rmm/internal/workflow"
 )
 
 type bulkData struct {
@@ -30,6 +31,10 @@ type bulkData struct {
 	// computer groups the agents can be added to.
 	Group  *store.Group
 	Groups []store.Group
+	// Workflows: the distribution workflows; Workflow: the one preselected
+	// (?workflow=).
+	Workflows []store.Workflow
+	Workflow  string
 }
 
 // selectedAgents returns the active agents listed in the "agent" values.
@@ -163,6 +168,13 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if _, _, err := s.publishedModule(r.Context(), workflow.ModuleID); err == nil {
+		if d.Workflows, err = s.store.ListWorkflows(r.Context(), t); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		d.Workflow = q.Get("workflow")
+	}
 	title := s.Tf(r, "Azioni su %d agenti", len(agents))
 	if group != nil {
 		title = s.Tf(r, "Azioni sul gruppo %s (%d computer)", group.Name, len(agents))
@@ -191,6 +203,15 @@ func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 		targets = append(targets, a.ID)
 	}
 	back = "/agents/bulk?" + url.Values{"agent": targets}.Encode()
+	if id := r.PostFormValue("workflow"); id != "" {
+		req, msg := s.workflowJob(r, t, id, targets)
+		if msg != "" {
+			s.flash(w, r, msg, back)
+			return
+		}
+		s.startStepUp(w, r, sessionFrom(r.Context()), req, back)
+		return
+	}
 	if sha := r.PostFormValue("package"); sha != "" {
 		if !shaHexRe.MatchString(sha) {
 			http.NotFound(w, r)
@@ -214,7 +235,8 @@ func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if _, ok := man.Actions[target[2]]; !ok || man.Interactive() {
+	// Workflows run only from their own form, which validates them.
+	if _, ok := man.Actions[target[2]]; !ok || man.Interactive() || man.ID == workflow.ModuleID {
 		s.flash(w, r, s.T(r, "Azione non disponibile."), back)
 		return
 	}

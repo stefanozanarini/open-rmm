@@ -346,6 +346,7 @@ func (s *Server) RunRebootRescans(ctx context.Context) {
 var refreshAfter = map[[2]string][][2]string{
 	{"software", "install"}:   {{"inventory", "collect"}, {"winget", "scan"}},
 	{"software", "uninstall"}: {{"inventory", "collect"}, {"winget", "scan"}},
+	{"workflow", "run"}:       {{"inventory", "collect"}, {"winget", "scan"}},
 	{"winget", "upgrade"}:     {{"inventory", "collect"}, {"winget", "scan"}},
 	{"winget", "install"}:     {{"inventory", "collect"}, {"winget", "scan"}},
 	{"winupdate", "install"}:  {{"winupdate", "scan"}, {"inventory", "collect"}},

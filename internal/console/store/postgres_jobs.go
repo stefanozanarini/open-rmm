@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -138,6 +139,18 @@ func (p *Postgres) ListJobs(ctx context.Context, tenantID, agentID string, limit
 	}
 	return p.queryJobs(ctx, tenantID, `SELECT `+jobColumns+` FROM jobs WHERE agent_id = $1
 		ORDER BY created_at DESC LIMIT $2`, agentID, limit)
+}
+
+func (p *Postgres) ListModuleJobs(ctx context.Context, tenantID, module string, limit int) ([]Job, error) {
+	if limit <= 0 || limit > 10000 {
+		limit = 1000
+	}
+	jobs, err := p.queryJobs(ctx, tenantID, `SELECT `+strings.Replace(jobColumns, "envelope", "''::bytea", 1)+` FROM jobs
+		WHERE module = $1 ORDER BY created_at DESC LIMIT $2`, module, limit)
+	for i := range jobs {
+		jobs[i].Envelope = nil
+	}
+	return jobs, err
 }
 
 func (p *Postgres) DispatchableJobs(ctx context.Context, tenantID, agentID string, now time.Time) ([]Job, error) {

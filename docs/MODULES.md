@@ -192,6 +192,17 @@ Details in [ENTRA.md](ENTRA.md). The full text of scripts goes to the audit log.
 | `files` 1.0.0 | Windows, Linux | `open` (`{"minutes":60,"max_bytes":…}`, at most 240 minutes): interactive file session (capability `file_session`, served by the agent itself, 1.1.0 or later): browse, download, upload, new folder; the agent's own folders are refused. Opened from the agent page or for several agents from the bulk page; never in policies |
 | `message` 1.0.0 | Windows | `send` (`title`, `text` up to 1000 characters, `icon` info/warning/error, `timeout_seconds`, `wait`): a message box in every active user session (WTSSendMessage, the agent runs as SYSTEM); the result says per session whether it was shown, confirmed or timed out. In the agent context menu |
 | `adinventory` 1.1.0 | Windows | `collect`: computer objects of the endpoint's domain (name, OU, operating system, enabled, last domain logon) read with the computer account, at most 10,000; and the enabled user accounts with a name (account, UPN, given name, surname, display name), at most 20,000 and as many as fit in the result. Run it on the domain controllers or one member server. Results feed the *Active Directory* page, the OU tree and the search of computers by the name of their user |
+| `workflow` 1.0.0 | Windows | `run`: a software distribution workflow of the console (see below), with the library packages it uses. Capability `adhoc_script`: approved with MFA, never in a policy, refused where `AllowAdHocScripts` is 0 |
+
+## Distribution workflows
+
+*Software → Workflow* holds workflows built in the console, each saved as a new, immutable revision with its author and comment. A revision (`internal/workflow`) has:
+
+- **Detection rules**, joined by AND or OR: when they hold the computer is compliant and no step runs; after the steps they must hold, or the run fails (unless an installer asked for a reboot).
+- **Steps**, run in order as SYSTEM: PowerShell script, command, download (a library package, or any URL with an optional SHA-256), HTTP `GET`/`POST` (headers and body), installation (MSI, Inno, NSIS, burn, exe with silent arguments; Authenticode checked unless allowed unsigned). A failed step stops the workflow unless it is marked to continue.
+- **Conditions** on each step, joined by AND or OR, the same kinds as the detection rules: installed application (name with `*`, minimum version), registry key or value, file or folder (minimum file version), PowerShell script returning `$true`, **user in an AD group** (the logged-on user, or the last one) and **computer in an AD group**, nested groups included, read with the computer account. Any rule can be negated.
+
+`%VARIABLE%` is expanded in paths, arguments, URLs, headers and bodies; `%RMM_WORK%` is the job's work folder, where downloads go. A workflow runs from *Actions on selected* (computers or a group) with one MFA approval: the console signs the latest revision as the job's parameters, with the library packages it uses (at most 5). The workflow page and the catalog show the latest run on each computer: installed, already compliant, running or failed.
 
 ## Automatic collection
 

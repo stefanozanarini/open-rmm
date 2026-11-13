@@ -91,6 +91,23 @@ func (m *Memory) ListJobs(_ context.Context, tenantID, agentID string, limit int
 	return out, nil
 }
 
+func (m *Memory) ListModuleJobs(_ context.Context, tenantID, module string, limit int) ([]Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []Job
+	for _, j := range m.jobs {
+		if j.TenantID == tenantID && j.Module == module {
+			j.Envelope = nil
+			out = append(out, j)
+		}
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].CreatedAt.After(out[b].CreatedAt) })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
 func (m *Memory) DispatchableJobs(_ context.Context, tenantID, agentID string, now time.Time) ([]Job, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -281,3 +281,24 @@ details.columns summary { cursor:pointer; }
 .column-choices { display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:8px; }
 label.inline-check, form.stack label.inline-check { display:inline-flex; flex-direction:row; align-items:center; gap:6px; white-space:nowrap; font-weight:400; }
 label.inline-check input[type=checkbox] { width:auto; margin:0; }
+
+/* Workflow editor */
+.wf-edit [hidden] { display:none !important; }
+.flash.error { border-color:var(--danger); color:var(--danger); }
+.wf-top { display:flex; flex-wrap:wrap; gap:16px 40px; margin-bottom:12px; }
+.wf-top section { flex:1 1 320px; }
+ul.wf-revs { list-style:none; padding:0; margin:0; max-height:180px; overflow:auto; }
+ul.wf-revs li { padding:3px 0; border-bottom:1px solid var(--line); }
+ul.wf-revs li.current a { font-weight:600; }
+fieldset.wf-step { display:flex; flex-direction:column; gap:10px; position:relative; border:1px solid var(--line); border-radius:4px; padding:10px 12px 12px; margin:0 0 12px; }
+fieldset.wf-step legend { display:flex; align-items:center; gap:8px; font-weight:600; padding:0 4px; }
+.wf-tools { position:absolute; top:-4px; right:10px; display:flex; gap:10px; background:var(--card); padding:0 4px; }
+.wf-tools button { font-size:15px; }
+.wf-row { display:flex; flex-wrap:wrap; gap:8px 20px; align-items:flex-end; }
+.wf-conds { display:flex; flex-direction:column; gap:6px; }
+.wf-rule { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:6px 8px; border-left:3px solid var(--line); background:var(--bg); }
+.wf-rule input:not([type=checkbox]) { flex:1 1 180px; width:auto; }
+.wf-rule textarea { flex:1 1 100%; }
+.wf-rule label.check { font-weight:400; }
+details.wf-when > summary { cursor:pointer; font-weight:600; font-size:13px; }
+details.wf-when[open] > summary { margin-bottom:6px; }

@@ -1,0 +1,23 @@
+{{define "content"}}
+{{with .Data}}
+{{if not .Module}}<p class="flash">{{t "Per eseguire i workflow pubblica il modulo workflow dalla pagina Moduli."}}</p>{{end}}
+<div class="toolbar">
+  <p class="muted">{{t "Un workflow controlla prima se il computer è già a posto (regole di rilevamento); se non lo è esegue i passi in ordine: script, comandi, download, chiamate HTTP, installazioni, ognuno solo se valgono le sue condizioni."}}</p>
+  {{if $.CanRun}}<a class="button" href="/workflows/new">{{t "Nuovo workflow"}}</a>{{end}}
+</div>
+{{if .Rows}}
+<table>
+<thead><tr><th>{{t "Nome"}}</th><th class="num">{{t "Revisione"}}</th><th class="num">{{t "Passi"}}</th><th>{{t "Modificato"}}</th><th>{{t "Stato della distribuzione"}}</th></tr></thead>
+<tbody>
+{{range .Rows}}<tr>
+  <td><a href="/workflows/{{.ID}}">{{.Name}}</a>{{with .Description}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+  <td class="num">{{.Revision}}</td>
+  <td class="num">{{.Steps}}</td>
+  <td>{{fmtTime .UpdatedAt}}<br><span class="muted small">{{.Author}}</span></td>
+  <td>{{template "wf-counts" .Counts}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{else}}<p class="muted">{{t "Nessun workflow."}}</p>{{end}}
+{{end}}
+{{end}}

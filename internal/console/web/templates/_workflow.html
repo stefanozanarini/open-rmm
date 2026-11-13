@@ -1,0 +1,91 @@
+{{define "wf-counts"}}{{with .}}{{with index . "ok"}}<span class="badge succeeded" title="{{t "installato e verificato"}}">✓ {{.}}</span> {{end}}{{with index . "compliant"}}<span class="badge chk-ok" title="{{t "già conforme, nessun passo eseguito"}}">= {{.}}</span> {{end}}{{with index . "running"}}<span class="badge running" title="{{t "in corso o in attesa del computer"}}">… {{.}}</span> {{end}}{{with index . "failed"}}<span class="badge failed" title="{{t "errore"}}">✕ {{.}}</span>{{end}}{{else}}<span class="muted">{{t "mai distribuito"}}</span>{{end}}{{end}}
+
+{{define "wf-state"}}{{if eq . "ok"}}<span class="badge succeeded">{{t "installato"}}</span>{{else if eq . "compliant"}}<span class="badge chk-ok">{{t "già conforme"}}</span>{{else if eq . "running"}}<span class="badge running">{{t "in corso"}}</span>{{else}}<span class="badge failed">{{t "errore"}}</span>{{end}}{{end}}
+
+{{/* A rule: dict "P" field prefix (d.r.0, s.2.r.1), "R" workflow.Rule, "D" the page data. */}}
+{{define "wf-rule"}}{{$r := .R}}
+<div class="wf-rule" data-wf-rule>
+  <select name="{{.P}}.type" data-wf-type aria-label="{{t "Tipo di regola"}}">
+    {{range .D.RuleTypes}}<option value="{{.}}"{{if eq . $r.Type}} selected{{end}}>{{wfRuleLabel .}}</option>{{end}}
+  </select>
+  <label class="check"><input type="checkbox" name="{{.P}}.negate" value="1"{{if $r.Negate}} checked{{end}}> {{t "non"}}</label>
+  <input name="{{.P}}.name" value="{{$r.Name}}" data-for="app registry user_group computer_group" placeholder="{{t "Nome (applicazione con *, valore del registro, gruppo AD)"}}" aria-label="{{t "Nome"}}"{{if not (in $r.Type "app registry user_group computer_group")}} hidden{{end}}>
+  <input name="{{.P}}.path" value="{{$r.Path}}" data-for="registry file" placeholder="HKLM:\SOFTWARE\… / %ProgramFiles%\…" aria-label="{{t "Percorso"}}"{{if not (in $r.Type "registry file")}} hidden{{end}}>
+  <select name="{{.P}}.op" data-for="app registry file" aria-label="{{t "Operatore"}}"{{if not (in $r.Type "app registry file")}} hidden{{end}}>
+    <option value="exists"{{if eq $r.Op "exists"}} selected{{end}}>{{t "esiste"}}</option>
+    <option value="equals"{{if eq $r.Op "equals"}} selected{{end}}>{{t "uguale a (registro)"}}</option>
+    <option value="version_ge"{{if eq $r.Op "version_ge"}} selected{{end}}>{{t "versione almeno"}}</option>
+  </select>
+  <input name="{{.P}}.value" value="{{$r.Value}}" data-for="app registry file" placeholder="{{t "Valore o versione"}}" aria-label="{{t "Valore"}}"{{if not (in $r.Type "app registry file")}} hidden{{end}}>
+  <textarea name="{{.P}}.script" rows="3" spellcheck="false" data-for="script" placeholder="{{t "PowerShell: vero se l'ultimo output è $true"}}" aria-label="Script"{{if ne $r.Type "script"}} hidden{{end}}>{{$r.Script}}</textarea>
+  <button type="button" class="link" data-wf-remove title="{{t "Togli la regola"}}">✕</button>
+</div>
+{{end}}
+
+{{/* Conditions: dict "P" prefix (d, s.2), "C" workflow.Conditions, "D" the page data. */}}
+{{define "wf-conds"}}{{$p := .P}}{{$d := .D}}
+<div class="wf-conds" data-wf-conds="{{.P}}">
+  <label class="check">{{t "Devono valere"}}
+    <select name="{{.P}}.match"><option value="all"{{if ne .C.Match "any"}} selected{{end}}>{{t "tutte le regole (AND)"}}</option><option value="any"{{if eq .C.Match "any"}} selected{{end}}>{{t "almeno una regola (OR)"}}</option></select>
+  </label>
+  <div data-wf-rules>{{range $i, $r := .C.Rules}}{{template "wf-rule" (dict "P" (printf "%s.r.%d" $p $i) "R" $r "D" $d)}}{{end}}</div>
+  <button type="button" class="link" data-wf-add-rule>+ {{t "Aggiungi una regola"}}</button>
+</div>
+{{end}}
+
+{{/* A step: dict "I" index, "S" workflow.Step, "D" the page data. */}}
+{{define "wf-step"}}{{$s := .S}}{{$p := printf "s.%v" .I}}{{$d := .D}}
+<fieldset class="wf-step" data-wf-step="{{.I}}">
+  <legend><span data-wf-num></span>
+    <select name="{{$p}}.type" data-wf-type aria-label="{{t "Tipo di passo"}}">
+      {{range .D.StepTypes}}<option value="{{.}}"{{if eq . $s.Type}} selected{{end}}>{{wfStepLabel .}}</option>{{end}}
+    </select>
+  </legend>
+  <input type="hidden" name="{{$p}}.order" value="{{.I}}" data-wf-order>
+  <div class="wf-tools">
+    <button type="button" class="link" data-wf-up title="{{t "Sposta su"}}">↑</button>
+    <button type="button" class="link" data-wf-down title="{{t "Sposta giù"}}">↓</button>
+    <button type="button" class="link" data-wf-remove title="{{t "Togli il passo"}}">✕</button>
+  </div>
+  <label>{{t "Nome del passo"}} <input name="{{$p}}.name" value="{{$s.Name}}" maxlength="128" placeholder="{{t "facoltativo"}}"></label>
+
+  <label data-for="script"{{if ne $s.Type "script"}} hidden{{end}}>{{t "Script PowerShell (eseguito come SYSTEM; riuscito se termina con codice 0)"}}
+    <textarea name="{{$p}}.script" rows="6" spellcheck="false">{{$s.Script}}</textarea></label>
+  <label data-for="command"{{if ne $s.Type "command"}} hidden{{end}}>{{t "Programma (percorso, nome sul PATH o file scaricato prima)"}}
+    <input name="{{$p}}.command" value="{{$s.Command}}" spellcheck="false" placeholder="cmd.exe"></label>
+  <label data-for="command install"{{if not (in $s.Type "command install")}} hidden{{end}}>{{t "Argomenti"}}
+    <input name="{{$p}}.args" value="{{$s.Args}}" spellcheck="false" placeholder="{{t "/c sc stop Servizio · per un'installazione: argomenti aggiunti a quelli silenziosi"}}"></label>
+  <label data-for="download install"{{if not (in $s.Type "download install")}} hidden{{end}}>{{t "Pacchetto della libreria"}}
+    <select name="{{$p}}.package"><option value="">{{t "— nessuno: URL o file scaricato —"}}</option>{{range .D.Packages}}<option value="{{.SHA256}}"{{if eq .SHA256 $s.Package}} selected{{end}}>{{.Name}} {{.Version}} ({{.FileName}})</option>{{end}}</select></label>
+  <label data-for="download http"{{if not (in $s.Type "download http")}} hidden{{end}}>URL
+    <input name="{{$p}}.url" value="{{$s.URL}}" spellcheck="false" placeholder="https://…"></label>
+  <label data-for="download"{{if ne $s.Type "download"}} hidden{{end}}>{{t "SHA-256 atteso (facoltativo, per un download da URL)"}}
+    <input name="{{$p}}.sha256" value="{{$s.SHA256}}" spellcheck="false" maxlength="64"></label>
+  <label data-for="download"{{if ne $s.Type "download"}} hidden{{end}}>{{t "Salva come (nome nella cartella di lavoro o percorso completo)"}}
+    <input name="{{$p}}.save_as" value="{{$s.SaveAs}}" spellcheck="false" placeholder="setup.exe · C:\ProgramData\App\config.xml"></label>
+  <label data-for="install"{{if ne $s.Type "install"}} hidden{{end}}>{{t "File da installare (scaricato da un passo precedente), se non è un pacchetto"}}
+    <input name="{{$p}}.file" value="{{$s.File}}" spellcheck="false" placeholder="setup.exe"></label>
+  <label data-for="install"{{if ne $s.Type "install"}} hidden{{end}}>{{t "Tipo di installer"}}
+    <select name="{{$p}}.kind">{{range .D.InstallKinds}}<option value="{{.}}"{{if eq . $s.Kind}} selected{{end}}>{{if .}}{{.}}{{else}}{{t "dall'estensione (MSI o EXE)"}}{{end}}</option>{{end}}</select></label>
+  <label class="check" data-for="install"{{if ne $s.Type "install"}} hidden{{end}}><input type="checkbox" name="{{$p}}.unsigned" value="1"{{if $s.AllowUnsigned}} checked{{end}}> {{t "consenti installer senza firma Authenticode valida"}}</label>
+  <label data-for="http"{{if ne $s.Type "http"}} hidden{{end}}>{{t "Metodo"}}
+    <select name="{{$p}}.method"><option{{if ne $s.Method "POST"}} selected{{end}}>GET</option><option{{if eq $s.Method "POST"}} selected{{end}}>POST</option></select></label>
+  <label data-for="http"{{if ne $s.Type "http"}} hidden{{end}}>{{t "Intestazioni (Nome: valore, una per riga)"}}
+    <textarea name="{{$p}}.headers" rows="2" spellcheck="false">{{$s.Headers}}</textarea></label>
+  <label data-for="http"{{if ne $s.Type "http"}} hidden{{end}}>{{t "Corpo (POST)"}}
+    <textarea name="{{$p}}.body" rows="3" spellcheck="false" placeholder='{"computer":"%COMPUTERNAME%"}'>{{$s.Body}}</textarea></label>
+  <label data-for="http"{{if ne $s.Type "http"}} hidden{{end}}>Content-Type
+    <input name="{{$p}}.content_type" value="{{$s.ContentType}}" spellcheck="false" placeholder="application/json"></label>
+  <div class="wf-row">
+    <label data-for="command install"{{if not (in $s.Type "command install")}} hidden{{end}}>{{t "Codici di uscita riusciti"}}
+      <input name="{{$p}}.codes" value="{{range $i, $c := $s.SuccessCodes}}{{if $i}}, {{end}}{{$c}}{{end}}" placeholder="{{t "0 (installazione: 0, 3010, 1641)"}}"></label>
+    <label data-for="script command install"{{if not (in $s.Type "script command install")}} hidden{{end}}>{{t "Tempo massimo (minuti)"}}
+      <input name="{{$p}}.timeout" type="number" min="0" max="240" value="{{if $s.TimeoutSeconds}}{{div $s.TimeoutSeconds 60}}{{end}}" placeholder="30"></label>
+    <label class="check"><input type="checkbox" name="{{$p}}.continue" value="1"{{if $s.ContinueOnError}} checked{{end}}> {{t "in caso di errore continua con il passo successivo"}}</label>
+  </div>
+  <details class="wf-when"{{if $s.When.Rules}} open{{end}}>
+    <summary>{{t "Condizioni"}} {{with $s.When.Rules}}<span class="badge">{{len .}}</span>{{else}}<span class="muted">{{t "(nessuna: il passo viene sempre eseguito)"}}</span>{{end}}</summary>
+    {{template "wf-conds" (dict "P" $p "C" $s.When "D" $d)}}
+  </details>
+</fieldset>
+{{end}}

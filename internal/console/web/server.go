@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/stefanozanarini/tempra-rmm/internal/console/wingetcat"
 	"github.com/stefanozanarini/tempra-rmm/internal/federation"
 	"github.com/stefanozanarini/tempra-rmm/internal/inventory"
+	"github.com/stefanozanarini/tempra-rmm/internal/workflow"
 )
 
 //go:embed templates/*.html static/*
@@ -244,6 +246,24 @@ func funcs(lang string) template.FuncMap {
 			return map[string]any{"Rows": rows, "Select": sel, "View": d}
 		},
 		"add": func(a, b int) int { return a + b },
+		// dict passes several values to a template: dict "A" 1 "B" 2.
+		"dict": func(kv ...any) map[string]any {
+			m := map[string]any{}
+			for i := 0; i+1 < len(kv); i += 2 {
+				if k, ok := kv[i].(string); ok {
+					m[k] = kv[i+1]
+				}
+			}
+			return m
+		},
+		"div": func(a, b int) int { return a / b },
+		// Workflow editor: labels and the blank rows added by the editor.
+		"wfStepLabel": func(k string) string { return tr(lang, wfStepLabels[k]) },
+		"wfRuleLabel": func(k string) string { return tr(lang, wfRuleLabels[k]) },
+		"blankStep":   func() workflow.Step { return workflow.Step{Type: workflow.StepInstall} },
+		"blankRule":   func() workflow.Rule { return workflow.Rule{Type: workflow.RuleApp, Op: workflow.OpExists} },
+		// in: whether v is one of the space-separated words of list.
+		"in": func(v, list string) bool { return slices.Contains(strings.Fields(list), v) },
 		// qs builds a query string from key/value pairs, skipping empty values.
 		"qs": func(kv ...string) string {
 			v := url.Values{}
@@ -361,6 +381,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /agents/bulk", s.role(authn.RoleOperator, s.handleBulkForm))
 	mux.Handle("GET /patches/app", s.auth(s.handleAppUpgrade))
 	mux.Handle("POST /agents/bulk", s.role(authn.RoleOperator, s.handleBulkJobs))
+	mux.Handle("GET /workflows", s.auth(s.handleWorkflows))
+	mux.Handle("GET /workflows/new", s.role(authn.RoleOperator, s.handleWorkflow))
+	mux.Handle("POST /workflows/new", s.role(authn.RoleOperator, s.handleSaveWorkflow))
+	mux.Handle("GET /workflows/{id}", s.auth(s.handleWorkflow))
+	mux.Handle("POST /workflows/{id}", s.role(authn.RoleOperator, s.handleSaveWorkflow))
 	mux.Handle("GET /groups", s.auth(s.handleGroups))
 	mux.Handle("POST /groups", s.role(authn.RoleOperator, s.handleCreateGroup))
 	mux.Handle("POST /groups/agents", s.role(authn.RoleOperator, s.handleGroupAgents))
