@@ -55,6 +55,7 @@ func TestPostgresListTenants(t *testing.T)           { testListTenants(t, openTe
 func TestPostgresLastUser(t *testing.T)              { testLastUser(t, openTestDB(t)) }
 func TestPostgresGroups(t *testing.T)                { testGroups(t, openTestDB(t)) }
 func TestPostgresWorkflows(t *testing.T)             { testWorkflows(t, openTestDB(t)) }
+func TestPostgresAssignments(t *testing.T)           { testAssignments(t, openTestDB(t)) }
 
 func TestPostgresTenantIsolation(t *testing.T) {
 	db := openTestDB(t)

@@ -479,6 +479,37 @@ func testSecurity(t *testing.T, s Store) {
 	if list, _ := s.ListLogonEvents(ctx, tenant.ID, agent.ID, 10); len(list) != 2 || list[0].RecordID != 2 {
 		t.Fatalf("list = %+v", list)
 	}
+
+	// Top failed logons: by computer and by user, most recent window only.
+	agent2 := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "dc"},
+		CertFingerprint: "fp2", CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, agent2)
+	more := []LogonEvent{
+		{Channel: "security", RecordID: 10, At: now, EventID: 4625, Kind: "logon_failed", User: "x"}, // on agent, record_id 2 already added one for x
+		{Channel: "security", RecordID: 11, At: now, EventID: 4625, Kind: "logon_failed", User: "y"},
+		{Channel: "security", RecordID: 12, At: now.Add(-200 * 24 * time.Hour), EventID: 4625, Kind: "logon_failed", User: "old"}, // outside retention and the window
+	}
+	s.AddLogonEvents(ctx, tenant.ID, agent.ID, more, now)
+	s.AddLogonEvents(ctx, tenant.ID, agent2.ID, []LogonEvent{
+		{Channel: "security", RecordID: 1, At: now, EventID: 4625, Kind: "logon_failed", User: "x"},
+		{Channel: "security", RecordID: 2, At: now, EventID: 4624, Kind: "logon", User: "x"}, // a success, not counted
+	}, now)
+	byAgent, byUser, err := s.TopFailedLogons(ctx, tenant.ID, now.Add(-7*24*time.Hour), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byAgent) != 2 || byAgent[0].Key != agent.ID || byAgent[0].Count != 3 || byAgent[1].Key != agent2.ID || byAgent[1].Count != 1 {
+		t.Fatalf("byAgent = %+v", byAgent)
+	}
+	if len(byUser) != 2 || byUser[0].Key != "x" || byUser[0].Count != 3 || byUser[1].Key != "y" || byUser[1].Count != 1 {
+		t.Fatalf("byUser = %+v", byUser)
+	}
+	if byAgent, _, _ := s.TopFailedLogons(ctx, tenant.ID, now.Add(-7*24*time.Hour), 1); len(byAgent) != 1 {
+		t.Fatalf("limit not applied: %+v", byAgent)
+	}
+	if byAgent, byUser, _ := s.TopFailedLogons(ctx, ids.NewUUID(), now.Add(-7*24*time.Hour), 10); len(byAgent)+len(byUser) != 0 {
+		t.Fatal("failed logons visible from another tenant")
+	}
 }
 
 func TestUpdateStatus(t *testing.T) { testUpdateStatus(t, NewMemory()) }
@@ -910,5 +941,56 @@ func testWorkflows(t *testing.T, s Store) {
 	}
 	if _, err := s.GetWorkflow(ctx, tenant.ID, w.ID, 0); err != ErrNotFound {
 		t.Fatalf("deleted: %v", err)
+	}
+}
+
+func TestAssignments(t *testing.T) { testAssignments(t, NewMemory()) }
+
+func testAssignments(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	wfID, groupID := ids.NewUUID(), ids.NewUUID()
+	if _, err := s.SaveWorkflow(ctx, Workflow{TenantID: tenant.ID, ID: wfID, Name: "wf", Document: []byte(`{}`), Author: "anna"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutGroup(ctx, Group{TenantID: tenant.ID, ID: groupID, Name: "g", Kind: GroupComputer, CreatedBy: "anna"}); err != nil {
+		t.Fatal(err)
+	}
+	a := Assignment{TenantID: tenant.ID, ID: ids.NewUUID(), WorkflowID: wfID, Revision: 2, GroupID: groupID,
+		Envelope: []byte("signed-envelope"), MaxTTLSeconds: 3600, ExpiresAt: time.Now().Add(90 * 24 * time.Hour).Truncate(time.Second),
+		CreatedBy: "anna"}
+	if err := s.CreateAssignment(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetAssignment(ctx, tenant.ID, a.ID)
+	if err != nil || !got.Active || got.Revision != 2 || string(got.Envelope) != "signed-envelope" || !got.ExpiresAt.Equal(a.ExpiresAt) {
+		t.Fatalf("get = %+v, %v", got, err)
+	}
+	list, err := s.ListAssignments(ctx, tenant.ID)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+	if other, _ := s.ListAssignments(ctx, ids.NewUUID()); len(other) != 0 {
+		t.Fatal("assignment visible from another tenant")
+	}
+	now := time.Now().Truncate(time.Second)
+	if err := s.SetAssignmentActive(ctx, tenant.ID, a.ID, false, "bob", now); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = s.GetAssignment(ctx, tenant.ID, a.ID); got.Active || got.RevokedBy != "bob" || got.RevokedAt == nil || !got.RevokedAt.Equal(now) {
+		t.Fatalf("revoked = %+v", got)
+	}
+	if err := s.SetAssignmentActive(ctx, tenant.ID, a.ID, true, "", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = s.GetAssignment(ctx, tenant.ID, a.ID); !got.Active || got.RevokedBy != "" || got.RevokedAt != nil {
+		t.Fatalf("reactivated = %+v", got)
+	}
+	if err := s.SetAssignmentActive(ctx, tenant.ID, ids.NewUUID(), false, "bob", now); err != ErrNotFound {
+		t.Fatalf("unknown assignment: %v", err)
+	}
+	if _, err := s.GetAssignment(ctx, tenant.ID, ids.NewUUID()); err != ErrNotFound {
+		t.Fatalf("unknown assignment get: %v", err)
 	}
 }
