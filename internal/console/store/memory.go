@@ -39,6 +39,7 @@ type Memory struct {
 	adDomains   map[string]ADDomain
 	federation  *memFederation
 	installers  []Installer
+	lastUsers   map[string]LastUser
 	vulnFeeds   map[string]VulnFeed
 }
 

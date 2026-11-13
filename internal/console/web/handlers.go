@@ -58,6 +58,10 @@ type runnable struct {
 }
 
 type agentData struct {
+	// User: logged on, or the last one seen; LastUser: the last user seen,
+	// within the days set (nil otherwise).
+	User     userView
+	LastUser *store.LastUser
 	Agent    store.Agent
 	Results  []resultView
 	Jobs     []store.Job
@@ -121,8 +125,10 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 		return nil, err
 	}
 	d := &agentData{Agent: a, Jobs: jobs, Online: s.online(a), Return: "/agents/" + id}
+	var invSum store.InventorySummary
 	switch inv, err := s.store.GetInventory(r.Context(), t, id); {
 	case err == nil:
+		invSum = inv.Summary
 		if d.Inv, err = inventory.Parse(inv.Data); err != nil {
 			s.log.Error("stored inventory unreadable", "agent", id, "err", err)
 		} else {
@@ -131,6 +137,11 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 	case !errors.Is(err, store.ErrNotFound):
 		return nil, err
 	}
+	lastUsers, userTTL := s.lastUsers(r.Context(), t)
+	if lu, ok := lastUsers[id]; ok && s.now().Sub(lu.SeenAt) <= userTTL {
+		d.LastUser = &lu
+	}
+	d.User = s.userFor(a, invSum, lastUsers[id], d.LastUser != nil, userTTL)
 	if d.Changes, err = s.store.ListInventoryChanges(r.Context(), t, id, 100); err != nil {
 		return nil, err
 	}

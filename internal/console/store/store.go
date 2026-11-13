@@ -119,6 +119,7 @@ type Store interface {
 	ADStore
 	FederationStore
 	InstallerStore
+	LastUserStore
 	VulnFeedStore
 }
 

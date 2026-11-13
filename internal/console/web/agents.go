@@ -30,6 +30,7 @@ type agentRow struct {
 	ThirdParty int
 	Current    bool // shown in the bottom panel
 	Checked    bool
+	User       userView // logged on, or last seen for a few days
 }
 
 type siteView struct {
@@ -64,7 +65,7 @@ func (s *Server) online(a store.Agent) bool {
 // matches tells whether every word of q (lower case) appears in one of the
 // row's fields: "fr01 26h2" finds the Windows 11 26H2 PCs named FR01….
 func (r agentRow) matches(q string) bool {
-	fields := []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser,
+	fields := []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser, r.User.Name,
 		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion, r.Host.AgentVersion, r.Site, r.OU, r.ID}
 	fields = append(fields, r.Inv.IPv4...)
 	if r.LastSeenIP != nil {
@@ -205,9 +206,12 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	siteCount := map[string]int{}
 	var ouKeys, allOUs []string
 	needle := strings.ToLower(d.Query)
+	lastUsers, userTTL := s.lastUsers(r.Context(), t)
 	for _, a := range agents {
 		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a), Checks: worst[a.ID], Alerts: alerts[a.ID],
 			Current: a.ID == selected}
+		lu, hasLU := lastUsers[a.ID]
+		row.User = s.userFor(a, row.Inv, lu, hasLU, userTTL)
 		var siteID string
 		siteID, row.Site, row.SiteManual = matcher.match(a, row.Inv)
 		ouKey := ""

@@ -772,3 +772,31 @@ func testListTenants(t *testing.T, s Store) {
 		t.Fatalf("tenants = %+v, %v", list, err)
 	}
 }
+
+func TestLastUser(t *testing.T) { testLastUser(t, NewMemory()) }
+
+func testLastUser(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	a := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "pc"},
+		CertFingerprint: ids.NewUUID(), CertNotAfter: time.Now().Add(time.Hour)}
+	s.CreateAgent(ctx, a)
+	t0 := time.Now().UTC().Truncate(time.Second)
+	if err := s.SetLastUser(ctx, tenant.ID, a.ID, LastUser{User: `CORP\mario`, SeenAt: t0, Source: LastUserLogon}); err != nil {
+		t.Fatal(err)
+	}
+	// An older observation does not replace a newer one.
+	s.SetLastUser(ctx, tenant.ID, a.ID, LastUser{User: `CORP\old`, SeenAt: t0.Add(-time.Hour), Source: LastUserInventory})
+	got, err := s.LastUsers(ctx, tenant.ID)
+	if err != nil || got[a.ID].User != `CORP\mario` || !got[a.ID].SeenAt.Equal(t0) || got[a.ID].Source != LastUserLogon {
+		t.Fatalf("last users = %+v, %v", got, err)
+	}
+	s.SetLastUser(ctx, tenant.ID, a.ID, LastUser{User: `CORP\luigi`, SeenAt: t0.Add(time.Hour), Source: LastUserInventory})
+	if got, _ := s.LastUsers(ctx, tenant.ID); got[a.ID].User != `CORP\luigi` {
+		t.Fatalf("newer not stored: %+v", got)
+	}
+	if err := s.SetLastUser(ctx, tenant.ID, ids.NewUUID(), LastUser{User: "x", SeenAt: t0, Source: LastUserLogon}); err != ErrNotFound {
+		t.Fatalf("unknown agent: %v", err)
+	}
+}

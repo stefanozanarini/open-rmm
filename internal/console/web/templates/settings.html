@@ -17,6 +17,14 @@
   {{if .IsAdmin}}<button class="primary">{{t "Salva"}}</button>{{end}}
 </form>
 
+<h2 id="last-user">{{t "Utente dei computer"}}</h2>
+<p class="muted">{{t "Quando nessuno è collegato o il computer è spento, la console continua a mostrare l'ultimo utente visto (dall'inventario o dagli accessi interattivi e RDP) per questo numero di giorni."}}</p>
+<form method="post" action="/settings/last-user" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>{{t "Mostra l'ultimo utente per (giorni)"}} <input type="number" name="last_user_days" min="1" max="90" value="{{.Data.LastUserDays}}" {{if not .IsAdmin}}disabled{{end}}></label>
+  {{if .IsAdmin}}<button class="primary">{{t "Salva"}}</button>{{end}}
+</form>
+
 <h2 id="logo">{{t "Logo aziendale"}}</h2>
 <p class="muted">{{t "Compare in alto a destra in tutte le pagine di questo tenant. PNG, JPEG o WebP, al massimo 256 KB; meglio con sfondo trasparente e alto circa 40 pixel."}}</p>
 {{if .HasLogo}}<p><img class="logo-preview" src="/logo" alt="{{t "Logo aziendale"}}"></p>{{end}}

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/stefanozanarini/tempra-rmm/internal/accesslog"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
@@ -100,6 +101,8 @@ type settingsData struct {
 	// FileMaxMB: the largest file a file session transfers; FileMaxCap
 	// its upper bound.
 	FileMaxMB, FileMaxCap int
+	// LastUserDays: how long the last user of a computer is shown.
+	LastUserDays int
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +116,8 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	d := settingsData{Subnets: strings.Join(cur.RDPAllowedSubnets, "\n"), FileMaxMB: int(fileMaxBytes(cur) >> 20), FileMaxCap: maxFileMaxMB}
+	d := settingsData{Subnets: strings.Join(cur.RDPAllowedSubnets, "\n"), FileMaxMB: int(fileMaxBytes(cur) >> 20), FileMaxCap: maxFileMaxMB,
+		LastUserDays: int(cur.LastUserTTL() / (24 * time.Hour))}
 	for _, p := range accesslog.DefaultAllowed {
 		d.Defaults = append(d.Defaults, p.String())
 	}
@@ -251,4 +255,35 @@ func (s *Server) handleLogo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", cur.LogoType)
 	w.Header().Set("Cache-Control", "private, max-age=300")
 	_, _ = w.Write(cur.Logo)
+}
+
+// maxLastUserDays bounds Settings.LastUserDays.
+const maxLastUserDays = 90
+
+// handleSaveLastUser sets how long the last user of a computer is shown.
+func (s *Server) handleSaveLastUser(w http.ResponseWriter, r *http.Request) {
+	t, ok := tenantOf(r)
+	if !ok {
+		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
+		return
+	}
+	op := sessionFrom(r.Context()).data.Operator
+	days, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("last_user_days")))
+	if err != nil || days < 1 || days > maxLastUserDays {
+		s.flash(w, r, s.Tf(r, "I giorni devono essere tra 1 e %d.", maxLastUserDays), "/settings#last-user")
+		return
+	}
+	cur, err := s.store.GetSettings(r.Context(), t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	prev := int(cur.LastUserTTL() / (24 * time.Hour))
+	cur.LastUserDays = days
+	if err := s.store.PutSettings(r.Context(), t, cur, "operator:"+op.Username); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.audit(r.Context(), t, op, "settings.last_user_days", t, map[string]any{"last_user_days": days, "previous": prev})
+	s.flash(w, r, s.T(r, "Impostazioni salvate."), "/settings#last-user")
 }

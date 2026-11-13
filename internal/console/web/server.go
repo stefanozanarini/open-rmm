@@ -372,6 +372,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /settings", s.role(authn.RoleAdmin, s.handleSettings))
 	mux.Handle("POST /settings", s.role(authn.RoleAdmin, s.handleSaveSettings))
 	mux.Handle("POST /settings/files", s.role(authn.RoleAdmin, s.handleSaveFileLimit))
+	mux.Handle("POST /settings/last-user", s.role(authn.RoleAdmin, s.handleSaveLastUser))
 	mux.Handle("POST /settings/logo", s.role(authn.RoleAdmin, s.handleLogoUpload))
 	mux.Handle("GET /logo", s.auth(s.handleLogo))
 	mux.Handle("GET /policies", s.auth(s.handlePolicies))

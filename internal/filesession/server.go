@@ -274,7 +274,7 @@ func (s *server) get(ctx context.Context, m *Msg) {
 		err = fmt.Errorf("the file is larger than the limit of %s", Bytes(s.o.MaxBytes))
 	}
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		s.fail(m.ID, err)
 		return
 	}
@@ -371,7 +371,7 @@ func (s *server) put(m *Msg) {
 }
 
 func (u *upload) abort() {
-	u.f.Close()
+	_ = u.f.Close()
 	_ = os.Remove(u.tmp)
 }
 
@@ -386,7 +386,7 @@ func (s *server) write(id uint32, chunk []byte) {
 	if u.written+int64(len(chunk)) > u.size {
 		err = errors.New("more data than announced")
 	} else if _, err = u.f.Write(chunk); err == nil {
-		u.h.Write(chunk)
+		_, _ = u.h.Write(chunk) // hash.Hash never fails
 		u.written += int64(len(chunk))
 		s.mu.Lock()
 		s.st.BytesIn += int64(len(chunk))

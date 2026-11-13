@@ -7,7 +7,7 @@ import "html/template"
 // elsewhere in app.js). The texts are in the catalog like every string.
 
 // helpTexts are keyed by page template name, or by "section:<name>".
-var helpTexts = map[string]string{
+var helpTexts = map[string]string{ // #nosec G101 -- help text, not credentials
 	"agents":      "Elenco dei computer con l'agente. A sinistra filtri per sede, sistema operativo e OU di Active Directory; la casella di ricerca trova per nome, IP, utente o versione. Un clic su un computer apre il pannello in basso, il tasto destro il menu rapido. Con le caselle selezioni più computer per un'azione su tutti, approvata con una sola MFA.",
 	"agent":       "Tutto su un computer: riepilogo, controlli, aggiornamenti, software, inventario, accessi e job. Le azioni (comandi, shell, file, installazioni) chiedono l'approvazione MFA: l'agente esegue solo comandi firmati.",
 	"jobs":        "Ogni comando inviato agli agenti, con stato e risultato. \"Completato con errori\" vuol dire che il modulo ha funzionato ma alcuni elementi (aggiornamenti, applicazioni) non sono stati installati: apri il job per il dettaglio. Puoi filtrare per computer o cercare per modulo, azione e stato.",

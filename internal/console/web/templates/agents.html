@@ -13,7 +13,7 @@
     {{if .Reboot}}{{if eq .Status "active"}}<a class="badge chk-warning" href="{{rowTab $.View $id "commands" "act-reboot-reboot"}}" title="{{t "apri il riavvio dell'endpoint"}}">⏻ {{t "riavvio"}}</a>{{else}}<span class="badge chk-warning" title="{{t "riavvio in sospeso"}}">{{t "riavvio"}}</span>{{end}}{{end}}
     {{with .ThirdParty}}<a class="badge chk-warning" href="{{rowTab $.View $id "patches" "patches"}}" title="{{t "applicazioni da aggiornare"}}">{{tf "%d app" .}}</a>{{end}}</td>
   <td>{{.Site}}{{if .SiteManual}} <span class="muted" title="{{t "assegnata a mano"}}">✎</span>{{end}}</td>
-  <td>{{.Inv.LoggedOnUser}}</td>
+  <td>{{with .User}}{{if .Last}}<span class="muted" title="{{tf "ultimo utente, visto il %s" (fmtTime .Seen)}}">{{.Name}}</span>{{else}}{{.Name}}{{end}}{{end}}</td>
   <td>{{.Inv.Manufacturer}} {{.Inv.Model}}</td>
   <td>{{.Host.OSVersion}}</td>
   <td>{{with .Inv.SupremoID}}<code>{{.}}</code>{{end}}</td>

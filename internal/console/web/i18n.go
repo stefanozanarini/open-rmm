@@ -1527,4 +1527,14 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"servizi":                                     "services",
 	"spazio libero (GB)":                          "free space (GB)",
 	"valore":                                      "value",
+
+	// Last user of a computer
+	"I giorni devono essere tra 1 e %d.":  "Days must be between 1 and %d.",
+	"Mostra l'ultimo utente per (giorni)": "Show the last user for (days)",
+	"Quando nessuno è collegato o il computer è spento, la console continua a mostrare l'ultimo utente visto (dall'inventario o dagli accessi interattivi e RDP) per questo numero di giorni.": "When nobody is logged on or the computer is off, the console keeps showing the last user seen (from the inventory or from interactive and RDP logons) for this number of days.",
+	"Ultimo utente":              "Last user",
+	"Utente dei computer":        "Computer users",
+	"inventario":                 "inventory",
+	"ultimo utente, visto il %s": "last user, seen on %s",
+	"visto il %s":                "seen on %s",
 }

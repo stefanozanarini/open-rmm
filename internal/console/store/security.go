@@ -39,6 +39,21 @@ type Settings struct {
 	PilotManual bool `json:"pilot_manual,omitempty"`
 	// FileMaxMB is the largest file a file session transfers (0: 1024).
 	FileMaxMB int `json:"file_max_mb,omitempty"`
+	// LastUserDays is how long the last user of a computer is shown while
+	// nobody is logged on or it is offline (0: DefaultLastUserDays).
+	LastUserDays int `json:"last_user_days,omitempty"`
+}
+
+// DefaultLastUserDays is the default of Settings.LastUserDays.
+const DefaultLastUserDays = 7
+
+// LastUserTTL is how long the last user of a computer is shown.
+func (s Settings) LastUserTTL() time.Duration {
+	d := s.LastUserDays
+	if d <= 0 {
+		d = DefaultLastUserDays
+	}
+	return time.Duration(d) * 24 * time.Hour
 }
 
 // Check statuses.

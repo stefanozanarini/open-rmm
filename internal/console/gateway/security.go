@@ -111,6 +111,7 @@ func (s *Server) ingestLogons(ctx context.Context, a store.Agent, raw []byte) {
 	if len(added) == 0 {
 		return
 	}
+	s.noteLogonUser(ctx, a, added)
 	settings, err := s.store.GetSettings(ctx, a.TenantID)
 	if err != nil {
 		s.log.Error("load settings", "err", err)

@@ -210,6 +210,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	matcher := newSiteMatcher(sites, manual)
 	osCount := map[string]int{}
 	d.Searched = d.Software != "" || d.Version != "" || d.OSFilter != "" || d.User != "" || d.Model != "" || d.Site != "" || q.Has("all") || q.Has("search")
+	lastUsers, userTTL := s.lastUsers(r.Context(), t)
 	for _, a := range agents {
 		if a.Status == store.AgentRevoked {
 			continue
@@ -223,7 +224,9 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		}
 		siteID, siteName, _ := matcher.match(a, stored.Summary)
 		row := reportRow{Agent: a, Site: siteName, OS: osLabel(a, inv), Seen: stored.ReceivedAt,
-			Model: strings.TrimSpace(stored.Summary.Manufacturer + " " + stored.Summary.Model), User: stored.Summary.LoggedOnUser}
+			Model: strings.TrimSpace(stored.Summary.Manufacturer + " " + stored.Summary.Model)}
+		lu, hasLU := lastUsers[a.ID]
+		row.User = s.userFor(a, stored.Summary, lu, hasLU, userTTL).Name
 		osCount[row.OS]++
 		if d.Tab != "computers" || !d.Searched {
 			continue

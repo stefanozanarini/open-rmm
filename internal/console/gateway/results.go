@@ -118,6 +118,9 @@ func (s *Server) ingestInventory(ctx context.Context, a store.Agent, raw []byte)
 	switch err := s.store.PutInventory(ctx, rec, changes); {
 	case err == nil:
 		s.log.Info("inventory stored", "agent", a.ID, "software", len(inv.Software), "changes", len(changes))
+		if inv.OS.LoggedOnUser != "" {
+			s.noteLastUser(ctx, a, inv.OS.LoggedOnUser, inv.CollectedAt, store.LastUserInventory)
+		}
 	case errors.Is(err, store.ErrStaleInventory):
 		s.log.Info("older inventory ignored", "agent", a.ID)
 	default:

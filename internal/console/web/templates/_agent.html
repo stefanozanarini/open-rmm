@@ -10,6 +10,7 @@
   {{with .AD}}<dt>Active Directory</dt><dd>{{.Domain}}{{with .OU}} · <a href="/agents{{qs "ou" $.Data.AD.Key}}">{{.}}</a>{{end}}{{if not .Enabled}} <span class="badge chk-failing">{{t "account disabilitato"}}</span>{{end}}{{with .LastLogon}} · {{tf "ultimo accesso al dominio %s" (fmtTime .)}}{{end}}</dd>{{end}}
   {{with .Inv}}
   <dt>{{t "Utente collegato"}}</dt><dd>{{or .OS.LoggedOnUser "-"}} <span class="muted">{{tf "all'inventario del %s" (fmtTime $.Data.InvAt)}}</span></dd>
+  {{with $.Data.LastUser}}<dt>{{t "Ultimo utente"}}</dt><dd>{{.User}} <span class="muted">{{tf "visto il %s" (fmtTime .SeenAt)}} · {{if eq .Source "logon"}}{{t "accesso"}}{{else}}{{t "inventario"}}{{end}}</span></dd>{{end}}
   {{if .PrivilegedGroups}}<dt>{{t "Gruppi privilegiati del dominio"}}</dt><dd>{{range .PrivilegedGroups}}{{if .Members}}<strong>{{.Name}}</strong>{{with .NonStandard}} <span class="badge chk-failing">{{tf "%d non predefiniti" .}}</span>{{end}}<br>
     {{range .Members}}{{.Name}}{{if eq .Type "group"}} <span class="badge">{{t "gruppo"}}</span>{{end}}{{if .Disabled}} <span class="badge">{{t "disabilitato"}}</span>{{end}}{{if not .Standard}} <span class="badge chk-warning">{{t "non predefinito"}}</span>{{end}}<br>{{end}}{{end}}{{end}}
     <span class="muted small">{{t "Su un domain controller il gruppo Administrators è quello del dominio: i suoi membri amministrano tutti i DC e il database di Active Directory. Predefiniti: Administrator, Domain Admins, Enterprise Admins; i gruppi Operators di norma sono vuoti."}}</span></dd>
