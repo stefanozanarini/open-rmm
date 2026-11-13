@@ -374,12 +374,19 @@
 {{end}}
 {{if and .CanRun .Data.Screen}}
 <h2 id="act-screen">{{t "Controllo remoto"}}{{help "section:screen"}}</h2>
+{{if and .Data.User.Name (not .Data.User.Last)}}
+<p><span class="badge chk-ok">{{t "utente collegato"}}</span> {{tf "%s risulta collegato ora: la sessione dovrebbe riuscire." .Data.User.Name}}</p>
+{{else if .Data.User.Name}}
+<p><span class="badge chk-warning">{{t "nessun utente collegato"}}</span> {{tf "Nessun utente risulta collegato ora (ultimo visto: %s, %s): la sessione probabilmente fallirà." .Data.User.Name (isoDate .Data.User.Seen)}}</p>
+{{else}}
+<p><span class="badge chk-warning">{{t "nessun utente collegato"}}</span> {{t "Nessun utente risulta collegato: la sessione probabilmente fallirà."}}</p>
+{{end}}
 <form method="post" action="/agents/{{.Data.Agent.ID}}/screen" class="inline">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <label>{{t "Durata"}} <select name="minutes"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">60 min</option></select></label>
   <button class="primary">🖥️ {{t "Apri il controllo remoto"}}</button>
 </form>
-<p class="muted">{{t "Vedi lo schermo e controlla mouse e tastiera, in una sessione approvata con MFA. Richiede un utente collegato con lo schermo sbloccato; il PC deve consentirla con la policy locale (GPO)."}}</p>
+<p class="muted">{{t "Vedi lo schermo e controlla mouse e tastiera, in una sessione approvata con MFA. Richiede un utente collegato con lo schermo sbloccato; il PC deve consentirla con la policy locale (GPO)."}} {{t "Lo stato dell'utente sopra riflette l'ultimo inventario, non il momento esatto dell'apertura: può essere cambiato nel frattempo."}}</p>
 {{end}}
 {{if and .CanRun .Data.Files (eq .Data.Agent.Status "active")}}
 <h2 id="act-files">{{t "File"}}{{help "section:files"}}</h2>
