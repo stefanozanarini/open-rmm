@@ -229,6 +229,28 @@
   <label>{{t "Ultimi giorni"}} <input name="days" type="number" min="1" max="365" value="{{.Days}}"></label>
   <button class="primary">{{t "Cerca"}}</button>
 </form>
+
+{{if or .FailedByAgent .FailedByUser}}
+<h2>{{tf "Login falliti negli ultimi %d giorni" .Days}}</h2>
+<div class="charts2">
+<section>
+<h3>{{t "Computer"}}</h3>
+<table>
+<thead><tr><th>{{t "Computer"}}</th><th class="num">{{t "Tentativi falliti"}}</th></tr></thead>
+<tbody>{{range .FailedByAgent}}<tr><td>{{if .Link}}<a href="{{.Link}}?tab=logons">{{.Label}}</a>{{else}}<code>{{.Label}}</code>{{end}}</td><td class="num">{{.Count}}</td></tr>{{end}}</tbody>
+</table>
+</section>
+<section>
+<h3>{{t "Utenti"}}</h3>
+<table>
+<thead><tr><th>{{t "Utente"}}</th><th class="num">{{t "Tentativi falliti"}}</th></tr></thead>
+<tbody>{{range .FailedByUser}}<tr><td>{{.Label}}</td><td class="num">{{.Count}}</td></tr>{{end}}</tbody>
+</table>
+</section>
+</div>
+<p class="muted small">{{t "Spesso in testa ci sono i domain controller, che registrano anche i tentativi falliti verso altri computer: non significa che siano loro il bersaglio."}}</p>
+{{end}}
+
 <p>{{tf "%d accessi." (len .Logons)}}{{if .Truncated}} {{tf "Mostrati i primi %d: restringi la ricerca." (len .Logons)}}{{end}}{{if .Logons}} <a href="/reports?{{.Query}}&amp;format=csv">{{t "Esporta CSV"}}</a>{{end}}</p>
 {{if .Logons}}
 <table>

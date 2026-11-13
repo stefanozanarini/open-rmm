@@ -54,3 +54,38 @@ func TestConsoleReports(t *testing.T) {
 		t.Fatal("logon filter ignored")
 	}
 }
+
+func TestFailedLogonRanking(t *testing.T) {
+	e := startConsole(t)
+	ctx := context.Background()
+	pc1 := e.addWindowsAgent(t, "PC-01")
+	dc := e.addWindowsAgent(t, "DC-01")
+	now := time.Now()
+	e.store.AddLogonEvents(ctx, e.tenant, pc1, []store.LogonEvent{
+		{Channel: "security", RecordID: 1, At: now, EventID: 4625, Kind: "logon_failed", User: "mrossi"},
+		{Channel: "security", RecordID: 2, At: now, EventID: 4624, Kind: "logon", User: "mrossi"}, // a success, not counted
+	}, now)
+	e.store.AddLogonEvents(ctx, e.tenant, dc, []store.LogonEvent{
+		{Channel: "security", RecordID: 1, At: now, EventID: 4625, Kind: "logon_failed", User: "mrossi"},
+		{Channel: "security", RecordID: 2, At: now, EventID: 4625, Kind: "logon_failed", User: "guest"},
+		{Channel: "security", RecordID: 3, At: now, EventID: 4625, Kind: "logon_failed", User: "guest"},
+	}, now)
+
+	c, _ := e.login(t, admin)
+	_, body := get(t, c, e.console.URL+"/reports?tab=logons")
+	body = html.UnescapeString(body)
+	if !strings.Contains(body, "Login falliti negli ultimi 30 giorni") {
+		t.Fatalf("ranking heading missing: %s", body)
+	}
+	dcPos, pc1Pos := strings.Index(body, "DC-01"), strings.Index(body, "PC-01")
+	if dcPos < 0 || pc1Pos < 0 || dcPos > pc1Pos {
+		t.Fatalf("computers not ranked by failed count: dc=%d pc1=%d", dcPos, pc1Pos)
+	}
+	guestPos, mrossiPos := strings.Index(body, ">guest<"), strings.Index(body, ">mrossi<")
+	if guestPos < 0 || mrossiPos < 0 || guestPos > mrossiPos {
+		t.Fatalf("users not ranked by failed count: guest=%d mrossi=%d", guestPos, mrossiPos)
+	}
+	if !strings.Contains(body, `href="/agents/`+dc+`?tab=logons"`) {
+		t.Fatalf("computer row not linked: %s", body)
+	}
+}

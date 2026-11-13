@@ -150,6 +150,17 @@ type SecurityStore interface {
 	// whether user logged on successfully from ip before t.
 	LogonHistory(ctx context.Context, tenantID, agentID, user, ip string, t time.Time) (first time.Time, seen bool, err error)
 	ListLogonEvents(ctx context.Context, tenantID, agentID string, limit int) ([]LogonEvent, error)
+	// TopFailedLogons ranks, since the given time, the computers and the
+	// user names with the most failed logons (accesslog.KindLogonFailed),
+	// each list sorted by count descending, at most limit entries.
+	TopFailedLogons(ctx context.Context, tenantID string, since time.Time, limit int) (byAgent, byUser []LogonRank, err error)
+}
+
+// LogonRank is one row of a failed-logon ranking: an agent id or a user
+// name, with how many failed logons it had.
+type LogonRank struct {
+	Key   string // agent id, or user name (DOMAIN\user)
+	Count int
 }
 
 // SuccessfulLogon reports whether an event is a successful logon.
@@ -383,6 +394,47 @@ func (m *Memory) SearchLogons(_ context.Context, tenantID, user string, since ti
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func (m *Memory) TopFailedLogons(_ context.Context, tenantID string, since time.Time, limit int) ([]LogonRank, []LogonRank, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	byAgent, byUser := map[string]int{}, map[string]int{}
+	for k, evs := range m.sec().logons {
+		agent, ok := strings.CutPrefix(k, tenantID+"/")
+		if !ok {
+			continue
+		}
+		for _, e := range evs {
+			if e.Kind != "logon_failed" || e.At.Before(since) {
+				continue
+			}
+			byAgent[agent]++
+			if e.User != "" {
+				byUser[e.User]++
+			}
+		}
+	}
+	return rankLogons(byAgent, limit), rankLogons(byUser, limit), nil
+}
+
+// rankLogons sorts counts by count descending (ties broken by key, for a
+// stable order), keeping at most limit.
+func rankLogons(counts map[string]int, limit int) []LogonRank {
+	out := make([]LogonRank, 0, len(counts))
+	for k, n := range counts {
+		out = append(out, LogonRank{Key: k, Count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Key < out[j].Key
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
 }
 
 // ---- postgres ----
@@ -657,4 +709,35 @@ func (p *Postgres) ListLogonEvents(ctx context.Context, tenantID, agentID string
 		return err
 	})
 	return out, err
+}
+
+func (p *Postgres) TopFailedLogons(ctx context.Context, tenantID string, since time.Time, limit int) ([]LogonRank, []LogonRank, error) {
+	var byAgent, byUser []LogonRank
+	err := p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rank := func(query string) ([]LogonRank, error) {
+			rows, err := tx.Query(ctx, query, since, limit)
+			if err != nil {
+				return nil, err
+			}
+			defer rows.Close()
+			var out []LogonRank
+			for rows.Next() {
+				var r LogonRank
+				if err := rows.Scan(&r.Key, &r.Count); err != nil {
+					return nil, err
+				}
+				out = append(out, r)
+			}
+			return out, rows.Err()
+		}
+		var err error
+		if byAgent, err = rank(`SELECT agent_id::text, count(*) FROM logon_events WHERE kind = 'logon_failed' AND at >= $1
+			GROUP BY agent_id ORDER BY count(*) DESC, agent_id LIMIT $2`); err != nil {
+			return err
+		}
+		byUser, err = rank(`SELECT username, count(*) FROM logon_events WHERE kind = 'logon_failed' AND at >= $1 AND username <> ''
+			GROUP BY username ORDER BY count(*) DESC, username LIMIT $2`)
+		return err
+	})
+	return byAgent, byUser, err
 }

@@ -23,6 +23,8 @@ import (
 const (
 	maxReportLogons = 2000
 	reportLogonDays = 30
+	// maxFailedRank bounds the failed-logon ranking (computers, users).
+	maxFailedRank = 15
 )
 
 type reportsData struct {
@@ -52,6 +54,9 @@ type reportsData struct {
 	Days      int
 	Logons    []logonRow
 	Truncated bool
+	// FailedByAgent, FailedByUser: ranking of the most failed logons, the
+	// same window as Logons.
+	FailedByAgent, FailedByUser []failedRank
 	// Query is the current filter, for the CSV link.
 	Query string
 }
@@ -81,6 +86,14 @@ type osGroup struct {
 type logonRow struct {
 	store.AgentLogon
 	Hostname string
+}
+
+// failedRank is a ranking row: a computer (Label, Link to open it) or a
+// user name, with its count of failed logons.
+type failedRank struct {
+	Label string
+	Link  string // agents/{id}, "" for a user row
+	Count int
 }
 
 // osLabel is how an operating system is named in reports: name, release
@@ -180,6 +193,21 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, e := range evs {
 			d.Logons = append(d.Logons, logonRow{AgentLogon: e, Hostname: names[e.AgentID]})
+		}
+		byAgent, byUser, err := s.store.TopFailedLogons(ctx, t, s.now().AddDate(0, 0, -d.Days), maxFailedRank)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		for _, fr := range byAgent {
+			label, link := fr.Key, ""
+			if name, ok := names[fr.Key]; ok {
+				label, link = name, "/agents/"+fr.Key
+			}
+			d.FailedByAgent = append(d.FailedByAgent, failedRank{Label: label, Link: link, Count: fr.Count})
+		}
+		for _, fr := range byUser {
+			d.FailedByUser = append(d.FailedByUser, failedRank{Label: fr.Key, Count: fr.Count})
 		}
 		if csvOut {
 			s.writeCSV(w, "logons.csv", []string{"computer", "time", "user", "domain", "kind", "logon_type", "source_ip", "source_host", "status"},
