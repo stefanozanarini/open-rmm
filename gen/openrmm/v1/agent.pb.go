@@ -389,9 +389,11 @@ func (x *GetModuleRequest) GetVersion() string {
 }
 
 type GetPackageRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	Sha256        []byte                 `protobuf:"bytes,2,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	JobId  string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	Sha256 []byte                 `protobuf:"bytes,2,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	// Resume: the bytes the agent already has.
+	Offset        int64 `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -440,9 +442,19 @@ func (x *GetPackageRequest) GetSha256() []byte {
 	return nil
 }
 
+func (x *GetPackageRequest) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
 type PackageChunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Data  []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	// Where the data of the first chunk starts in the package (0 from consoles
+	// that cannot resume).
+	Offset        int64 `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -482,6 +494,13 @@ func (x *PackageChunk) GetData() []byte {
 		return x.Data
 	}
 	return nil
+}
+
+func (x *PackageChunk) GetOffset() int64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
 }
 
 // PackageRef pins a package of the console's library in a signed job.
@@ -1932,12 +1951,14 @@ const file_openrmm_v1_agent_proto_rawDesc = "" +
 	"\x04data\x18\x02 \x01(\fR\x04data\"D\n" +
 	"\x10GetModuleRequest\x12\x16\n" +
 	"\x06module\x18\x01 \x01(\tR\x06module\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"B\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\"Z\n" +
 	"\x11GetPackageRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x16\n" +
-	"\x06sha256\x18\x02 \x01(\fR\x06sha256\"\"\n" +
+	"\x06sha256\x18\x02 \x01(\fR\x06sha256\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x03R\x06offset\":\n" +
 	"\fPackageChunk\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"U\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\x12\x16\n" +
+	"\x06offset\x18\x02 \x01(\x03R\x06offset\"U\n" +
 	"\n" +
 	"PackageRef\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\fR\x06sha256\x12\x1b\n" +

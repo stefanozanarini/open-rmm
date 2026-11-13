@@ -72,10 +72,15 @@ message GetModuleRequest {
 message GetPackageRequest {
   string job_id = 1;
   bytes sha256 = 2;
+  // Resume: the bytes the agent already has.
+  int64 offset = 3;
 }
 
 message PackageChunk {
   bytes data = 1;
+  // Where the data of the first chunk starts in the package (0 from consoles
+  // that cannot resume).
+  int64 offset = 2;
 }
 
 // PackageRef pins a package of the console's library in a signed job.

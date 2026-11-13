@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
@@ -117,6 +119,14 @@ func New(ctx context.Context, cfg *config.Config, tenantID, agentID string, log 
 	return e, nil
 }
 
+// Package downloads interrupted by the network are retried, resuming where
+// they stopped, while the agent reconnects.
+var (
+	packageAttempts = 6
+	packageRetry    = 15 * time.Second
+	packageWait     = 3 * time.Minute
+)
+
 // fetchPackages downloads the job's packages into <work>/packages.
 func (e *Executor) fetchPackages(job *openrmmv1.Job, workDir string, send func(*openrmmv1.JobUpdate)) ([]runner.Package, error) {
 	refs := job.GetPackages()
@@ -127,22 +137,65 @@ func (e *Executor) fetchPackages(job *openrmmv1.Job, workDir string, send func(*
 	if err := secfile.EnsureDir(dir); err != nil {
 		return nil, fmt.Errorf("package directory: %w", err)
 	}
-	e.mu.Lock()
-	sess := e.session
-	e.mu.Unlock()
-	if sess == nil {
-		return nil, errors.New("not connected to the console: cannot download packages")
-	}
 	var out []runner.Package
 	for _, ref := range refs {
 		send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING, Message: "download " + ref.GetFileName()})
 		dest := filepath.Join(dir, ref.GetFileName())
-		if err := sess.FetchPackage(e.ctx, job.GetJobId(), ref, dest); err != nil {
-			return nil, fmt.Errorf("package %s: %w", ref.GetFileName(), err)
+		for attempt := 1; ; attempt++ {
+			err := errNotConnected
+			if sess := e.waitSession(packageWait); sess != nil {
+				err = sess.FetchPackage(e.ctx, job.GetJobId(), ref, dest)
+			}
+			if err == nil {
+				break
+			}
+			if attempt == packageAttempts || !retryable(err) || e.ctx.Err() != nil {
+				return nil, fmt.Errorf("package %s: %w", ref.GetFileName(), err)
+			}
+			e.log.Warn("package download interrupted, retrying", "job", job.GetJobId(), "package", ref.GetFileName(), "attempt", attempt, "err", err)
+			send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING,
+				Message: fmt.Sprintf("download %s interrupted, resuming (attempt %d of %d)", ref.GetFileName(), attempt+1, packageAttempts)})
+			select {
+			case <-e.ctx.Done():
+				return nil, fmt.Errorf("package %s: %w", ref.GetFileName(), e.ctx.Err())
+			case <-time.After(time.Duration(attempt) * packageRetry):
+			}
 		}
 		out = append(out, runner.Package{FileName: ref.GetFileName(), Path: dest, SHA256: hex.EncodeToString(ref.GetSha256())})
 	}
 	return out, nil
+}
+
+var errNotConnected = errors.New("not connected to the console: cannot download packages")
+
+// waitSession returns the live session, waiting up to d for a reconnection.
+func (e *Executor) waitSession(d time.Duration) Session {
+	deadline := time.Now().Add(d)
+	for {
+		e.mu.Lock()
+		sess := e.session
+		e.mu.Unlock()
+		if sess != nil || time.Now().After(deadline) {
+			return sess
+		}
+		select {
+		case <-e.ctx.Done():
+			return nil
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+// retryable reports whether a download failed because of the network.
+func retryable(err error) bool {
+	if errors.Is(err, errNotConnected) {
+		return true
+	}
+	switch status.Code(err) {
+	case codes.Unavailable, codes.DeadlineExceeded, codes.Canceled, codes.Aborted, codes.ResourceExhausted:
+		return true
+	}
+	return false
 }
 
 func (e *Executor) moduleLock(id string) *sync.Mutex {

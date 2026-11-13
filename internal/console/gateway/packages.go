@@ -44,11 +44,26 @@ func (s *Server) GetPackage(req *openrmmv1.GetPackageRequest, stream openrmmv1.A
 		return status.Error(codes.NotFound, "package file not found")
 	}
 	defer f.Close()
+	// A download interrupted by the network resumes where it stopped.
+	off := req.GetOffset()
+	if off != 0 {
+		end, err := f.Seek(0, io.SeekEnd)
+		if err != nil || off < 0 || off > end {
+			return status.Error(codes.InvalidArgument, "invalid offset")
+		}
+		if _, err := f.Seek(off, io.SeekStart); err != nil {
+			return status.Error(codes.Internal, "read package")
+		}
+	}
 	buf := make([]byte, packageChunkSize)
-	for {
+	for first := true; ; {
 		n, err := f.Read(buf)
 		if n > 0 {
-			if serr := stream.Send(&openrmmv1.PackageChunk{Data: buf[:n]}); serr != nil {
+			chunk := &openrmmv1.PackageChunk{Data: buf[:n]}
+			if first {
+				chunk.Offset, first = off, false
+			}
+			if serr := stream.Send(chunk); serr != nil {
 				return serr
 			}
 		}

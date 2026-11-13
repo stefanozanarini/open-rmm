@@ -259,7 +259,7 @@ Details: [UPDATES.md](UPDATES.md).
 
 The signer signs a job only if the request carries an id_token issued by Entra ID **for that exact request** (the OIDC `nonce` is the canonical hash of agent, module, manifest hash, action, parameters and validity), recent, with MFA, by an operator with the Operator or Admin role for that tenant, and never used before. The signer verifies all of this itself, with Microsoft's public keys; it does not trust the console.
 
-One approval may target **several agents** (up to 500, e.g. distributing a package): the agent list is part of the approved hash, and the signer issues one signed job per agent. Jobs may pin **packages** of the library by SHA-256, file name and size; the agent downloads them only for that job and checks size and hash before running the module.
+One approval may target **several agents** (up to 500, e.g. distributing a package): the agent list is part of the approved hash, and the signer issues one signed job per agent. Jobs may pin **packages** of the library by SHA-256, file name and size; the agent downloads them only for that job and checks size and hash before running the module. A download interrupted by the network is retried up to 6 times while the agent reconnects, resuming from the bytes already received (agent 1.1.3 and later).
 
 ### 6.4 Local policies on the endpoint ✅
 
