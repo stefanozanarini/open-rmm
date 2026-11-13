@@ -106,6 +106,9 @@
     menu.querySelectorAll("[data-only-files]").forEach(function (el) {
       if (!row.hasAttribute("data-files")) el.remove();
     });
+    menu.querySelectorAll("[data-only-screen]").forEach(function (el) {
+      if (!row.hasAttribute("data-screen")) el.remove();
+    });
     menu.querySelectorAll("[data-only-active]").forEach(function (el) {
       if (row.dataset.status !== "active") el.remove();
     });

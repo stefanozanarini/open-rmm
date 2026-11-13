@@ -16,10 +16,23 @@ import (
 	openrmmv1 "github.com/stefanozanarini/tempra-rmm/gen/openrmm/v1"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/jobreq"
 	"github.com/stefanozanarini/tempra-rmm/internal/console/store"
+	"github.com/stefanozanarini/tempra-rmm/internal/console/vuln"
 	"github.com/stefanozanarini/tempra-rmm/internal/ids"
 	"github.com/stefanozanarini/tempra-rmm/internal/modules"
 	"github.com/stefanozanarini/tempra-rmm/internal/screensession"
 )
+
+// minScreenAgent is the first agent version that can run the screenhelper
+// in the logged-on user's session (internal/agent/usersession); older
+// agents reject the screen module's context "user" outright.
+const minScreenAgent = "1.1.4"
+
+// screenAgent tells whether an agent version supports remote control. It
+// is only a cheap client-side hint for the context menu: the real check
+// is the module lookup in screenModuleFor/handleOpenScreen.
+func screenAgent(version string) bool {
+	return version != "" && vuln.CompareVersions(version, minScreenAgent) >= 0
+}
 
 // Remote-control sessions: one MFA approval opens a view of one agent's
 // screen, with mouse/keyboard control, for a limited time. Served the

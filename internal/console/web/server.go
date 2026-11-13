@@ -157,6 +157,7 @@ func funcs(lang string) template.FuncMap {
 		"t":            func(key string) string { return tr(lang, key) },
 		"help":         func(key string) template.HTML { return helpHTML(lang, key) },
 		"filesAgent":   filesAgent,
+		"screenAgent":  screenAgent,
 		"tf":           func(key string, args ...any) string { return trf(lang, key, args...) },
 		"th":           func(key string) template.HTML { return trHTML(lang, key) },
 		"msg":          func(s string) string { return trMessage(lang, s) },

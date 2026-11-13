@@ -1051,6 +1051,7 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	// Remote control
 	"Apri il controllo remoto": "Open remote control",
 	"Controllo remoto":         "Remote control",
+	"Controllo remoto…":        "Remote control…",
 	"Controllo remoto di %s":   "Remote control of %s",
 	"Il controllo remoto non è disponibile su questa console.":                                                                                                                                                                   "Remote control is not available on this console.",
 	"Sessione approvata da %s · al massimo %d minuti · richiede un utente collegato e con lo schermo sbloccato.":                                                                                                                 "Session approved by %s · at most %d minutes · requires a logged-on user with the screen unlocked.",
