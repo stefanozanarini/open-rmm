@@ -399,17 +399,6 @@ func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
 	if !ok {
 		return reject(job, "module %s has no action %q", m.ID, job.GetAction())
 	}
-	if action.Context == modules.ContextUser {
-		return reject(job, "user-context execution is not available yet")
-	}
-	if quiet && m.HasCapability(modules.CapAdHocScript) {
-		return reject(job, "modules that run ad-hoc code cannot be scheduled by policies")
-	}
-	// Local policy: decided on the endpoint (MSI/GPO), never by the console.
-	if m.HasCapability(modules.CapAdHocScript) && !e.cfg.AdHocScriptsAllowed() {
-		log.Warn("ad-hoc script refused by local policy")
-		return reject(job, "ad-hoc scripts are disabled by local policy on this endpoint")
-	}
 	if m.HasCapability(modules.CapFileSession) {
 		if quiet {
 			return reject(job, "file sessions cannot be scheduled by policies")
@@ -433,6 +422,31 @@ func (e *Executor) run(job *openrmmv1.Job, quiet bool) *openrmmv1.JobUpdate {
 		}
 		send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_ACCEPTED})
 		return e.runShell(job, filepath.Join(inst.FilesDir, filepath.FromSlash(ep.Path)), send, log)
+	}
+	if m.HasCapability(modules.CapScreenSession) {
+		if quiet {
+			return reject(job, "remote-control sessions cannot be scheduled by policies")
+		}
+		if !e.cfg.RemoteControlAllowed() {
+			log.Warn("remote control refused by local policy")
+			return reject(job, "remote-control sessions are disabled by local policy on this endpoint")
+		}
+		if err := modules.VerifyFiles(m, inst.FilesDir); err != nil {
+			return reject(job, "module integrity check failed: %v", err)
+		}
+		send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_ACCEPTED})
+		return e.runScreen(job, send, log)
+	}
+	if action.Context == modules.ContextUser {
+		return reject(job, "user-context execution is only available to remote-control sessions")
+	}
+	if quiet && m.HasCapability(modules.CapAdHocScript) {
+		return reject(job, "modules that run ad-hoc code cannot be scheduled by policies")
+	}
+	// Local policy: decided on the endpoint (MSI/GPO), never by the console.
+	if m.HasCapability(modules.CapAdHocScript) && !e.cfg.AdHocScriptsAllowed() {
+		log.Warn("ad-hoc script refused by local policy")
+		return reject(job, "ad-hoc scripts are disabled by local policy on this endpoint")
 	}
 	send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_ACCEPTED})
 

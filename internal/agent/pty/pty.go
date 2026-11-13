@@ -26,10 +26,10 @@ func clampSize(cols, rows uint16) (uint16, uint16) {
 	return min(cols, maxSize), min(rows, maxSize)
 }
 
-// envBlock builds a Windows environment block: UTF-16 "NAME=value" strings,
+// EnvBlock builds a Windows environment block: UTF-16 "NAME=value" strings,
 // each ending with a NUL, then a final NUL. (UTF16FromString cannot be used
 // on the whole block: it refuses strings containing NUL.)
-func envBlock(env []string) ([]uint16, error) {
+func EnvBlock(env []string) ([]uint16, error) {
 	var out []uint16
 	for _, e := range env {
 		if strings.ContainsRune(e, 0) || !strings.Contains(e, "=") {

@@ -79,7 +79,7 @@ func (p *Process) start(argv, env []string, dir string) error {
 			return err
 		}
 	}
-	envp, err := envBlock(env)
+	envp, err := EnvBlock(env)
 	if err != nil {
 		return err
 	}

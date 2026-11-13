@@ -1048,6 +1048,16 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"Torna all'agente":   "Back to the agent",
 	"Una sessione PowerShell su questo PC, approvata con MFA. Il PC deve consentirla con la policy locale (GPO) e ogni riga digitata è registrata.": "A PowerShell session on this PC, approved with MFA. The PC must allow it through its local policy (GPO), and every line typed is recorded.",
 
+	// Remote control
+	"Apri il controllo remoto": "Open remote control",
+	"Controllo remoto":         "Remote control",
+	"Controllo remoto di %s":   "Remote control of %s",
+	"Il controllo remoto non è disponibile su questa console.":                                                                                                                                                                   "Remote control is not available on this console.",
+	"Sessione approvata da %s · al massimo %d minuti · richiede un utente collegato e con lo schermo sbloccato.":                                                                                                                 "Session approved by %s · at most %d minutes · requires a logged-on user with the screen unlocked.",
+	"Vedi lo schermo e controlla mouse e tastiera, in una sessione approvata con MFA. Richiede un utente collegato con lo schermo sbloccato; il PC deve consentirla con la policy locale (GPO).":                                 "View the screen and control the mouse and keyboard, in an MFA-approved session. Requires a logged-on user with the screen unlocked; the PC must allow it through its local policy (GPO).",
+	"Controllo remoto del computer, a tempo: vedi lo schermo e muovi mouse e tastiera. Richiede un utente collegato con lo schermo sbloccato. Chiudi la sessione quando hai finito.":                                             "Remote control of the computer, for a limited time: view the screen and move the mouse and keyboard. Requires a logged-on user with the screen unlocked. Close the session when you are done.",
+	"Apre il controllo remoto del computer per il tempo scelto, dopo l'approvazione MFA. Serve un utente collegato con lo schermo sbloccato (Windows), il modulo screen pubblicato e la policy locale (GPO AllowRemoteControl).": "Opens remote control of the computer for the chosen time, after MFA approval. Requires a logged-on user with the screen unlocked (Windows), the screen module published and the local policy (GPO AllowRemoteControl).",
+
 	// Agent installers and code signing
 	"%d registrazioni": "%d enrollments",
 	"Almeno %d caratteri. La console non la conserva: servirà a ogni creazione di un installer. Se la perdi, dovrai creare una nuova chiave.": "At least %d characters. The console does not keep it: it is needed for every installer you build. If you lose it, you will have to create a new key.",

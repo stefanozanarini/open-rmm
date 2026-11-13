@@ -54,6 +54,10 @@ type Config struct {
 	// still needs an operator's MFA approval). Set it to false on endpoints
 	// that must never accept one (GPO).
 	AllowInteractiveShell *bool `json:"allow_interactive_shell,omitempty"`
+	// AllowRemoteControl is a local policy; default true (each session
+	// still needs an operator's MFA approval). Set it to false on endpoints
+	// that must never accept one (GPO).
+	AllowRemoteControl *bool `json:"allow_remote_control,omitempty"`
 
 	root        *x509.Certificate
 	keys        *signing.Keyring
@@ -212,4 +216,9 @@ func (c *Config) InteractiveShellAllowed() bool {
 // AdHocScriptsAllowed reports the effective local policy.
 func (c *Config) AdHocScriptsAllowed() bool {
 	return c.AllowAdHocScripts == nil || *c.AllowAdHocScripts
+}
+
+// RemoteControlAllowed reports the local policy for remote-control sessions.
+func (c *Config) RemoteControlAllowed() bool {
+	return c.AllowRemoteControl == nil || *c.AllowRemoteControl
 }

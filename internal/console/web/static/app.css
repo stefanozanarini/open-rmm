@@ -136,6 +136,7 @@ section.warn { background:var(--warn); border-color:var(--line); }
 header form.theme select, header form.lang select { padding:2px 4px; font-size:13px; }
 .terminal { height:70vh; background:#000; padding:6px; border:1px solid var(--line); }
 .shell-bar { display:flex; gap:12px; align-items:center; justify-content:space-between; margin:8px 0; }
+.screen-canvas { width:100%; max-height:80vh; background:#000; border:1px solid var(--line); cursor:default; }
 details.action { border:1px solid var(--line); border-radius:4px; background:var(--card); margin:6px 0; }
 details.action > summary { cursor:pointer; padding:8px 12px; }
 details.action[open] > summary { border-bottom:1px solid var(--line); }

@@ -1,0 +1,14 @@
+{
+  "id": "screen",
+  "version": "1.0.0",
+  "description": "Interactive remote-control session: view the screen and move the mouse/keyboard, for one MFA-approved session. Served by the agent itself; requires a logged-on, unlocked user session (Windows only).",
+  "protocol_version": 1,
+  "capabilities": ["screen_session"],
+  "entrypoints": {
+    "windows/amd64": { "type": "powershell", "path": "Screen.ps1" },
+    "windows/arm64": { "type": "powershell", "path": "Screen.ps1" }
+  },
+  "actions": {
+    "open": { "description": "Open a remote-control session (params: minutes, at most 60)", "context": "user", "timeout_seconds": 3600 }
+  }
+}

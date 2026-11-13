@@ -85,6 +85,7 @@ type agentData struct {
 	AD       *adPlace // computer object in Active Directory
 	Site     agentSite
 	Shell    bool // an interactive shell can be opened
+	Screen   bool // a remote-control session can be opened
 	Files    bool // a file session can be opened
 	// Packages of the library, to install from the agent page.
 	Packages []store.Package
@@ -185,6 +186,7 @@ func (s *Server) agentDetails(r *http.Request, t, id string) (*agentData, error)
 	}
 	if s.shell != nil && a.Status == store.AgentActive {
 		_, d.Shell = s.shellModuleFor(r, a)
+		_, d.Screen = s.screenModuleFor(r, a)
 		if _, man, ok := s.fileModule(r); ok && s.shell != nil {
 			_, d.Files = man.Entrypoints[a.Host.OS+"/"+a.Host.Arch]
 			d.Files = d.Files && filesAgent(a.Host.AgentVersion)

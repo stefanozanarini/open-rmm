@@ -372,6 +372,15 @@
 </form>
 <p class="muted">{{t "Una sessione PowerShell su questo PC, approvata con MFA. Il PC deve consentirla con la policy locale (GPO) e ogni riga digitata è registrata."}}</p>
 {{end}}
+{{if and .CanRun .Data.Screen}}
+<h2 id="act-screen">{{t "Controllo remoto"}}{{help "section:screen"}}</h2>
+<form method="post" action="/agents/{{.Data.Agent.ID}}/screen" class="inline">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>{{t "Durata"}} <select name="minutes"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">60 min</option></select></label>
+  <button class="primary">🖥️ {{t "Apri il controllo remoto"}}</button>
+</form>
+<p class="muted">{{t "Vedi lo schermo e controlla mouse e tastiera, in una sessione approvata con MFA. Richiede un utente collegato con lo schermo sbloccato; il PC deve consentirla con la policy locale (GPO)."}}</p>
+{{end}}
 {{if and .CanRun .Data.Files (eq .Data.Agent.Status "active")}}
 <h2 id="act-files">{{t "File"}}{{help "section:files"}}</h2>
 <form method="post" action="/agents/{{.Data.Agent.ID}}/files" class="inline">

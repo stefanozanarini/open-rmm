@@ -4,6 +4,7 @@
 //	openrmm-agent install [-config path]    install the Windows service (development; the MSI does this)
 //	openrmm-agent uninstall                 remove the Windows service
 //	openrmm-agent version
+//	openrmm-agent screenhelper              internal: screen capture/input, launched by the agent itself
 package main
 
 import (
@@ -20,6 +21,7 @@ import (
 
 	"github.com/stefanozanarini/tempra-rmm/internal/agent/client"
 	"github.com/stefanozanarini/tempra-rmm/internal/agent/config"
+	"github.com/stefanozanarini/tempra-rmm/internal/agent/screenhelper"
 	"github.com/stefanozanarini/tempra-rmm/internal/agent/secfile"
 	"github.com/stefanozanarini/tempra-rmm/internal/agent/svcctl"
 	"github.com/stefanozanarini/tempra-rmm/internal/agent/winsvc"
@@ -67,6 +69,12 @@ func run(args []string) error {
 	case "version":
 		fmt.Println(version)
 		return nil
+	case "screenhelper":
+		// Launched by the agent itself inside the logged-on user's
+		// session (internal/agent/usersession) to serve a remote-control
+		// job; never a user-facing command. Communicates on stdin/stdout,
+		// not the flags above.
+		return screenhelper.Run(os.Stdin, os.Stdout)
 	default:
 		return fmt.Errorf("unknown command %q", cmd)
 	}

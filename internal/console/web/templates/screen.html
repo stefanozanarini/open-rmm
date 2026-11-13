@@ -1,0 +1,10 @@
+{{define "content"}}
+{{with .Data}}
+<p class="muted">{{tf "Sessione approvata da %s · al massimo %d minuti · richiede un utente collegato e con lo schermo sbloccato." .By .Minutes}}
+ <a href="/agents/{{.Agent.ID}}">{{t "Torna all'agente"}}</a></p>
+<div class="shell-bar"><span id="screen-status">{{t "Connessione…"}}</span> <button type="button" id="screen-close" class="danger">{{t "Chiudi la sessione"}}</button></div>
+<canvas id="screen-canvas" class="screen-canvas" tabindex="0" data-ws="/screen/{{.Job.ID}}/ws"
+  data-connected="{{t "Connesso"}}" data-closed="{{t "Sessione terminata"}}"></canvas>
+<script src="/static/screen.js"></script>
+{{end}}
+{{end}}

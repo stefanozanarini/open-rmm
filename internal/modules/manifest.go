@@ -38,13 +38,17 @@ const (
 	// CapFileSession: the agent serves an interactive file session (browse,
 	// download, upload) for the job; the module carries no code for it.
 	CapFileSession = "file_session"
+	// CapScreenSession: the agent serves an interactive remote-control
+	// session (view the screen, move the mouse, type) for the job; the
+	// module carries no code for it, same as CapFileSession.
+	CapScreenSession = "screen_session"
 )
 
 // Execution contexts.
 const (
 	ContextSystem = "system"
-	// ContextUser runs in the logged-on user's session through the user
-	// helper (not implemented yet).
+	// ContextUser runs in the logged-on user's session, through the user
+	// helper (Windows only; see internal/agent/usersession).
 	ContextUser = "user"
 )
 
@@ -123,7 +127,7 @@ func (m *Manifest) HasCapability(c string) bool {
 // Interactive tells whether the module opens a session an operator works
 // in (shell, files): never a generic command nor a policy rule.
 func (m *Manifest) Interactive() bool {
-	return m.HasCapability(CapInteractiveShell) || m.HasCapability(CapFileSession)
+	return m.HasCapability(CapInteractiveShell) || m.HasCapability(CapFileSession) || m.HasCapability(CapScreenSession)
 }
 
 // Validate checks the static parts of a manifest. complete requires the
@@ -174,7 +178,7 @@ func (m *Manifest) Validate(complete bool) error {
 		}
 	}
 	for _, c := range m.Capabilities {
-		if c != CapAdHocScript && c != CapInteractiveShell && c != CapFileSession {
+		if c != CapAdHocScript && c != CapInteractiveShell && c != CapFileSession && c != CapScreenSession {
 			return fmt.Errorf("unknown capability %q", c)
 		}
 	}

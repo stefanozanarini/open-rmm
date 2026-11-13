@@ -117,6 +117,21 @@ func TestManifestValidation(t *testing.T) {
 	}
 }
 
+func TestScreenSessionCapability(t *testing.T) {
+	m := baseManifest()
+	m.Capabilities = []string{CapScreenSession}
+	m.Actions = map[string]Action{"open": {Context: ContextUser}}
+	if err := m.Validate(false); err != nil {
+		t.Fatalf("valid manifest rejected: %v", err)
+	}
+	if !m.HasCapability(CapScreenSession) {
+		t.Error("HasCapability(CapScreenSession) = false")
+	}
+	if !m.Interactive() {
+		t.Error("Interactive() = false for a screen_session module")
+	}
+}
+
 func TestPackRejectsCaseInsensitiveDuplicates(t *testing.T) {
 	m := baseManifest()
 	if _, err := Pack(m, srcDir(t, map[string]string{"main.sh": "a", "Main.sh": "b"}), nil); err == nil {

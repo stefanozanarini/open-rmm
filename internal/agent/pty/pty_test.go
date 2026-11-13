@@ -51,7 +51,7 @@ func TestShellOnPTY(t *testing.T) {
 }
 
 func TestEnvBlock(t *testing.T) {
-	b, err := envBlock([]string{"A=1", "PATH=C:\\Windows", "È=ü"})
+	b, err := EnvBlock([]string{"A=1", "PATH=C:\\Windows", "È=ü"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,11 +59,11 @@ func TestEnvBlock(t *testing.T) {
 	if !slices.Equal(b, want) {
 		t.Fatalf("block = %v", b)
 	}
-	if b, _ := envBlock(nil); !slices.Equal(b, []uint16{0, 0}) {
+	if b, _ := EnvBlock(nil); !slices.Equal(b, []uint16{0, 0}) {
 		t.Fatalf("empty block = %v", b)
 	}
 	for _, bad := range []string{"A=1\x00B=2", "NOEQUALS"} {
-		if _, err := envBlock([]string{bad}); err == nil {
+		if _, err := EnvBlock([]string{bad}); err == nil {
 			t.Errorf("%q accepted", bad)
 		}
 	}
