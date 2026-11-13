@@ -1756,5 +1756,11 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"Esegui un workflow…":                  "Run a workflow…",
 	"Login falliti negli ultimi %d giorni": "Failed logons in the last %d days",
 	"Spesso in testa ci sono i domain controller, che registrano anche i tentativi falliti verso altri computer: non significa che siano loro il bersaglio.": "Domain controllers are often at the top, since they also record failed attempts aimed at other computers: that does not mean they are the target.",
-	"Tentativi falliti": "Failed attempts",
+	"Tentativi falliti":                            "Failed attempts",
+	"Computer di un grafico della Dashboard (%d).": "Computers from a Dashboard chart (%d).",
+	"In buona salute":                              "In good health",
+	"In usura":                                     "Wearing",
+	"Usurata":                                      "Worn",
+	"mostra tutti gli agenti":                      "show all agents",
+	"usura dei portatili, dall'inventario":         "laptop wear, from the inventory",
 }

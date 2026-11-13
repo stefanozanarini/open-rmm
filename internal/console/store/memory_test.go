@@ -416,6 +416,12 @@ func testSecurity(t *testing.T, s Store) {
 	if w, _ := s.WorstChecks(ctx, tenant.ID); w[agent.ID] != CheckFailing {
 		t.Fatalf("worst = %+v", w)
 	}
+	if byID, _ := s.ChecksByID(ctx, tenant.ID, "trendmicro/sep"); len(byID) != 1 || byID[agent.ID].Status != CheckFailing {
+		t.Fatalf("by id = %+v", byID)
+	}
+	if byID, _ := s.ChecksByID(ctx, tenant.ID, "no/such"); len(byID) != 0 {
+		t.Fatalf("unknown check id = %+v", byID)
+	}
 
 	// Alerts: merged while open, new after acknowledgement.
 	a := Alert{TenantID: tenant.ID, AgentID: agent.ID, Severity: SeverityWarning, Kind: "k", Summary: "one", DedupeKey: "key",

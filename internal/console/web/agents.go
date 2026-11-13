@@ -55,9 +55,12 @@ type agentsData struct {
 	NoSite                   int
 	OUs                      []ouView // Active Directory containers holding agents
 	Pending, Active, Revoked []agentRow
-	Selected                 *agentData
-	Tab                      string
-	Tabs                     []panelTab
+	// Drilldown: the list is filtered to the agents named by ?ids=
+	// (a dashboard donut segment), not by the usual filters.
+	Drilldown bool
+	Selected  *agentData
+	Tab       string
+	Tabs      []panelTab
 	// Links keep the current filters.
 	SelectAllURL, ClearURL string
 }
@@ -264,7 +267,17 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	var ouKeys, allOUs []string
 	needle := strings.ToLower(d.Query)
 	lastUsers, userTTL := s.lastUsers(r.Context(), t)
+	wantIDs := map[string]bool{}
+	for _, id := range strings.Split(q.Get("ids"), ",") {
+		if ids.IsUUID(id) {
+			wantIDs[id] = true
+			d.Drilldown = true
+		}
+	}
 	for _, a := range agents {
+		if d.Drilldown && !wantIDs[a.ID] {
+			continue
+		}
 		row := agentRow{Agent: a, Inv: sums[a.ID], Online: s.online(a), Checks: worst[a.ID], Alerts: alerts[a.ID],
 			Current: a.ID == selected}
 		lu, hasLU := lastUsers[a.ID]

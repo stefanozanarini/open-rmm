@@ -69,6 +69,7 @@
   </details>
 </aside>
 <div class="main">
+{{if .Drilldown}}<p class="flash">{{tf "Computer di un grafico della Dashboard (%d)." (len .Active)}} <a href="/agents">{{t "mostra tutti gli agenti"}}</a></p>{{end}}
 <div class="toolbar">
   <nav class="tabs">
     <a href="/agents{{qs "site" .Site "q" .Query "ou" .OU "group" .Group}}" {{if eq .Family ""}}class="current"{{end}}>{{tf "Tutti (%d)" (index .Counts "")}}</a>

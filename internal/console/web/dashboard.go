@@ -76,6 +76,27 @@ type part struct {
 	X, W         float64
 }
 
+// checkBucket tallies agents into four states (ok, warning, critical, no
+// data), keeping each state's agent ids so its donut segment can link to
+// exactly them.
+type checkBucket struct {
+	n   [4]int
+	ids [4][]string
+}
+
+func (b *checkBucket) add(state int, agentID string) {
+	b.n[state]++
+	b.ids[state] = append(b.ids[state], agentID)
+}
+
+// link is the agent list filtered to this bucket's agents.
+func (b *checkBucket) link(state int) string {
+	if len(b.ids[state]) == 0 {
+		return ""
+	}
+	return "/agents?" + url.Values{"ids": {strings.Join(b.ids[state], ",")}}.Encode()
+}
+
 func newDonut(title, sub string, segs []seg) donut {
 	d := donut{Title: title, Sub: sub}
 	for _, s := range segs {
@@ -267,7 +288,15 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 	versions := map[string]int{}
 	var boot [6]int // <7d, 7-30, 30-60, 60-90, >90, unknown
 	var patch [5]int
-	var av, disk, bl [4]int // ok, warning, critical, no data
+	var av, disk, bl, bat checkBucket // ok, warning, critical, no data
+	avChecks, err := s.store.ChecksByID(ctx, t, "protection-status/antivirus")
+	if err != nil {
+		return nil, err
+	}
+	batChecks, err := s.store.ChecksByID(ctx, t, "inventory/battery")
+	if err != nil {
+		return nil, err
+	}
 	var outdated []bar
 	type swFamily struct {
 		search   string
@@ -351,14 +380,18 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 		}
 		// Antivirus, from the protection-status check.
 		avState := 3
-		if checks, err := s.store.ListChecks(ctx, t, a.ID); err == nil {
-			for _, c := range checks {
-				if c.CheckID == "protection-status/antivirus" {
-					avState = map[string]int{store.CheckOK: 0, store.CheckWarning: 1, store.CheckFailing: 2}[c.Status]
-				}
-			}
+		if c, ok := avChecks[a.ID]; ok {
+			avState = map[string]int{store.CheckOK: 0, store.CheckWarning: 1, store.CheckFailing: 2}[c.Status]
 		}
-		av[avState]++
+		av.add(avState, a.ID)
+		// Battery wear, laptops only (same test as the device-type split).
+		if inv != nil && len(inv.Batteries) > 0 {
+			batState := 3
+			if c, ok := batChecks[a.ID]; ok {
+				batState = map[string]int{store.CheckOK: 0, store.CheckWarning: 1, store.CheckFailing: 2}[c.Status]
+			}
+			bat.add(batState, a.ID)
+		}
 		// Free space: the fullest fixed volume.
 		diskState := 3
 		if inv != nil {
@@ -378,7 +411,7 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 				diskState = 0
 			}
 		}
-		disk[diskState]++
+		disk.add(diskState, a.ID)
 		// BitLocker on the system volume.
 		blState := 3
 		if inv != nil {
@@ -395,7 +428,7 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 				}
 			}
 		}
-		bl[blState]++
+		bl.add(blState, a.ID)
 		// Pending updates: Windows (important and other) and applications.
 		if n := st.Important + st.Other + third[a.ID]; n > 0 {
 			outdated = append(outdated, bar{Label: a.Host.Hostname, Link: "/agents/" + a.ID + "#patches", Count: n,
@@ -468,22 +501,28 @@ func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, erro
 			{Label: tr(lang, "In regola"), Class: "st-good", Count: patch[3], Link: "/patches?" + q("show", "compliant")},
 		}),
 		newDonut(tr(lang, "Antivirus"), tr(lang, "dal controllo protection-status"), []seg{
-			{Label: tr(lang, "Assente o disattivato"), Class: "st-critical", Count: av[2]},
-			{Label: tr(lang, "Da verificare"), Class: "st-warning", Count: av[1]},
-			{Label: tr(lang, "Nessun dato"), Class: "st-none", Count: av[3]},
-			{Label: tr(lang, "Attivo"), Class: "st-good", Count: av[0]},
+			{Label: tr(lang, "Assente o disattivato"), Class: "st-critical", Count: av.n[2], Link: av.link(2)},
+			{Label: tr(lang, "Da verificare"), Class: "st-warning", Count: av.n[1], Link: av.link(1)},
+			{Label: tr(lang, "Nessun dato"), Class: "st-none", Count: av.n[3], Link: av.link(3)},
+			{Label: tr(lang, "Attivo"), Class: "st-good", Count: av.n[0], Link: av.link(0)},
 		}),
 		newDonut(tr(lang, "Spazio disco"), tr(lang, "il volume più pieno di ogni agente"), []seg{
-			{Label: tr(lang, "Libero: meno del 10%"), Class: "st-critical", Count: disk[2]},
-			{Label: tr(lang, "Libero: meno del 20%"), Class: "st-warning", Count: disk[1]},
-			{Label: tr(lang, "Nessun dato"), Class: "st-none", Count: disk[3]},
-			{Label: tr(lang, "Spazio sufficiente"), Class: "st-good", Count: disk[0]},
+			{Label: tr(lang, "Libero: meno del 10%"), Class: "st-critical", Count: disk.n[2], Link: disk.link(2)},
+			{Label: tr(lang, "Libero: meno del 20%"), Class: "st-warning", Count: disk.n[1], Link: disk.link(1)},
+			{Label: tr(lang, "Nessun dato"), Class: "st-none", Count: disk.n[3], Link: disk.link(3)},
+			{Label: tr(lang, "Spazio sufficiente"), Class: "st-good", Count: disk.n[0], Link: disk.link(0)},
 		}),
 		newDonut("BitLocker", tr(lang, "volume di sistema"), []seg{
-			{Label: tr(lang, "Non cifrato"), Class: "st-critical", Count: bl[2]},
-			{Label: tr(lang, "Sospeso o in corso"), Class: "st-warning", Count: bl[1]},
-			{Label: tr(lang, "Nessun dato"), Class: "st-none", Count: bl[3]},
-			{Label: tr(lang, "Cifrato"), Class: "st-good", Count: bl[0]},
+			{Label: tr(lang, "Non cifrato"), Class: "st-critical", Count: bl.n[2], Link: bl.link(2)},
+			{Label: tr(lang, "Sospeso o in corso"), Class: "st-warning", Count: bl.n[1], Link: bl.link(1)},
+			{Label: tr(lang, "Nessun dato"), Class: "st-none", Count: bl.n[3], Link: bl.link(3)},
+			{Label: tr(lang, "Cifrato"), Class: "st-good", Count: bl.n[0], Link: bl.link(0)},
+		}),
+		newDonut(tr(lang, "Batteria"), tr(lang, "usura dei portatili, dall'inventario"), []seg{
+			{Label: tr(lang, "Usurata"), Class: "st-critical", Count: bat.n[2], Link: bat.link(2)},
+			{Label: tr(lang, "In usura"), Class: "st-warning", Count: bat.n[1], Link: bat.link(1)},
+			{Label: tr(lang, "Nessun dato"), Class: "st-none", Count: bat.n[3], Link: bat.link(3)},
+			{Label: tr(lang, "In buona salute"), Class: "st-good", Count: bat.n[0], Link: bat.link(0)},
 		}),
 	)
 	// Distributions with more classes: bars, the largest first, the rest

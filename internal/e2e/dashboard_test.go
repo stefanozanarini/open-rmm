@@ -18,8 +18,10 @@ func TestConsoleDashboard(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	boot := now.Add(-45 * 24 * time.Hour)
+	ids := make([]string, 3)
 	for i, name := range []string{"PC-01", "PC-02", "PC-03"} {
 		id := e.addWindowsAgent(t, name)
+		ids[i] = id
 		e.store.UpdateAgentSeen(ctx, e.tenant, id, &store.HostInfo{Hostname: name, OS: "windows", Arch: "amd64", OSFamily: "client",
 			AgentVersion: "1.0.2", OSVersion: "Windows 11"}, now, nil)
 		inv := inventory.Inventory{Schema: 1, CollectedAt: now.UTC(), OS: inventory.OS{Name: "Microsoft Windows 11 Pro", DisplayVersion: "24H2", LastBoot: &boot},
@@ -50,6 +52,9 @@ func TestConsoleDashboard(t *testing.T) {
 			status = store.CheckFailing
 		}
 		e.store.PutCheck(ctx, store.Check{TenantID: e.tenant, AgentID: id, CheckID: "protection-status/antivirus", Status: status, UpdatedAt: now})
+		if i == 0 { // the only laptop (has a battery)
+			e.store.PutCheck(ctx, store.Check{TenantID: e.tenant, AgentID: id, CheckID: "inventory/battery", Status: store.CheckOK, UpdatedAt: now})
+		}
 	}
 	c, _ := e.login(t, admin)
 	_, body := get(t, c, e.console.URL+"/reports")
@@ -85,5 +90,23 @@ func TestConsoleDashboard(t *testing.T) {
 	}
 	if strings.Contains(body, "style=") {
 		t.Fatal("inline style: blocked by the CSP")
+	}
+
+	// Battery donut: only PC-01 has one, and it is healthy.
+	if !strings.Contains(body, "Batteria") || !strings.Contains(body, "In buona salute") {
+		t.Fatalf("battery donut missing: %s", body)
+	}
+	avFailLink := "/agents?ids=" + ids[2]
+	if !strings.Contains(body, `href="`+avFailLink+`"`) {
+		t.Fatalf("antivirus segment not linked to PC-03: %s", body)
+	}
+	_, drill := get(t, c, e.console.URL+avFailLink)
+	if !strings.Contains(drill, "Computer di un grafico della Dashboard (1).") || !strings.Contains(drill, ">PC-03<") ||
+		strings.Contains(drill, ">PC-01<") || strings.Contains(drill, ">PC-02<") {
+		t.Fatalf("drilldown = %s", drill)
+	}
+	batGoodLink := "/agents?ids=" + ids[0]
+	if !strings.Contains(body, `href="`+batGoodLink+`"`) {
+		t.Fatalf("battery segment not linked to PC-01: %s", body)
 	}
 }

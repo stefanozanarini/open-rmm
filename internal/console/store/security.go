@@ -131,6 +131,9 @@ type SecurityStore interface {
 	ListChecks(ctx context.Context, tenantID, agentID string) ([]Check, error)
 	// WorstChecks returns the worst check status of each agent.
 	WorstChecks(ctx context.Context, tenantID string) (map[string]string, error)
+	// ChecksByID returns one specific check (e.g. "protection-status/antivirus")
+	// across every agent that reported it, keyed by agent id.
+	ChecksByID(ctx context.Context, tenantID, checkID string) (map[string]Check, error)
 
 	// RaiseAlert opens an alert, or updates the open alert with the same
 	// dedupe key (count, last seen). It reports whether a new one was opened.
@@ -246,6 +249,18 @@ func (m *Memory) WorstChecks(_ context.Context, tenantID string) (map[string]str
 	for _, c := range m.sec().checks {
 		if c.TenantID == tenantID {
 			out[c.AgentID] = Worse(out[c.AgentID], c.Status)
+		}
+	}
+	return out, nil
+}
+
+func (m *Memory) ChecksByID(_ context.Context, tenantID, checkID string) (map[string]Check, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]Check{}
+	for _, c := range m.sec().checks {
+		if c.TenantID == tenantID && c.CheckID == checkID {
+			out[c.AgentID] = c
 		}
 	}
 	return out, nil
@@ -528,6 +543,26 @@ func (p *Postgres) WorstChecks(ctx context.Context, tenantID string) (map[string
 				return err
 			}
 			out[a] = Worse(out[a], s)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func (p *Postgres) ChecksByID(ctx context.Context, tenantID, checkID string) (map[string]Check, error) {
+	out := map[string]Check{}
+	err := p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT agent_id::text, status, summary, updated_at FROM agent_checks WHERE check_id = $1`, checkID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			c := Check{TenantID: tenantID, CheckID: checkID}
+			if err := rows.Scan(&c.AgentID, &c.Status, &c.Summary, &c.UpdatedAt); err != nil {
+				return err
+			}
+			out[c.AgentID] = c
 		}
 		return rows.Err()
 	})
