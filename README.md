@@ -6,8 +6,6 @@
 - **Console** that can be hosted at the customer, multi-tenant, and federable under a central console.
 - **Outbound-only connections** from the endpoints, mTLS with a pinned private CA, every command approved with a fresh MFA sign-in.
 
-The project was called open-rmm until November 2026. Technical identifiers keep that name so that installed agents keep working: services `openrmm-agent` and `openrmm-watchdog`, folders and registry keys `open-rmm`, the `OPENRMM_*` variables, the `openrmm.v1` protocol, the Entra role `OpenRMM.Admin`, the ADMX files and the module ids.
-
 The project is at an early stage. The full design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Status
