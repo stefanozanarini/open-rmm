@@ -2,6 +2,24 @@
 {{with .Data}}
 <p>{{t "Agenti selezionati:"}} {{range $i, $a := .Agents}}{{if $i}}, {{end}}{{$a.Host.Hostname}}{{end}}.</p>
 <p class="muted">{{t "Una sola autenticazione con Microsoft approva l'azione su tutti gli agenti selezionati; ognuno riceve un proprio comando firmato."}}</p>
+{{with .Group}}<p><a href="/groups/{{.ID}}">{{tf "Torna al gruppo %s" .Name}}</a> · <span class="muted">{{t "I computer non approvati del gruppo sono esclusi."}}</span></p>{{end}}
+{{if not .Group}}
+<h2>{{t "Aggiungi a un gruppo"}}</h2>
+{{if .Groups}}<div><form method="post" action="/groups/agents" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <select name="group" aria-label="{{t "Gruppo"}}">{{range .Groups}}<option value="{{.ID}}">{{.Name}}{{if .Owner}} ({{t "personale"}}){{end}}</option>{{end}}</select>
+  <button>{{t "Aggiungi"}}</button>
+</form></div>{{end}}
+<div><form method="post" action="/groups" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  {{range .Agents}}<input type="hidden" name="agent" value="{{.ID}}">{{end}}
+  <input type="hidden" name="kind" value="computer">
+  <input name="name" required maxlength="64" placeholder="{{t "Nome del nuovo gruppo"}}" aria-label="{{t "Nome del nuovo gruppo"}}">
+  <select name="scope" aria-label="{{t "Visibilità"}}"><option value="personal">{{t "Personale"}}</option><option value="public">{{t "Pubblico"}}</option></select>
+  <button>{{t "Crea il gruppo"}}</button>
+</form></div>
+{{end}}
 {{if .Sites}}
 <h2>{{t "Sposta nella sede"}}</h2>
 <form method="post" action="/agents/site" class="inline">

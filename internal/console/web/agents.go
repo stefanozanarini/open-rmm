@@ -31,6 +31,8 @@ type agentRow struct {
 	Current    bool // shown in the bottom panel
 	Checked    bool
 	User       userView // logged on, or last seen for a few days
+	// UserNames: the names of the user in Active Directory, when known.
+	UserNames []string
 }
 
 type siteView struct {
@@ -46,6 +48,8 @@ type panelTab struct {
 
 type agentsData struct {
 	Family, Query, Site, OU  string
+	Group                    string      // group id filter
+	Groups                   []groupView // visible groups, Computers counted on all agents
 	Counts                   map[string]int
 	Sites                    []siteView
 	NoSite                   int
@@ -63,10 +67,26 @@ func (s *Server) online(a store.Agent) bool {
 }
 
 // matches tells whether every word of q (lower case) appears in one of the
-// row's fields: "fr01 26h2" finds the Windows 11 26H2 PCs named FR01….
+// row's fields: "fr01 26h2" finds the Windows 11 26H2 PCs named FR01…. A
+// word with * matches a whole field, * standing for any text: "fr01*"
+// starts with FR01, "*l" ends with L. Users match with and without their
+// domain: "mario*" finds CORP\mario.rossi and mario.rossi@corp.it; with
+// Active Directory also by name: "rossi", "mario rossi".
 func (r agentRow) matches(q string) bool {
-	fields := []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial, r.Inv.LoggedOnUser, r.User.Name,
+	fields := []string{r.Host.Hostname, r.Inv.Model, r.Inv.Manufacturer, r.Inv.Serial,
 		r.Inv.SupremoID, r.Inv.AnyDeskID, r.Inv.TeamViewerID, r.Host.OSVersion, r.Host.AgentVersion, r.Site, r.OU, r.ID}
+	fields = append(fields, r.UserNames...)
+	for _, u := range []string{r.Inv.LoggedOnUser, r.User.Name} {
+		if u == "" {
+			continue
+		}
+		fields = append(fields, u)
+		if _, name, ok := strings.Cut(u, `\`); ok {
+			fields = append(fields, name)
+		} else if name, _, ok := strings.Cut(u, "@"); ok {
+			fields = append(fields, name)
+		}
+	}
 	fields = append(fields, r.Inv.IPv4...)
 	if r.LastSeenIP != nil {
 		fields = append(fields, r.LastSeenIP.String())
@@ -77,7 +97,7 @@ func (r agentRow) matches(q string) bool {
 	for _, word := range strings.Fields(q) {
 		found := false
 		for _, f := range fields {
-			if strings.Contains(f, word) {
+			if wildcardMatch(word, f) {
 				found = true
 				break
 			}
@@ -87,6 +107,28 @@ func (r agentRow) matches(q string) bool {
 		}
 	}
 	return true
+}
+
+// wildcardMatch: without *, word appears in s; with *, s is word with each
+// * standing for any text ("*" alone matches anything).
+func wildcardMatch(word, s string) bool {
+	if !strings.Contains(word, "*") {
+		return strings.Contains(s, word)
+	}
+	parts := strings.Split(word, "*")
+	if !strings.HasPrefix(s, parts[0]) {
+		return false
+	}
+	s = s[len(parts[0]):]
+	last := parts[len(parts)-1]
+	for _, p := range parts[1 : len(parts)-1] {
+		i := strings.Index(s, p)
+		if i < 0 {
+			return false
+		}
+		s = s[i+len(p):]
+	}
+	return strings.HasSuffix(s, last)
 }
 
 // siteMatcher assigns agents to sites: by hand when an operator moved them,
@@ -186,6 +228,7 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	places := adPlaces(snaps)
+	adUsers := adinv.NewUserIndex(snaps)
 	d := agentsData{Family: q.Get("family"), Query: strings.TrimSpace(q.Get("q")), Site: q.Get("site"), OU: q.Get("ou"),
 		Counts: map[string]int{}}
 	if d.Family != "client" && d.Family != "server" {
@@ -203,6 +246,20 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	matcher := newSiteMatcher(sites, manual)
+	groups, err := s.visibleGroups(r, t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var inGroup *groupMatcher
+	matchers := make([]groupMatcher, len(groups))
+	for i, g := range groups {
+		matchers[i] = newGroupMatcher(g)
+		d.Groups = append(d.Groups, groupView{Group: g, Personal: g.Owner != ""})
+		if g.ID == q.Get("group") {
+			d.Group, inGroup = g.ID, &matchers[i]
+		}
+	}
 	siteCount := map[string]int{}
 	var ouKeys, allOUs []string
 	needle := strings.ToLower(d.Query)
@@ -212,6 +269,17 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 			Current: a.ID == selected}
 		lu, hasLU := lastUsers[a.ID]
 		row.User = s.userFor(a, row.Inv, lu, hasLU, userTTL)
+		if u, ok := adUsers.Lookup(row.User.Name); ok {
+			row.UserNames = append([]string{u.Label()}, u.Names()...)
+		}
+		for i, m := range matchers {
+			if m.has(a.ID, row.User.Name) {
+				d.Groups[i].Computers++
+			}
+		}
+		if inGroup != nil && !inGroup.has(a.ID, row.User.Name) {
+			continue
+		}
 		var siteID string
 		siteID, row.Site, row.SiteManual = matcher.match(a, row.Inv)
 		ouKey := ""
@@ -277,6 +345,9 @@ func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
 			base.Set(k, v)
 		}
 	}
+	if d.Group != "" {
+		base.Set("group", d.Group)
+	}
 	link := func(extra url.Values) string {
 		v := url.Values{}
 		for k, vs := range base {
@@ -334,6 +405,9 @@ func rowLink(d agentsData, agentID string) string {
 	}
 	if d.OU != "" {
 		v.Set("ou", d.OU)
+	}
+	if d.Group != "" {
+		v.Set("group", d.Group)
 	}
 	if d.Tab != "" {
 		v.Set("tab", d.Tab)

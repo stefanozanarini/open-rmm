@@ -800,3 +800,68 @@ func testLastUser(t *testing.T, s Store) {
 		t.Fatalf("unknown agent: %v", err)
 	}
 }
+
+func TestGroups(t *testing.T) { testGroups(t, NewMemory()) }
+
+func testGroups(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	s.CreateTenant(ctx, tenant)
+	pcs := Group{TenantID: tenant.ID, ID: ids.NewUUID(), Name: "Contabilità", Kind: GroupComputer, CreatedBy: "anna"}
+	if err := s.PutGroup(ctx, pcs); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutGroup(ctx, Group{TenantID: tenant.ID, ID: ids.NewUUID(), Name: "Contabilità", Kind: GroupUser, CreatedBy: "bob"}); err != ErrGroupExists {
+		t.Fatalf("duplicate public name: %v", err)
+	}
+	// The same name is fine for a personal group.
+	mine := Group{TenantID: tenant.ID, ID: ids.NewUUID(), Name: "Contabilità", Kind: GroupUser, Owner: "bob", CreatedBy: "bob"}
+	if err := s.PutGroup(ctx, mine); err != nil {
+		t.Fatal(err)
+	}
+	a, b := ids.NewUUID(), ids.NewUUID()
+	if err := s.AddGroupMembers(ctx, tenant.ID, pcs.ID, []string{b, a, b}); err != nil {
+		t.Fatal(err)
+	}
+	s.AddGroupMembers(ctx, tenant.ID, mine.ID, []string{`CORP\mario`})
+	pcs.Name, pcs.Kind = "Amministrazione", GroupUser // the kind cannot change
+	if err := s.PutGroup(ctx, pcs); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.ListGroups(ctx, tenant.ID)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("groups = %+v, %v", list, err)
+	}
+	g := list[0]
+	want := []string{a, b}
+	if b < a {
+		want = []string{b, a}
+	}
+	if g.Name != "Amministrazione" || g.Kind != GroupComputer || g.CreatedBy != "anna" || len(g.Members) != 2 || g.Members[0] != want[0] || g.Members[1] != want[1] {
+		t.Fatalf("group = %+v", g)
+	}
+	if list[1].Owner != "bob" || len(list[1].Members) != 1 || list[1].Members[0] != `CORP\mario` {
+		t.Fatalf("personal group = %+v", list[1])
+	}
+	if err := s.RemoveGroupMembers(ctx, tenant.ID, pcs.ID, []string{a}); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ = s.ListGroups(ctx, tenant.ID); len(list[0].Members) != 1 || list[0].Members[0] != b {
+		t.Fatalf("after remove: %+v", list[0])
+	}
+	if other, _ := s.ListGroups(ctx, ids.NewUUID()); len(other) != 0 {
+		t.Fatal("group visible from another tenant")
+	}
+	if err := s.DeleteGroup(ctx, tenant.ID, pcs.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteGroup(ctx, tenant.ID, pcs.ID); err != ErrNotFound {
+		t.Fatalf("delete twice: %v", err)
+	}
+	if err := s.AddGroupMembers(ctx, tenant.ID, pcs.ID, []string{a}); err != ErrNotFound {
+		t.Fatalf("add to deleted group: %v", err)
+	}
+	if list, _ = s.ListGroups(ctx, tenant.ID); len(list) != 1 {
+		t.Fatalf("after delete: %+v", list)
+	}
+}

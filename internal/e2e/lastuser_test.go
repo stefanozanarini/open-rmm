@@ -39,3 +39,27 @@ func TestLastUserShown(t *testing.T) {
 		t.Fatal("out-of-range days accepted")
 	}
 }
+
+// With the Active Directory report, computers are found by the name of
+// their user, and * stands for any text.
+func TestSearchByUserName(t *testing.T) {
+	e := startConsole(t)
+	ctx := context.Background()
+	pc := e.addWindowsAgent(t, "PC-CONTA01")
+	e.addWindowsAgent(t, "PC-MAGAZZINO")
+	e.store.SetLastUser(ctx, e.tenant, pc, store.LastUser{User: `CORP\mrossi`, SeenAt: time.Now(), Source: store.LastUserLogon})
+	e.store.PutADDomain(ctx, store.ADDomain{TenantID: e.tenant, Domain: "corp.local", AgentID: pc, CollectedAt: time.Now(),
+		Data: []byte(`{"schema":1,"domain":"corp.local","collected_at":"2026-11-13T10:00:00Z","computers":[],
+			"users":[{"sam":"mrossi","given_name":"Mario","surname":"Rossi","display_name":"Mario Rossi"}]}`)})
+	c, _ := e.login(t, admin)
+	for q, want := range map[string]bool{"rossi": true, "mario+rossi": true, "mros*": true, "pc-conta*": true, "*01": true,
+		"conta*": false, "bianchi": false} {
+		_, body := get(t, c, e.console.URL+"/agents?q="+q)
+		if got := strings.Contains(body, ">PC-CONTA01<"); got != want || strings.Contains(body, ">PC-MAGAZZINO<") {
+			t.Errorf("q=%s: found=%v", q, got)
+		}
+		if want && !strings.Contains(body, "Mario Rossi") {
+			t.Errorf("q=%s: AD name not shown", q)
+		}
+	}
+}

@@ -61,3 +61,32 @@ func TestParseRejects(t *testing.T) {
 		}
 	}
 }
+
+func TestUsers(t *testing.T) {
+	raw := `{"schema":1,"domain":"corp.local","collected_at":"2026-11-13T10:00:00Z","computers":[],"users":[
+	 {"sam":"mario.rossi","upn":"mario.rossi@corp.it","given_name":"Mario","surname":"Rossi","display_name":"Rossi Mario - Contabilità"},
+	 {"sam":"anna","given_name":"Anna","surname":"Verdi"},
+	 {"sam":"","display_name":"no account"},
+	 {"sam":"bad","display_name":"a\u0000b"}]}`
+	s, err := Parse([]byte(raw))
+	if err != nil || len(s.Users) != 2 {
+		t.Fatalf("users = %+v, %v", s, err)
+	}
+	idx := NewUserIndex([]*Snapshot{s})
+	for _, name := range []string{`CORP\Mario.Rossi`, "mario.rossi@corp.it", "MARIO.ROSSI", "mario.rossi@corp.local"} {
+		if u, ok := idx.Lookup(name); !ok || u.SAM != "mario.rossi" {
+			t.Errorf("Lookup(%q) = %+v, %v", name, u, ok)
+		}
+	}
+	if _, ok := idx.Lookup(`CORP\luigi`); ok {
+		t.Error("unknown user found")
+	}
+	u, _ := idx.Lookup("anna")
+	if u.Label() != "Anna Verdi" || strings.Join(u.Names(), "|") != "Anna|Verdi" {
+		t.Errorf("anna: %q %q", u.Label(), u.Names())
+	}
+	u, _ = idx.Lookup("mario.rossi")
+	if strings.Join(u.Names(), "|") != "Rossi Mario - Contabilità" {
+		t.Errorf("names = %q", u.Names())
+	}
+}

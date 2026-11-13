@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"slices"
@@ -25,6 +26,10 @@ type bulkData struct {
 	Preset, For string
 	// Files: a file session can be opened on the selected agents.
 	Files bool
+	// Group: the agents are those of a group (?group=); Groups: the
+	// computer groups the agents can be added to.
+	Group  *store.Group
+	Groups []store.Group
 }
 
 // selectedAgents returns the active agents listed in the "agent" values.
@@ -54,7 +59,30 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, s.T(r, "nessun tenant"), http.StatusForbidden)
 		return
 	}
-	agents, msg := s.selectedAgents(r, t, r.URL.Query()["agent"])
+	values := r.URL.Query()["agent"]
+	var group *store.Group
+	if id := r.URL.Query().Get("group"); id != "" {
+		g, err := s.findGroup(r, t, id)
+		if errors.Is(err, store.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		all, err := s.tenantAgents(r, t)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		values, group = activeIDs(groupAgents(g, all)), &g
+		if len(values) == 0 {
+			s.flash(w, r, s.T(r, "Il gruppo non ha computer approvati."), "/groups/"+g.ID)
+			return
+		}
+	}
+	agents, msg := s.selectedAgents(r, t, values)
 	if msg != "" {
 		s.flash(w, r, msg, "/agents")
 		return
@@ -64,7 +92,17 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	d := bulkData{Agents: agents, Sites: sites}
+	d := bulkData{Agents: agents, Sites: sites, Group: group}
+	groups, err := s.visibleGroups(r, t)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	for _, g := range groups {
+		if g.Kind == store.GroupComputer {
+			d.Groups = append(d.Groups, g)
+		}
+	}
 	if _, man, ok := s.fileModule(r); ok && s.shell != nil {
 		d.Files = true
 		for _, a := range agents {
@@ -125,7 +163,11 @@ func (s *Server) handleBulkForm(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "bulk", s.Tf(r, "Azioni su %d agenti", len(agents)), d)
+	title := s.Tf(r, "Azioni su %d agenti", len(agents))
+	if group != nil {
+		title = s.Tf(r, "Azioni sul gruppo %s (%d computer)", group.Name, len(agents))
+	}
+	s.render(w, r, "bulk", title, d)
 }
 
 func (s *Server) handleBulkJobs(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,8 @@
 // Package adinv parses the Active Directory computer list reported by the
 // adinventory module and compares it with the agents: computers without an
 // agent, stale computer objects, and the organizational unit of each agent.
+// The report also names the enabled users, to find computers by the name of
+// their user.
 //
 // The module runs on a domain member with the computer account's read
 // access to the directory: the console holds no AD credentials.
@@ -11,9 +13,11 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -22,6 +26,8 @@ const (
 
 	// MaxComputers bounds a report (the module result is at most 3 MiB).
 	MaxComputers = 10000
+	// MaxUsers bounds the users of a report.
+	MaxUsers = 20000
 
 	// ActiveDays: a computer that logged on more recently is in use.
 	ActiveDays = 30
@@ -51,6 +57,9 @@ type Snapshot struct {
 	CollectedAt time.Time  `json:"collected_at"`
 	Computers   []Computer `json:"computers"`
 	Truncated   bool       `json:"truncated,omitempty"`
+	// Users: enabled accounts with a name (adinventory 1.1.0 and later).
+	Users          []User `json:"users,omitempty"`
+	UsersTruncated bool   `json:"users_truncated,omitempty"`
 }
 
 var (
@@ -89,7 +98,89 @@ func Parse(raw []byte) (*Snapshot, error) {
 	}
 	s.Computers = out
 	sort.Slice(s.Computers, func(i, j int) bool { return s.Computers[i].Name < s.Computers[j].Name })
+	if len(s.Users) > MaxUsers {
+		return nil, fmt.Errorf("more than %d users", MaxUsers)
+	}
+	users := s.Users[:0]
+	for _, u := range s.Users {
+		u.SAM, u.UPN = strings.TrimSpace(u.SAM), strings.TrimSpace(u.UPN)
+		if u.SAM == "" || len(u.SAM) > 64 || len(u.UPN) > 256 || len(u.GivenName) > 128 || len(u.Surname) > 128 ||
+			len(u.DisplayName) > 256 || strings.ContainsFunc(u.SAM+u.UPN+u.GivenName+u.Surname+u.DisplayName, unicode.IsControl) {
+			continue
+		}
+		users = append(users, u)
+	}
+	s.Users = users
 	return &s, nil
+}
+
+// User is an enabled user account.
+type User struct {
+	SAM         string `json:"sam"` // sAMAccountName
+	UPN         string `json:"upn,omitempty"`
+	GivenName   string `json:"given_name,omitempty"`
+	Surname     string `json:"surname,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+}
+
+// Names are the user's names, for search and display: the display name and,
+// when it does not contain them, given name and surname.
+func (u User) Names() []string {
+	out := []string{u.DisplayName}
+	low := strings.ToLower(u.DisplayName)
+	for _, n := range []string{u.GivenName, u.Surname} {
+		if n != "" && !strings.Contains(low, strings.ToLower(n)) {
+			out = append(out, n)
+		}
+	}
+	return slices.DeleteFunc(out, func(s string) bool { return s == "" })
+}
+
+// Label is how the user is shown: the display name, or given name and
+// surname.
+func (u User) Label() string {
+	if u.DisplayName != "" {
+		return u.DisplayName
+	}
+	return strings.TrimSpace(u.GivenName + " " + u.Surname)
+}
+
+// UserIndex finds the AD account of a user name as Windows reports it
+// (DOMAIN\user, user@domain or user), by account name or UPN, lower case.
+type UserIndex map[string]User
+
+// NewUserIndex indexes the users of the snapshots.
+func NewUserIndex(snaps []*Snapshot) UserIndex {
+	idx := UserIndex{}
+	for _, s := range snaps {
+		for _, u := range s.Users {
+			idx[strings.ToLower(u.SAM)] = u
+			if u.UPN != "" {
+				idx[strings.ToLower(u.UPN)] = u
+			}
+		}
+	}
+	return idx
+}
+
+// Lookup returns the account of a user name.
+func (idx UserIndex) Lookup(name string) (User, bool) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return User{}, false
+	}
+	if u, ok := idx[name]; ok {
+		return u, true
+	}
+	if _, sam, ok := strings.Cut(name, `\`); ok {
+		u, ok := idx[sam]
+		return u, ok
+	}
+	if sam, _, ok := strings.Cut(name, "@"); ok {
+		u, ok := idx[sam]
+		return u, ok
+	}
+	return User{}, false
 }
 
 // splitDN splits a distinguished name into its RDNs, honoring escapes.

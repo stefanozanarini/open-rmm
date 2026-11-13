@@ -120,6 +120,7 @@ type Store interface {
 	FederationStore
 	InstallerStore
 	LastUserStore
+	GroupStore
 	VulnFeedStore
 }
 

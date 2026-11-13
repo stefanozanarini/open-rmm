@@ -24,6 +24,8 @@ var helpTexts = map[string]string{ // #nosec G101 -- help text, not credentials
 	"installers":  "Crea l'installer dell'agente, MSI per Windows o .run per Linux, già configurato con indirizzo della console, certificati e token di registrazione. I computer installati compaiono in attesa di approvazione.",
 	"tokens":      "I token di registrazione permettono a un agente di presentarsi alla console, mai di essere approvato da solo. Dai loro una scadenza e revocali se un installer finisce in mani sbagliate.",
 	"modules":     "I moduli firmati danno funzioni agli agenti (inventario, aggiornamenti, firmware, file…). Quelli inclusi nella console si pubblicano qui con una sola approvazione; una versione nuova va pubblicata prima di poterla usare.",
+	"groups":      "Gruppi di computer o di utenti. Un gruppo personale lo vedi solo tu, uno pubblico tutti gli operatori. Selezionando un gruppo nella lista agenti vedi solo i suoi computer; dalla pagina del gruppo apri le azioni (comandi, script, installazioni) su tutti, approvate con una sola MFA.",
+	"group":       "Membri del gruppo e computer a cui corrispondono. Per un gruppo di utenti contano i computer dove l'utente è collegato o è stato visto per ultimo (per i giorni impostati). Le azioni partono solo sui computer approvati.",
 	"sites":       "Sedi e subnet: un computer va nella prima sede che contiene uno dei suoi indirizzi IP, dall'inventario o da cui si collega. Puoi anche assegnare una sede a mano dal pannello dell'agente.",
 	"settings":    "Impostazioni del tenant: reti da cui l'RDP è consentito, limite per file della gestione dei file, logo aziendale.",
 	"setup":       "Stato della configurazione della console: certificati, firma, collegamento a Entra ID, moduli e release da pubblicare.",

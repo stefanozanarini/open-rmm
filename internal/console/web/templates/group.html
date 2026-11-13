@@ -1,0 +1,62 @@
+{{define "content"}}
+{{with .Data}}
+<p>{{if eq .Kind "user"}}{{t "Gruppo di utenti"}}{{else}}{{t "Gruppo di computer"}}{{end}} ·
+  {{if .Personal}}{{t "personale"}}{{else}}{{t "pubblico"}}{{end}} ·
+  <span class="muted">{{tf "creato da %s il %s" .CreatedBy (fmtTime .CreatedAt)}}</span></p>
+{{if eq .Kind "user"}}<p class="muted">{{t "Il gruppo vale per i computer dove i suoi utenti sono collegati ora o, per qualche giorno, sono stati visti per ultimi. Scrivi DOMINIO\\utente o utente@dominio; un nome senza dominio vale in ogni dominio."}}</p>{{end}}
+<div class="actions">
+  {{if and $.CanRun .Active}}<a class="button primary" href="/agents/bulk?group={{.ID}}">{{tf "Azioni sui %d computer del gruppo…" .Active}}</a>{{end}}
+  <a href="/agents?group={{.ID}}">{{t "Mostra nella lista agenti"}}</a> · <a href="/groups">{{t "Tutti i gruppi"}}</a>
+</div>
+{{with .Unknown}}<p class="flash">{{tf "Non trovati: %s" .}}</p>{{end}}
+
+<h2>{{tf "Membri (%d)" (len .Members)}}</h2>
+{{if .Members}}
+<form method="post" action="/groups/{{.ID}}">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<table>
+<thead><tr>{{if $.CanRun}}<th></th>{{end}}<th>{{if eq .Kind "user"}}{{t "Utente"}}{{else}}{{t "Computer"}}{{end}}</th>{{if eq .Kind "user"}}<th>{{t "Computer"}}</th>{{else}}<th>{{t "Utente"}}</th><th>{{t "Sistema"}}</th><th>{{t "Ultimo contatto"}}</th>{{end}}</tr></thead>
+<tbody>
+{{range .Members}}<tr>
+  {{if $.CanRun}}<td><input type="checkbox" name="member" value="{{.Member}}" aria-label="{{tf "seleziona %s" .Label}}"></td>{{end}}
+  {{if eq $.Data.Kind "user"}}
+  <td>{{.Label}}</td>
+  <td>{{range $i, $a := .Agents}}{{if $i}}, {{end}}{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}}<a href="/agents/{{.ID}}">{{.Host.Hostname}}</a>{{if .User.Last}} <span class="muted" title="{{tf "ultimo utente, visto il %s" (fmtTime .User.Seen)}}">({{t "ultimo"}})</span>{{end}}{{else}}<span class="muted">{{t "nessun computer"}}</span>{{end}}</td>
+  {{else if .Missing}}
+  <td><code>{{short .Member}}</code> <span class="muted">{{t "agente eliminato"}}</span></td><td></td><td></td><td></td>
+  {{else}}{{with index .Agents 0}}
+  <td>{{if .Online}}<span class="dot online" title="online"></span>{{else}}<span class="dot" title="offline"></span>{{end}}<a href="/agents/{{.ID}}">{{.Host.Hostname}}</a>{{if ne .Status "active"}} <span class="badge">{{label .Status}}</span>{{end}}</td>
+  <td>{{with .User}}{{if .Last}}<span class="muted">{{.Name}}</span>{{else}}{{.Name}}{{end}}{{end}}</td>
+  <td>{{.Host.OSVersion}}</td>
+  <td>{{fmtTime .LastSeenAt}}</td>
+  {{end}}{{end}}
+</tr>{{end}}
+</tbody>
+</table>
+{{if $.CanRun}}<div class="actions"><button name="do" value="remove">{{t "Togli i selezionati dal gruppo"}}</button></div>{{end}}
+</form>
+{{else}}<p class="muted">{{t "Il gruppo è vuoto."}}</p>{{end}}
+
+{{if $.CanRun}}
+<h2>{{t "Aggiungi membri"}}</h2>
+<form method="post" action="/groups/{{.ID}}" class="stack">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <input type="hidden" name="do" value="add">
+  {{if eq .Kind "user"}}<label>{{t "Utenti (uno per riga)"}} <textarea name="names" rows="4" spellcheck="false" placeholder="CORP\mario.rossi"></textarea></label>
+  {{else}}<label>{{t "Nomi dei computer (uno per riga)"}} <textarea name="names" rows="4" spellcheck="false" placeholder="PC-01"></textarea></label>{{end}}
+  <button class="primary">{{t "Aggiungi"}}</button>
+</form>
+
+<h2>{{t "Gruppo"}}</h2>
+<form method="post" action="/groups/{{.ID}}" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <input name="name" value="{{.Name}}" required maxlength="64" aria-label="{{t "Nome"}}">
+  <button name="do" value="rename">{{t "Rinomina"}}</button>
+</form>
+<form method="post" action="/groups/{{.ID}}" class="inline">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <button class="danger" name="do" value="delete">{{t "Elimina il gruppo"}}</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

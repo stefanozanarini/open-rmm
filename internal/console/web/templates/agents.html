@@ -13,7 +13,7 @@
     {{if .Reboot}}{{if eq .Status "active"}}<a class="badge chk-warning" href="{{rowTab $.View $id "commands" "act-reboot-reboot"}}" title="{{t "apri il riavvio dell'endpoint"}}">⏻ {{t "riavvio"}}</a>{{else}}<span class="badge chk-warning" title="{{t "riavvio in sospeso"}}">{{t "riavvio"}}</span>{{end}}{{end}}
     {{with .ThirdParty}}<a class="badge chk-warning" href="{{rowTab $.View $id "patches" "patches"}}" title="{{t "applicazioni da aggiornare"}}">{{tf "%d app" .}}</a>{{end}}</td>
   <td>{{.Site}}{{if .SiteManual}} <span class="muted" title="{{t "assegnata a mano"}}">✎</span>{{end}}</td>
-  <td>{{with .User}}{{if .Last}}<span class="muted" title="{{tf "ultimo utente, visto il %s" (fmtTime .Seen)}}">{{.Name}}</span>{{else}}{{.Name}}{{end}}{{end}}</td>
+  <td>{{with .User}}{{if .Last}}<span class="muted" title="{{tf "ultimo utente, visto il %s" (fmtTime .Seen)}}">{{.Name}}</span>{{else}}{{.Name}}{{end}}{{end}}{{with .UserNames}}<br><span class="muted small">{{index . 0}}</span>{{end}}</td>
   <td>{{.Inv.Manufacturer}} {{.Inv.Model}}</td>
   <td>{{.Host.OSVersion}}</td>
   <td>{{with .Inv.SupremoID}}<code>{{.}}</code>{{end}}</td>
@@ -50,29 +50,36 @@
 <div class="workspace">
 <aside class="tree" aria-label="{{t "Sedi"}}">
   <p class="tree-title">{{$.Tenant.Name}}</p>
-  <a href="/agents{{qs "family" .Family "q" .Query "ou" .OU}}" {{if not .Site}}class="current"{{end}}>{{t "Tutte le sedi"}}</a>
-  {{range .Sites}}<a href="/agents{{qs "site" .ID "family" $.Data.Family "q" $.Data.Query "ou" $.Data.OU}}" {{if eq $.Data.Site .ID}}class="current"{{end}}>{{.Name}} <span class="muted">{{.Count}}</span></a>{{end}}
-  <a href="/agents{{qs "site" "none" "family" .Family "q" .Query "ou" .OU}}" {{if eq .Site "none"}}class="current"{{end}}>{{t "Senza sede"}} <span class="muted">{{.NoSite}}</span></a>
+  <a href="/agents{{qs "family" .Family "q" .Query "ou" .OU "group" .Group}}" {{if not .Site}}class="current"{{end}}>{{t "Tutte le sedi"}}</a>
+  {{range .Sites}}<a href="/agents{{qs "site" .ID "family" $.Data.Family "q" $.Data.Query "ou" $.Data.OU "group" $.Data.Group}}" {{if eq $.Data.Site .ID}}class="current"{{end}}>{{.Name}} <span class="muted">{{.Count}}</span></a>{{end}}
+  <a href="/agents{{qs "site" "none" "family" .Family "q" .Query "ou" .OU "group" .Group}}" {{if eq .Site "none"}}class="current"{{end}}>{{t "Senza sede"}} <span class="muted">{{.NoSite}}</span></a>
   <a class="muted small" href="/sites">{{if $.IsAdmin}}{{t "gestisci le sedi"}}{{else}}{{t "sedi"}}{{end}}</a>
   {{if .OUs}}<details class="tree-group" open data-remember="agents.ad"{{if .OU}} data-keep-open{{end}}>
   <summary class="tree-title">Active Directory</summary>
-  {{if .OU}}<a href="/agents{{qs "family" .Family "q" .Query "site" .Site}}">{{t "Tutte le OU"}}</a>{{end}}
-  {{range .OUs}}<a href="/agents{{qs "ou" .Key "family" $.Data.Family "q" $.Data.Query "site" $.Data.Site}}" class="depth-{{.Depth}}{{if eq $.Data.OU .Key}} current{{end}}" title="{{.Key}}">{{.Label}} <span class="muted">{{.Count}}</span></a>{{end}}
+  {{if .OU}}<a href="/agents{{qs "family" .Family "q" .Query "site" .Site "group" .Group}}">{{t "Tutte le OU"}}</a>{{end}}
+  {{range .OUs}}<a href="/agents{{qs "ou" .Key "family" $.Data.Family "q" $.Data.Query "site" $.Data.Site "group" $.Data.Group}}" class="depth-{{.Depth}}{{if eq $.Data.OU .Key}} current{{end}}" title="{{.Key}}">{{.Label}} <span class="muted">{{.Count}}</span></a>{{end}}
   <a class="muted small" href="/ad">{{t "confronto con AD"}}</a>{{help "section:ad"}}
   </details>{{end}}
+  <details class="tree-group" open data-remember="agents.groups"{{if .Group}} data-keep-open{{end}}>
+  <summary class="tree-title">{{t "Gruppi"}}</summary>
+  {{if .Group}}<a href="/agents{{qs "family" .Family "q" .Query "site" .Site "ou" .OU}}">{{t "Tutti i computer"}}</a>{{end}}
+  {{range .Groups}}<a href="/agents{{qs "group" .ID "family" $.Data.Family "q" $.Data.Query "site" $.Data.Site "ou" $.Data.OU}}"{{if eq $.Data.Group .ID}} class="current"{{end}} title="{{if eq .Kind "user"}}{{t "gruppo di utenti"}}{{else}}{{t "gruppo di computer"}}{{end}}">{{if eq .Kind "user"}}👤 {{end}}{{.Name}}{{if .Personal}} <span class="muted" title="{{t "personale"}}">•</span>{{end}} <span class="muted">{{.Computers}}</span></a>{{end}}
+  <a class="muted small" href="/groups">{{if $.CanRun}}{{t "gestisci i gruppi"}}{{else}}{{t "gruppi"}}{{end}}</a>
+  </details>
 </aside>
 <div class="main">
 <div class="toolbar">
   <nav class="tabs">
-    <a href="/agents{{qs "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family ""}}class="current"{{end}}>{{tf "Tutti (%d)" (index .Counts "")}}</a>
-    <a href="/agents{{qs "family" "client" "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family "client"}}class="current"{{end}}>{{tf "Client (%d)" (index .Counts "client")}}</a>
-    <a href="/agents{{qs "family" "server" "site" .Site "q" .Query "ou" .OU}}" {{if eq .Family "server"}}class="current"{{end}}>{{tf "Server (%d)" (index .Counts "server")}}</a>
+    <a href="/agents{{qs "site" .Site "q" .Query "ou" .OU "group" .Group}}" {{if eq .Family ""}}class="current"{{end}}>{{tf "Tutti (%d)" (index .Counts "")}}</a>
+    <a href="/agents{{qs "family" "client" "site" .Site "q" .Query "ou" .OU "group" .Group}}" {{if eq .Family "client"}}class="current"{{end}}>{{tf "Client (%d)" (index .Counts "client")}}</a>
+    <a href="/agents{{qs "family" "server" "site" .Site "q" .Query "ou" .OU "group" .Group}}" {{if eq .Family "server"}}class="current"{{end}}>{{tf "Server (%d)" (index .Counts "server")}}</a>
   </nav>
   <form method="get" action="/agents" class="search">
     {{if .Family}}<input type="hidden" name="family" value="{{.Family}}">{{end}}
     {{if .Site}}<input type="hidden" name="site" value="{{.Site}}">{{end}}
     {{if .OU}}<input type="hidden" name="ou" value="{{.OU}}">{{end}}
-    <input type="search" name="q" value="{{.Query}}" placeholder="{{t "Nome, IP, utente, modello, seriale, ID Supremo, sede…"}}" aria-label="{{t "Cerca"}}">
+    {{if .Group}}<input type="hidden" name="group" value="{{.Group}}">{{end}}
+    <input type="search" name="q" value="{{.Query}}" placeholder="{{t "Nome, IP, utente, modello, seriale, ID Supremo, sede…"}}" aria-label="{{t "Cerca"}}" title="{{t "Più parole: devono esserci tutte. L'asterisco sta per qualsiasi testo: PC* trova i nomi che iniziano con PC, anna* gli utenti anna.verdi e anna.neri."}}">
     <button>{{t "Cerca"}}</button>
   </form>
 </div>

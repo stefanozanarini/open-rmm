@@ -1,0 +1,34 @@
+{{define "grouprows"}}
+<table>
+<thead><tr><th>{{t "Nome"}}</th><th>{{t "Tipo"}}</th><th class="num">{{t "Membri"}}</th><th class="num">{{t "Computer"}}</th><th>{{t "Creato da"}}</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+  <td><a href="/groups/{{.ID}}">{{.Name}}</a></td>
+  <td>{{if eq .Kind "user"}}{{t "Utenti"}}{{else}}{{t "Computer"}}{{end}}</td>
+  <td class="num">{{len .Members}}</td>
+  <td class="num"><a href="/agents?group={{.ID}}" title="{{t "mostra nella lista agenti"}}">{{.Computers}}</a></td>
+  <td>{{.CreatedBy}}</td>
+</tr>{{end}}
+</tbody>
+</table>
+{{end}}
+{{define "content"}}
+{{with .Data}}
+<p class="muted">{{t "Un gruppo di computer raccoglie dei PC scelti a mano; un gruppo di utenti vale per i computer dove quegli utenti sono collegati o sono stati visti per ultimi. Dal gruppo apri le azioni su tutti i suoi computer: comandi, script, installazioni."}}</p>
+<h2>{{t "Gruppi personali"}}</h2>
+{{if .Personal}}{{template "grouprows" .Personal}}{{else}}<p class="muted">{{t "Nessun gruppo personale. Solo tu vedi i tuoi gruppi personali."}}</p>{{end}}
+<h2>{{t "Gruppi pubblici"}}</h2>
+{{if .Public}}{{template "grouprows" .Public}}{{else}}<p class="muted">{{t "Nessun gruppo pubblico."}}</p>{{end}}
+{{end}}
+{{if .CanRun}}
+<h2>{{t "Nuovo gruppo"}}</h2>
+<form method="post" action="/groups" class="stack">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <label>{{t "Nome"}} <input name="name" required maxlength="64" placeholder="{{t "Amministrazione"}}"></label>
+  <label>{{t "Tipo"}} <select name="kind"><option value="computer">{{t "Computer"}}</option><option value="user">{{t "Utenti"}}</option></select></label>
+  <label>{{t "Visibilità"}} <select name="scope"><option value="personal">{{t "Personale (solo tu)"}}</option><option value="public">{{t "Pubblico (tutti gli operatori)"}}</option></select></label>
+  <button class="primary">{{t "Crea"}}</button>
+</form>
+<p class="muted">{{t "Puoi anche selezionare dei computer nella lista agenti e, da \"Azioni sui selezionati\", aggiungerli a un gruppo."}}</p>
+{{end}}
+{{end}}
