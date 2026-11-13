@@ -87,6 +87,10 @@ var messages = []message{
 	// inventory (domain controllers)
 	msg("Membri non predefiniti nei gruppi privilegiati del dominio: {}", "Non-standard members in the domain privileged groups: ${1}"),
 	msg("Gruppi privilegiati del dominio con i soli membri predefiniti", "Domain privileged groups with only their default members"),
+	// inventory (battery wear)
+	msg("Batteria usurata, salute {}", "Battery worn, health ${1}"),
+	msg("Batteria in usura, salute {}", "Battery wearing, health ${1}"),
+	msg("Batteria in buona salute, {}", "Battery in good health, ${1}"),
 	// winget
 	msg("Nessuna applicazione da aggiornare (winget)", "No applications to update (winget)"),
 	msg("{} applicazioni da aggiornare: {}", "${1} applications to update: ${2}"),

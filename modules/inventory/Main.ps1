@@ -437,6 +437,19 @@ function Get-PrivilegedCheck($Groups) {
     @{ id = 'privileged-groups'; status = 'ok'; summary = 'Gruppi privilegiati del dominio con i soli membri predefiniti' }
 }
 
+# Battery wear, not its current charge: health_percent is full charge
+# capacity against the design capacity, which drops as the battery ages.
+# Desktops report no batteries, so the check is absent for them.
+function Get-BatteryCheck($Batteries) {
+    $known = @($Batteries | Where-Object { $_.health_percent -gt 0 })
+    if ($known.Count -eq 0) { return }
+    $worst = $known | Sort-Object health_percent | Select-Object -First 1
+    $detail = "$($worst.health_percent)% (cicli: $($worst.cycle_count))"
+    if ($worst.health_percent -lt 60) { return @{ id = 'battery'; status = 'failing'; summary = "Batteria usurata, salute $detail" } }
+    if ($worst.health_percent -lt 80) { return @{ id = 'battery'; status = 'warning'; summary = "Batteria in usura, salute $detail" } }
+    @{ id = 'battery'; status = 'ok'; summary = "Batteria in buona salute, $detail" }
+}
+
 Invoke-RmmModule @{
     collect = {
         param($Params, $Request)
@@ -459,11 +472,15 @@ Invoke-RmmModule @{
         $inv.remote_access = Get-Section 'remote_access' { Get-RemoteAccessInfo } @{}
         $inv.pending_updates = @(Get-Section 'pending_updates' { Get-PendingBrowserUpdates } @())
         $inv.local_admins = @(Get-Section 'local_admins' { Get-LocalAdmins } @())
+        $checks = @()
         $groups = @(Get-Section 'privileged_groups' { Get-PrivilegedGroups } @())
         if ($groups.Count) {
             $inv.privileged_groups = $groups
-            $inv.checks = @(Get-PrivilegedCheck $groups)
+            $checks += Get-PrivilegedCheck $groups
         }
+        $battery = Get-BatteryCheck $inv.batteries
+        if ($battery) { $checks += $battery }
+        if ($checks.Count) { $inv.checks = @($checks) }
         $inv
     }
 }
