@@ -264,6 +264,10 @@ func (s *Server) completeJob(w http.ResponseWriter, r *http.Request, sess *sessi
 		http.Redirect(w, r, "/shell/"+created[0], http.StatusSeeOther)
 		return
 	}
+	if len(created) == 1 && s.isScreenModule(r.Context(), req.GetModule(), req.GetModuleVersion()) {
+		http.Redirect(w, r, "/screen/"+created[0], http.StatusSeeOther)
+		return
+	}
 	// Back where the operator was: the jobs are followed in the corner
 	// panel (jobdock), not on a page that keeps reloading.
 	back := p.Return
