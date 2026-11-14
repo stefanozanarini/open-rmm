@@ -1,0 +1,27 @@
+{{define "content"}}
+{{with .Data}}
+<p><a href="/reports?tab=computers">← {{t "Inventario computer"}}</a></p>
+<h2>{{t "Sintassi"}}</h2>
+<ul>
+  <li>{{th `<code>campo:valore</code> trova il testo contenuto, senza distinguere maiuscole e minuscole; <code>campo=valore</code> il valore esatto; <code>campo!=valore</code> tutti gli altri.`}}</li>
+  <li>{{th `<code>*</code> vale qualsiasi testo: <code>hostname:VWUK*</code> trova i nomi che iniziano così; <code>campo:*</code> da solo trova i computer dove il campo ha un valore, <code>NOT campo:*</code> quelli dove è vuoto.`}}</li>
+  <li>{{th `Numeri e versioni si confrontano con <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code>: <code>ram_gb&lt;16</code>, <code>agent_version&lt;1.1.3</code>.`}}</li>
+  <li>{{th `Le date si scrivono <code>2026-01-31</code> (o solo <code>2026-01</code> con <code>:</code>) oppure come giorni fa: <code>last_seen&lt;30d</code> sono i computer non visti da più di 30 giorni.`}}</li>
+  <li>{{th `I campi sì/no vogliono <code>sì</code> o <code>no</code> (anche <code>yes</code>, <code>true</code>, <code>false</code>).`}}</li>
+  <li>{{th `<code>software:nome</code> trova un'applicazione installata; <code>software:"nome@versione"</code> nome e versione della stessa applicazione, anche con <code>&gt;</code> <code>&lt;</code>: <code>software&lt;"Google Chrome@142"</code>.`}}</li>
+  <li>{{th `I valori con spazi vanno tra virgolette: <code>model:"Latitude 5440"</code>. Una parola senza campo cerca in nome, utente, sistema, modello, numero di serie e IP.`}}</li>
+  <li>{{th `Combina i termini con <code>AND</code>, <code>OR</code>, <code>NOT</code> (o <code>-</code> davanti al termine) e le parentesi. Due termini vicini valgono AND; NOT lega più di AND, AND più di OR.`}}</li>
+</ul>
+
+<h2>{{t "Esempi"}}</h2>
+<ul class="query-examples">
+{{range .Examples}}<li><a href="/reports?tab=computers&amp;search=1&amp;q={{.Query}}"><code>{{.Query}}</code></a> — {{t .Label}}</li>{{end}}
+</ul>
+
+<h2>{{t "Campi"}}</h2>
+<table class="query-fields">
+<thead><tr><th>{{t "Campo"}}</th><th>{{t "Descrizione"}}</th><th>{{t "Tipo"}}</th></tr></thead>
+<tbody>{{range .Fields}}<tr><td><code>{{.Key}}</code></td><td>{{t .Label}}</td><td>{{t .Kind}}</td></tr>{{end}}</tbody>
+</table>
+{{end}}
+{{end}}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"html"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +47,27 @@ func TestConsoleReports(t *testing.T) {
 	_, csv := get(t, c, e.console.URL+"/reports?tab=computers&software=hyperlink&format=csv")
 	if !strings.HasPrefix(csv, "computer,site,") || !strings.Contains(csv, `'=HYPERLINK`) {
 		t.Fatalf("csv: %q", csv)
+	}
+	// Advanced search: AND, OR, NOT over the inventory fields.
+	adv := func(q string) string {
+		_, b := get(t, c, e.console.URL+"/reports?tab=computers&q="+url.QueryEscape(q))
+		return html.UnescapeString(b)
+	}
+	if body = adv(`software:7-zip AND NOT software:"7-Zip@24*"`); !strings.Contains(body, "1 computer.") || !strings.Contains(body, "PC-01") ||
+		!strings.Contains(body, "7-Zip 23.01 (x64)") {
+		t.Fatalf("advanced search: %s", body)
+	}
+	if body = adv(`(software:notepad OR os_release:23h2) AND hostname:PC-0*`); !strings.Contains(body, "2 computer.") || strings.Contains(body, "PC-02") {
+		t.Fatalf("advanced search with OR: %s", body)
+	}
+	if !strings.Contains(body, `href="/reports?q=%28software%3Anotepad`) || !strings.Contains(body, `&format=csv"`) {
+		t.Fatalf("csv link: %s", body)
+	}
+	if body = adv(`ram_gb<lots`); !strings.Contains(body, "ram_gb vuole un numero") || strings.Contains(body, "computer.") {
+		t.Fatalf("invalid advanced search: %s", body)
+	}
+	if _, body = get(t, c, e.console.URL+"/reports/query"); !strings.Contains(body, "<code>ram_gb</code>") || !strings.Contains(body, "q=last_seen%3c30d") {
+		t.Fatalf("advanced search help: %s", body)
 	}
 	if _, body = get(t, c, e.console.URL+"/reports?tab=logons&logon_user=ross"); !strings.Contains(body, "1 accessi.") || !strings.Contains(body, "10.0.0.5") {
 		t.Fatalf("logons: %s", body)

@@ -332,6 +332,7 @@ All modules are signed plugins outside the agent core, assigned by jobs or polic
 - The Linux entrypoint collects a subset: system, OS, firmware, CPU, memory, disks, packages (dpkg/rpm).
 - It runs through a policy (e.g. daily) or as a command. The console treats a result as an inventory only when its own records say it comes from `inventory`/`collect` (job or policy rule), never on the agent's word.
 - The console decodes only known fields, clips strings and bounds lists, and stores the normalized document. It keeps the latest inventory per agent and a **change history** (software installed/removed/updated, memory, disks, disk health, BIOS, OS build, BitLocker state, remote-access ids), at most 2000 entries per agent.
+- **Reporting → Computer inventory** finds computers by software, OS, user, model and site, plus an **advanced search** over the latest inventory: terms `field:value` (contains, `*` wildcards), `field=value`, `>`/`<` for numbers, versions and dates (`last_seen<30d`), `software:"name@version"` for one application, combined with AND, OR, NOT and parentheses. The fields and examples are listed on `/reports/query`; results export to CSV.
 - 📋 Later: MSIX packages, 2023 Secure Boot certificates and ESRT, disk wear, alerts on changes.
 
 The installation type is also sent by the core on connect (one field), so the console splits **clients and servers** before any inventory runs.

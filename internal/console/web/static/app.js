@@ -35,6 +35,15 @@
     sel.addEventListener("change", function () { f.submit(); });
   });
 
+  // Filter forms (class autosubmit) apply as soon as a choice changes.
+  document.querySelectorAll("form.autosubmit").forEach(function (f) {
+    var btn = f.querySelector("button");
+    if (btn) btn.hidden = true;
+    f.querySelectorAll("select").forEach(function (sel) {
+      sel.addEventListener("change", function () { f.submit(); });
+    });
+  });
+
   // Navigation drop-downs: one open at a time, closed by a click elsewhere.
   var menus = document.querySelectorAll("nav details.menu");
   menus.forEach(function (d) {

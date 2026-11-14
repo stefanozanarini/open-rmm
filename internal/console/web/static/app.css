@@ -306,3 +306,6 @@ fieldset.wf-step legend { display:flex; align-items:center; gap:8px; font-weight
 .wf-rule label.check { font-weight:400; }
 details.wf-when > summary { cursor:pointer; font-weight:600; font-size:13px; }
 details.wf-when[open] > summary { margin-bottom:6px; }
+/* Advanced search: fields and examples. */
+table.query-fields code { white-space:nowrap; }
+.query-examples li { margin:6px 0; }

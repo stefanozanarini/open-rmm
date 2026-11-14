@@ -131,14 +131,14 @@
 {{end}}{{end}}
 
 {{if eq .Tab "dashboard"}}
-<form method="get" action="/reports" class="inline">
+<form method="get" action="/reports" class="inline autosubmit">
   <input type="hidden" name="tab" value="dashboard">
-  <label>{{t "Sede"}} <select name="site" onchange="this.form.submit()"><option value="">{{t "Tutti gli agenti"}}</option>
+  <label>{{t "Sede"}} <select name="site"><option value="">{{t "Tutti gli agenti"}}</option>
     {{range .Sites}}<option value="{{.ID}}"{{if eq $.Data.Site .ID}} selected{{end}}>{{.Name}}</option>{{end}}
     <option value="none"{{if eq .Site "none"}} selected{{end}}>{{t "Senza sede"}}</option></select></label>
-  <label>{{t "Gruppo"}} <select name="group" onchange="this.form.submit()"><option value="">{{t "Tutti gli agenti"}}</option>
+  <label>{{t "Gruppo"}} <select name="group"><option value="">{{t "Tutti gli agenti"}}</option>
     {{range .Groups}}<option value="{{.ID}}"{{if eq $.Data.Group .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-  <noscript><button class="primary">{{t "Applica"}}</button></noscript>
+  <button class="primary">{{t "Applica"}}</button>
 </form>
 {{with .Dash}}
 <div class="cards">
@@ -193,25 +193,29 @@
       {{range .Sites}}<option value="{{.ID}}"{{if eq $.Data.Site .ID}} selected{{end}}>{{.Name}}</option>{{end}}
       <option value="none"{{if eq .Site "none"}} selected{{end}}>{{t "Senza sede"}}</option></select></label>
   </div>
+  <label>{{t "Ricerca avanzata"}} <a href="/reports/query" class="small">{{t "campi ed esempi"}}</a>
+    <input name="q" value="{{.Expr}}" spellcheck="false" placeholder='(model:Latitude OR model:OptiPlex) AND ram_gb&lt;16 AND NOT software:"7-Zip@24*"'></label>
+  <p class="muted small">{{t "Combina i campi dell'inventario con AND, OR, NOT e le parentesi; si aggiunge in AND ai filtri sopra."}}</p>
+  {{with .ExprError}}<p class="flash error">{{.}} <a href="/reports/query">{{t "Vedi campi e sintassi."}}</a></p>{{end}}
   <details class="columns"{{if .Columns}} open{{end}}>
     <summary>{{t "Colonne aggiuntive dall'inventario"}}{{with .Columns}} <span class="muted">({{len .}})</span>{{end}}</summary>
     <div class="column-choices">{{range .Choices}}<label class="inline-check"><input type="checkbox" name="col" value="{{.Key}}"{{if .Selected}} checked{{end}}> {{t .Label}}</label>{{end}}</div>
   </details>
   <div class="actions"><button class="primary">{{t "Cerca"}}</button> <a href="/reports{{qs "tab" "computers" "all" "1"}}">{{t "tutti i computer"}}</a></div>
 </form>
-{{if .Searched}}
-<p>{{tf "%d computer." (len .Rows)}}{{if .Rows}} <a href="/reports?{{.Query}}&amp;format=csv">{{t "Esporta CSV"}}</a>{{end}}</p>
+{{if and .Searched (not .ExprError)}}
+<p>{{tf "%d computer." (len .Rows)}}{{if .Rows}} <a href="{{.CSVURL}}">{{t "Esporta CSV"}}</a>{{end}}</p>
 {{if and $.CanRun .Upgrades}}<div class="stack">{{range .Upgrades}}<p><a class="button primary" href="{{.URL}}">↑ {{t "Aggiorna questa applicazione…"}}</a>
   {{.Name}} <code>{{.ID}}</code> → {{.Available}} · {{tf "aggiornabile con winget su %d dei computer trovati" .Count}}</p>{{end}}
   <p class="muted small">{{t "Apre l'azione già preparata: la controlli e la approvi con MFA una sola volta. Non sono inclusi i computer dove winget non vede l'applicazione (installata nel profilo dell'utente o winget assente)."}}</p></div>{{end}}
 {{if .Rows}}
 <table>
-<thead><tr><th>{{t "Computer"}}</th><th>{{t "Sede"}}</th><th>{{t "Sistema operativo"}}</th><th>{{t "Modello"}}</th><th>{{t "Utente"}}</th>{{if or .Software .Version}}<th>{{t "Software"}}</th>{{end}}{{range .Columns}}<th>{{t .Label}}</th>{{end}}<th>{{t "Inventario"}}</th></tr></thead>
+<thead><tr><th>{{t "Computer"}}</th><th>{{t "Sede"}}</th><th>{{t "Sistema operativo"}}</th><th>{{t "Modello"}}</th><th>{{t "Utente"}}</th>{{if .ShowSoftware}}<th>{{t "Software"}}</th>{{end}}{{range .Columns}}<th>{{t .Label}}</th>{{end}}<th>{{t "Inventario"}}</th></tr></thead>
 <tbody>
 {{range .Rows}}<tr>
   <td><a href="/agents/{{.Agent.ID}}">{{.Agent.Host.Hostname}}</a>{{if eq .Agent.Status "pending"}} <span class="badge pending">{{label .Agent.Status}}</span>{{end}}</td>
   <td>{{.Site}}</td><td>{{.OS}}</td><td>{{.Model}}</td><td>{{.User}}</td>
-  {{if or $.Data.Software $.Data.Version}}<td>{{range .Software}}{{.Name}} <span class="muted">{{.Version}}</span><br>{{end}}</td>{{end}}
+  {{if $.Data.ShowSoftware}}<td>{{range .Software}}{{.Name}} <span class="muted">{{.Version}}</span><br>{{end}}</td>{{end}}
   {{range .Extra}}<td>{{.}}</td>{{end}}
   <td>{{if .Seen.IsZero}}<span class="muted">{{t "non ancora ricevuto"}}</span>{{else}}{{fmtTime .Seen}}{{end}}</td>
 </tr>{{end}}
@@ -222,7 +226,7 @@
 {{end}}
 
 {{if eq .Tab "os"}}
-<p>{{t "Computer per sistema operativo, versione e build."}} {{if .OS}}<a href="/reports?{{.Query}}&amp;format=csv">{{t "Esporta CSV"}}</a>{{end}}</p>
+<p>{{t "Computer per sistema operativo, versione e build."}} {{if .OS}}<a href="{{.CSVURL}}">{{t "Esporta CSV"}}</a>{{end}}</p>
 <table>
 <thead><tr><th>{{t "Sistema operativo"}}</th><th>{{t "Computer"}}</th></tr></thead>
 <tbody>
@@ -261,7 +265,7 @@
 <p class="muted small">{{t "Spesso in testa ci sono i domain controller, che registrano anche i tentativi falliti verso altri computer: non significa che siano loro il bersaglio."}}</p>
 {{end}}
 
-<p>{{tf "%d accessi." (len .Logons)}}{{if .Truncated}} {{tf "Mostrati i primi %d: restringi la ricerca." (len .Logons)}}{{end}}{{if .Logons}} <a href="/reports?{{.Query}}&amp;format=csv">{{t "Esporta CSV"}}</a>{{end}}</p>
+<p>{{tf "%d accessi." (len .Logons)}}{{if .Truncated}} {{tf "Mostrati i primi %d: restringi la ricerca." (len .Logons)}}{{end}}{{if .Logons}} <a href="{{.CSVURL}}">{{t "Esporta CSV"}}</a>{{end}}</p>
 {{if .Logons}}
 <table>
 <thead><tr><th>{{t "Quando"}}</th><th>{{t "Computer"}}</th><th>{{t "Utente"}}</th><th>{{t "Tipo"}}</th><th>{{t "Origine"}}</th><th>{{t "Esito"}}</th></tr></thead>

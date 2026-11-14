@@ -37,7 +37,11 @@ type reportsData struct {
 	Dash *dashData
 	// Computers.
 	Software, Version, OSFilter, User, Model, Site string
-	Sites                                          []store.Site
+	// Expr: the advanced search (?q=), ExprError why it is not valid.
+	Expr, ExprError string
+	// ShowSoftware: the table lists the applications that matched.
+	ShowSoftware bool
+	Sites        []store.Site
 	// Group: the dashboard can also be narrowed to one group (computer or
 	// user); Groups lists the ones the operator can see.
 	Group    string
@@ -61,8 +65,8 @@ type reportsData struct {
 	// FailedByAgent, FailedByUser: ranking of the most failed logons, the
 	// same window as Logons.
 	FailedByAgent, FailedByUser []failedRank
-	// Query is the current filter, for the CSV link.
-	Query string
+	// Query is the current filter, CSVURL the same as a CSV export.
+	Query, CSVURL string
 }
 
 type reportRow struct {
@@ -129,7 +133,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	d := reportsData{Tab: q.Get("tab"), Software: strings.TrimSpace(q.Get("software")), Version: strings.TrimSpace(q.Get("version")),
 		OSFilter: strings.TrimSpace(q.Get("os")), User: strings.TrimSpace(q.Get("user")), Model: strings.TrimSpace(q.Get("model")),
-		Site: q.Get("site"), Group: q.Get("group"), LogonUser: strings.TrimSpace(q.Get("logon_user")), Days: reportLogonDays}
+		Site: q.Get("site"), Group: q.Get("group"), Expr: strings.TrimSpace(q.Get("q")), LogonUser: strings.TrimSpace(q.Get("logon_user")), Days: reportLogonDays}
 	if n, err := strconv.Atoi(q.Get("days")); err == nil && n > 0 && n <= 365 {
 		d.Days = n
 	}
@@ -143,6 +147,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	qq := q
 	qq.Del("format")
 	d.Query = qq.Encode()
+	d.CSVURL = "/reports?" + d.Query + "&format=csv"
 	ctx := r.Context()
 
 	if d.Tab == "dashboard" {
@@ -265,7 +270,15 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	d.Sites = sites
 	matcher := newSiteMatcher(sites, manual)
 	osCount := map[string]int{}
-	d.Searched = d.Software != "" || d.Version != "" || d.OSFilter != "" || d.User != "" || d.Model != "" || d.Site != "" || q.Has("all") || q.Has("search")
+	d.Searched = d.Software != "" || d.Version != "" || d.OSFilter != "" || d.User != "" || d.Model != "" || d.Site != "" || d.Expr != "" ||
+		q.Has("all") || q.Has("search")
+	expr, err := parseQuery(d.Expr, s.now())
+	if err != nil && d.Tab == "computers" {
+		d.ExprError = queryErrorText(s.lang(r), err)
+		csvOut = false
+	}
+	swTerms := softwareTerms(expr)
+	d.ShowSoftware = d.Software != "" || d.Version != "" || len(swTerms) > 0
 	lastUsers, userTTL := s.lastUsers(r.Context(), t)
 	for _, a := range agents {
 		if a.Status == store.AgentRevoked {
@@ -284,7 +297,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		lu, hasLU := lastUsers[a.ID]
 		row.User = s.userFor(a, stored.Summary, lu, hasLU, userTTL).Name
 		osCount[row.OS]++
-		if d.Tab != "computers" || !d.Searched {
+		if d.Tab != "computers" || !d.Searched || d.ExprError != "" {
 			continue
 		}
 		if !contains(row.OS, d.OSFilter) || !contains(row.User, d.User) || !contains(row.Model, d.Model) {
@@ -304,6 +317,27 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 			}
 			if len(row.Software) == 0 {
 				continue
+			}
+		}
+		if expr != nil {
+			qc := &queryCtx{lang: s.lang(r), now: s.now(), a: a, inv: inv, row: &row}
+			if inv == nil {
+				qc.inv = &inventory.Inventory{}
+			}
+			if !expr.eval(qc) {
+				continue
+			}
+			seen := map[string]bool{}
+			for _, sw := range row.Software {
+				seen[sw.Name+"\x00"+sw.Version] = true
+			}
+			for _, t := range swTerms {
+				for _, sw := range t.apps(qc) {
+					if k := sw.Name + "\x00" + sw.Version; !seen[k] {
+						seen[k] = true
+						row.Software = append(row.Software, sw)
+					}
+				}
 			}
 		}
 		row.Extra = columnValues(s.lang(r), d.Columns, a, inv)

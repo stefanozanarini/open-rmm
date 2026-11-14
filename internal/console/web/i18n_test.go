@@ -59,7 +59,18 @@ func usedKeys(t *testing.T) map[string]bool {
 		}
 		ast.Inspect(file, func(n ast.Node) bool {
 			call, ok := n.(*ast.CallExpr)
-			if !ok || len(call.Args) < 2 {
+			if !ok {
+				return true
+			}
+			// Advanced search errors: qerr(format, args...).
+			if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "qerr" && len(call.Args) > 0 {
+				if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					k, _ := strconv.Unquote(lit.Value)
+					keys[k] = keys[k] || len(call.Args) > 1
+				}
+				return true
+			}
+			if len(call.Args) < 2 {
 				return true
 			}
 			var name string
@@ -111,6 +122,15 @@ func usedKeys(t *testing.T) map[string]bool {
 	}
 	for _, v := range assignmentValidities {
 		keys[v.Label] = keys[v.Label] || false
+	}
+	for _, f := range queryFields {
+		keys[f.Label] = keys[f.Label] || false
+	}
+	for _, l := range kindLabels {
+		keys[l] = keys[l] || false
+	}
+	for _, e := range queryExamples {
+		keys[e.Label] = keys[e.Label] || false
 	}
 	for _, c := range invColumns {
 		keys[c.Label] = keys[c.Label] || false

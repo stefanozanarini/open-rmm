@@ -369,6 +369,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /updates/target", s.role(authn.RoleAdmin, s.handleSetTarget))
 	mux.Handle("POST /updates/auto-pilot", s.role(authn.RoleAdmin, s.handleAutoPilot))
 	mux.Handle("GET /reports", s.auth(s.handleReports))
+	mux.Handle("GET /reports/query", s.auth(s.handleReportQuery))
 	mux.Handle("GET /tokens", s.role(authn.RoleAdmin, s.handleTokens))
 	mux.Handle("POST /tokens", s.role(authn.RoleAdmin, s.handleCreateToken))
 	mux.Handle("POST /tokens/{id}/revoke", s.role(authn.RoleAdmin, s.handleRevokeToken))
