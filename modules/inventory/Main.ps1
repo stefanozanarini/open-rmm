@@ -94,6 +94,12 @@ function Get-OSInfo {
         install_date      = ConvertTo-Iso $os.InstallDate
         last_boot         = ConvertTo-Iso $os.LastBootUpTime
         logged_on_user    = Get-Str $cs.UserName
+        # logonui.exe is the process that draws the lock screen, the
+        # Ctrl+Alt+Del screen and UAC's secure-desktop prompt: a simple,
+        # well-known way to tell a locked session from an unlocked one
+        # without P/Invoke. A remote-control session on a locked PC would
+        # only ever capture that secure desktop, not the user's own.
+        screen_locked     = [bool](Get-Process -Name logonui -ErrorAction SilentlyContinue)
     }
 }
 

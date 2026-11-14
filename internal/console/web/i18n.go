@@ -1060,10 +1060,12 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"Apre il controllo remoto del computer per il tempo scelto, dopo l'approvazione MFA. Serve un utente collegato con lo schermo sbloccato (Windows), il modulo screen pubblicato e la policy locale (GPO AllowRemoteControl).": "Opens remote control of the computer for the chosen time, after MFA approval. Requires a logged-on user with the screen unlocked (Windows), the screen module published and the local policy (GPO AllowRemoteControl).",
 	"utente collegato":        "user logged on",
 	"nessun utente collegato": "no user logged on",
-	"%s risulta collegato ora: la sessione dovrebbe riuscire.":                                                                         "%s is logged on now: the session should succeed.",
-	"Nessun utente risulta collegato ora (ultimo visto: %s, %s): la sessione probabilmente fallirà.":                                   "No user appears logged on now (last seen: %s, %s): the session will probably fail.",
-	"Nessun utente risulta collegato: la sessione probabilmente fallirà.":                                                              "No user appears logged on: the session will probably fail.",
-	"Lo stato dell'utente sopra riflette l'ultimo inventario, non il momento esatto dell'apertura: può essere cambiato nel frattempo.": "The user status above reflects the last inventory, not the exact moment you open it: it may have changed since.",
+	"schermo bloccato":        "screen locked",
+	"%s è collegato ma lo schermo risulta bloccato (ultimo inventario): il controllo remoto vedrebbe solo la schermata di blocco, nera.": "%s is logged on but the screen appears locked (last inventory): remote control would only see the black lock screen.",
+	"%s risulta collegato ora: la sessione dovrebbe riuscire.":                                                                           "%s is logged on now: the session should succeed.",
+	"Nessun utente risulta collegato ora (ultimo visto: %s, %s): la sessione probabilmente fallirà.":                                     "No user appears logged on now (last seen: %s, %s): the session will probably fail.",
+	"Nessun utente risulta collegato: la sessione probabilmente fallirà.":                                                                "No user appears logged on: the session will probably fail.",
+	"Lo stato dell'utente sopra riflette l'ultimo inventario, non il momento esatto dell'apertura: può essere cambiato nel frattempo.":   "The user status above reflects the last inventory, not the exact moment you open it: it may have changed since.",
 
 	// Agent installers and code signing
 	"%d registrazioni": "%d enrollments",

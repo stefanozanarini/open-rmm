@@ -375,7 +375,11 @@
 {{if and .CanRun .Data.Screen}}
 <h2 id="act-screen">{{t "Controllo remoto"}}{{help "section:screen"}}</h2>
 {{if and .Data.User.Name (not .Data.User.Last)}}
+{{if and .Data.Inv .Data.Inv.OS.ScreenLocked}}
+<p><span class="badge chk-warning">{{t "schermo bloccato"}}</span> {{tf "%s è collegato ma lo schermo risulta bloccato (ultimo inventario): il controllo remoto vedrebbe solo la schermata di blocco, nera." .Data.User.Name}}</p>
+{{else}}
 <p><span class="badge chk-ok">{{t "utente collegato"}}</span> {{tf "%s risulta collegato ora: la sessione dovrebbe riuscire." .Data.User.Name}}</p>
+{{end}}
 {{else if .Data.User.Name}}
 <p><span class="badge chk-warning">{{t "nessun utente collegato"}}</span> {{tf "Nessun utente risulta collegato ora (ultimo visto: %s, %s): la sessione probabilmente fallirà." .Data.User.Name (isoDate .Data.User.Seen)}}</p>
 {{else}}

@@ -123,6 +123,9 @@ type OS struct {
 	InstallDate      *time.Time `json:"install_date,omitempty"`
 	LastBoot         *time.Time `json:"last_boot,omitempty"`
 	LoggedOnUser     string     `json:"logged_on_user,omitempty"`
+	// ScreenLocked: the lock screen (or a UAC prompt) is showing, so a
+	// remote-control session would only capture a black secure desktop.
+	ScreenLocked bool `json:"screen_locked,omitempty"`
 }
 
 type Firmware struct {
