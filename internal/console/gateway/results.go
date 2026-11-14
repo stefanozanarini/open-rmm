@@ -113,7 +113,8 @@ func (s *Server) ingestInventory(ctx context.Context, a store.Agent, raw []byte)
 	}
 	rec := store.Inventory{TenantID: a.TenantID, AgentID: a.ID, Data: data, Summary: store.InventorySummary{
 		CollectedAt: inv.CollectedAt, Manufacturer: inv.System.Manufacturer, Model: inv.System.Model,
-		Serial: inv.System.Serial, LoggedOnUser: inv.OS.LoggedOnUser, SupremoID: inv.RemoteAccess.SupremoID,
+		Serial: inv.System.Serial, LoggedOnUser: inv.OS.LoggedOnUser, ScreenLocked: inv.OS.ScreenLocked,
+		SupremoID: inv.RemoteAccess.SupremoID,
 		AnyDeskID: inv.RemoteAccess.AnyDeskID, TeamViewerID: inv.RemoteAccess.TeamViewerID, IPv4: inv.IPv4()}}
 	switch err := s.store.PutInventory(ctx, rec, changes); {
 	case err == nil:
