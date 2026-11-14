@@ -66,7 +66,8 @@
   function send(m) {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
   }
-  ws.onopen = function () { status.textContent = canvas.dataset.connected; };
+  // The status says "connected" only once the server reports that the
+  // agent has joined: the WebSocket alone reaches just the console.
   ws.onmessage = function (e) {
     if (typeof e.data === "string") {
       status.textContent = e.data;

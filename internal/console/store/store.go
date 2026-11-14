@@ -75,6 +75,10 @@ type Agent struct {
 	EnrolledTokenID string
 	LastSeenAt      *time.Time
 	LastSeenIP      *netip.Addr
+	// ConnectedAt is when the current or last session began; DisconnectedAt
+	// is set once that session has ended.
+	ConnectedAt    *time.Time
+	DisconnectedAt *time.Time
 }
 
 // Store is implemented by the PostgreSQL store and by an in-memory store for
@@ -92,7 +96,13 @@ type Store interface {
 	CreateAgent(ctx context.Context, a Agent) error
 	GetAgent(ctx context.Context, tenantID, agentID string) (Agent, error)
 	ListAgents(ctx context.Context, tenantID string) ([]Agent, error)
+	// UpdateAgentSeen records contact with the agent. A non-nil host means
+	// a new session: it also sets ConnectedAt to seen and clears
+	// DisconnectedAt.
 	UpdateAgentSeen(ctx context.Context, tenantID, agentID string, host *HostInfo, seen time.Time, ip *netip.Addr) error
+	// MarkAgentDisconnected records the end of the session that began at
+	// connectedAt; it does nothing if a newer session has begun since.
+	MarkAgentDisconnected(ctx context.Context, tenantID, agentID string, connectedAt, at time.Time) error
 	SetAgentStatus(ctx context.Context, tenantID, agentID string, s AgentStatus) error
 	// ApproveAgent moves a pending agent to active.
 	ApproveAgent(ctx context.Context, tenantID, agentID, by string, at time.Time) error

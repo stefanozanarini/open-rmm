@@ -19,10 +19,9 @@
     fit.fit();
     send({ t: "r", c: term.cols, r: term.rows });
   }
-  ws.onopen = function () {
-    status.textContent = el.dataset.connected;
-    resize();
-  };
+  // The status says "connected" only once the server reports that the
+  // agent has joined: the WebSocket alone reaches just the console.
+  ws.onopen = function () { resize(); };
   ws.onmessage = function (e) {
     if (typeof e.data === "string") {
       status.textContent = e.data;

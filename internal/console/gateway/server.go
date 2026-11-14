@@ -259,10 +259,20 @@ func (s *Server) Connect(stream openrmmv1.AgentService_ConnectServer) error {
 	if !ip.IsValid() {
 		ipp = nil
 	}
-	if err := s.store.UpdateAgentSeen(ctx, a.TenantID, a.ID, &host, s.now(), ipp); err != nil {
+	connectedAt := s.now()
+	if err := s.store.UpdateAgentSeen(ctx, a.TenantID, a.ID, &host, connectedAt, ipp); err != nil {
 		s.log.Error("update agent", "err", err)
 		return status.Error(codes.Unavailable, "temporarily unavailable")
 	}
+	// The console shows the agent offline as soon as this session ends,
+	// unless a newer one has begun meanwhile.
+	defer func() {
+		mctx, mcancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer mcancel()
+		if err := s.store.MarkAgentDisconnected(mctx, a.TenantID, a.ID, connectedAt, s.now()); err != nil {
+			s.log.Error("mark agent disconnected", "agent", a.ID, "err", err)
+		}
+	}()
 	if err := stream.Send(&openrmmv1.ConsoleMessage{Msg: &openrmmv1.ConsoleMessage_HelloAck{
 		HelloAck: &openrmmv1.HelloAck{HeartbeatIntervalSeconds: int32(s.heartbeat / time.Second), ApprovalPending: a.Status == store.AgentPending}, // #nosec G115 -- bounded to [1, 3600] in New
 	}}); err != nil {

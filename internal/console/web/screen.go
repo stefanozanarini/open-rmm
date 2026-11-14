@@ -245,31 +245,7 @@ func (s *Server) serveScreen(ws *websocket.Conn, r *http.Request, j store.Job, a
 			}
 		}
 	}()
-	// A session the agent refuses (local policy, no logged-on user,
-	// offline) never sends data: watch the job and say why instead of
-	// showing a blank screen.
-	go func() {
-		t := time.NewTicker(2 * time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-			}
-			cur, err := s.store.GetJob(ctx, j.TenantID, j.ID)
-			if err != nil || !cur.State.Final() || cur.State == store.JobSucceeded {
-				continue
-			}
-			msg := s.Tf(r, "Sessione rifiutata dall'agente: %s", cur.Error)
-			if cur.State == store.JobExpired {
-				msg = s.T(r, "Sessione scaduta: l'agente non si è collegato in tempo.")
-			}
-			_ = sendWS(msg)
-			cancel()
-			return
-		}
-	}()
+	go s.watchSession(ctx, r, j, sendWS, cancel)
 	// Screen frames to the browser: forwarded as opaque bytes, exactly as
 	// the agent sent them. Only the two real endpoints (screenhelper and
 	// the browser's own script) parse internal/screensession's framing.

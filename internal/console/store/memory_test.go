@@ -81,6 +81,62 @@ func testEnrollmentTokenLimits(t *testing.T, s Store) {
 	}
 }
 
+func TestAgentConnection(t *testing.T) { testAgentConnection(t, NewMemory()) }
+
+// testAgentConnection checks that the end of a session is recorded only
+// while no newer session has begun.
+func testAgentConnection(t *testing.T, s Store) {
+	ctx := context.Background()
+	tenant := Tenant{ID: ids.NewUUID(), Name: "t"}
+	if err := s.CreateTenant(ctx, tenant); err != nil {
+		t.Fatal(err)
+	}
+	a := Agent{TenantID: tenant.ID, ID: ids.NewUUID(), Status: AgentActive, Host: HostInfo{Hostname: "pc"},
+		CertFingerprint: "fp1", CertNotAfter: time.Now().Add(time.Hour)}
+	if err := s.CreateAgent(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	first := time.Now().UTC().Truncate(time.Microsecond)
+	second := first.Add(time.Minute)
+	if err := s.UpdateAgentSeen(ctx, tenant.ID, a.ID, &a.Host, first, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpdateAgentSeen(ctx, tenant.ID, a.ID, &a.Host, second, nil); err != nil {
+		t.Fatal(err)
+	}
+	// The first session ends after the second began: still connected.
+	if err := s.MarkAgentDisconnected(ctx, tenant.ID, a.ID, first, second.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetAgent(ctx, tenant.ID, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DisconnectedAt != nil || got.ConnectedAt == nil || !got.ConnectedAt.Equal(second) {
+		t.Fatalf("after stale end: connected %v, disconnected %v", got.ConnectedAt, got.DisconnectedAt)
+	}
+	end := second.Add(2 * time.Minute)
+	if err := s.MarkAgentDisconnected(ctx, tenant.ID, a.ID, second, end); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = s.GetAgent(ctx, tenant.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got.DisconnectedAt == nil || !got.DisconnectedAt.Equal(end) {
+		t.Fatalf("disconnected %v, want %v", got.DisconnectedAt, end)
+	}
+	// A new session clears it.
+	if err := s.UpdateAgentSeen(ctx, tenant.ID, a.ID, &a.Host, end.Add(time.Minute), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = s.GetAgent(ctx, tenant.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got.DisconnectedAt != nil {
+		t.Fatalf("still disconnected after a new session: %v", got.DisconnectedAt)
+	}
+}
+
 func TestApprovalAndRotation(t *testing.T) { testApprovalAndRotation(t, NewMemory()) }
 
 func testApprovalAndRotation(t *testing.T, s Store) {

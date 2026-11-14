@@ -189,7 +189,8 @@ func (p *Postgres) CreateAgent(ctx context.Context, a Agent) error {
 const agentColumns = `tenant_id::text, id::text, status, hostname, os, os_version, arch, agent_version,
 	machine_id, cert_fingerprint, cert_not_after, enrolled_at, coalesce(enrolled_token_id::text, ''),
 	last_seen_at, last_seen_ip, coalesce(prev_cert_fingerprint, ''), approved_at, approved_by,
-	update_ring, update_state, update_version, update_error, update_at, os_family`
+	update_ring, update_state, update_version, update_error, update_at, os_family,
+	connected_at, disconnected_at`
 
 func scanAgent(row pgx.Row) (Agent, error) {
 	var a Agent
@@ -199,7 +200,8 @@ func scanAgent(row pgx.Row) (Agent, error) {
 	err := row.Scan(&a.TenantID, &a.ID, &status, &a.Host.Hostname, &a.Host.OS, &a.Host.OSVersion,
 		&a.Host.Arch, &a.Host.AgentVersion, &a.Host.MachineID, &a.CertFingerprint, &a.CertNotAfter,
 		&a.EnrolledAt, &a.EnrolledTokenID, &a.LastSeenAt, &ip, &a.PrevCertFingerprint, &a.ApprovedAt, &a.ApprovedBy,
-		&a.UpdateRing, &a.Update.State, &a.Update.Version, &a.Update.Error, &updAt, &a.Host.OSFamily)
+		&a.UpdateRing, &a.Update.State, &a.Update.Version, &a.Update.Error, &updAt, &a.Host.OSFamily,
+		&a.ConnectedAt, &a.DisconnectedAt)
 	if updAt != nil {
 		a.Update.At = *updAt
 	}
@@ -251,7 +253,8 @@ func (p *Postgres) UpdateAgentSeen(ctx context.Context, tenantID, agentID string
 				family = "unknown"
 			}
 			tag, e := tx.Exec(ctx, `UPDATE agents SET last_seen_at = $2, last_seen_ip = $3,
-				hostname = $4, os = $5, os_version = $6, arch = $7, agent_version = $8, machine_id = $9, os_family = $10
+				hostname = $4, os = $5, os_version = $6, arch = $7, agent_version = $8, machine_id = $9, os_family = $10,
+				connected_at = $2, disconnected_at = NULL
 				WHERE id = $1`, agentID, seen, ip, host.Hostname, host.OS, host.OSVersion, host.Arch,
 				host.AgentVersion, host.MachineID, family)
 			err, n = e, tag.RowsAffected()
@@ -263,6 +266,14 @@ func (p *Postgres) UpdateAgentSeen(ctx context.Context, tenantID, agentID string
 		if err == nil && n == 0 {
 			return ErrNotFound
 		}
+		return err
+	})
+}
+
+func (p *Postgres) MarkAgentDisconnected(ctx context.Context, tenantID, agentID string, connectedAt, at time.Time) error {
+	return p.inTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE agents SET disconnected_at = $3 WHERE id = $1 AND connected_at = $2`,
+			agentID, connectedAt, at)
 		return err
 	})
 }

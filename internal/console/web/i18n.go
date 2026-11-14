@@ -1783,4 +1783,9 @@ var catalogEN = map[string]string{ // #nosec G101 -- UI text, not credentials
 	"Usurata":                                      "Worn",
 	"mostra tutti gli agenti":                      "show all agents",
 	"usura dei portatili, dall'inventario":         "laptop wear, from the inventory",
+
+	// Interactive sessions waiting for the agent.
+	"In attesa che l'agente riceva la richiesta…":                                                     "Waiting for the agent to receive the request…",
+	"L'agente sta avviando la sessione…":                                                              "The agent is starting the session…",
+	"L'agente non è collegato (ultimo contatto %s): la sessione partirà se si ricollega entro le %s.": "The agent is not connected (last contact %s): the session will start if it reconnects by %s.",
 }

@@ -65,8 +65,11 @@ type agentsData struct {
 	SelectAllURL, ClearURL string
 }
 
+// online tells whether the agent has a live session: one that has not
+// ended and has been heard from recently (should the core stop without
+// recording the end, the agent shows offline once last_seen_at is stale).
 func (s *Server) online(a store.Agent) bool {
-	return a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) < 10*time.Minute
+	return a.DisconnectedAt == nil && a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) < 10*time.Minute
 }
 
 // matches tells whether every word of q (lower case) appears in one of the

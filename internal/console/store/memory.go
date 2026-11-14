@@ -182,9 +182,23 @@ func (m *Memory) UpdateAgentSeen(_ context.Context, tenantID, agentID string, ho
 	}
 	if host != nil {
 		a.Host = *host
+		a.ConnectedAt, a.DisconnectedAt = &seen, nil
 	}
 	a.LastSeenAt = &seen
 	a.LastSeenIP = ip
+	m.agents[k] = a
+	return nil
+}
+
+func (m *Memory) MarkAgentDisconnected(_ context.Context, tenantID, agentID string, connectedAt, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := agentKey(tenantID, agentID)
+	a, ok := m.agents[k]
+	if !ok || a.ConnectedAt == nil || !a.ConnectedAt.Equal(connectedAt) {
+		return nil
+	}
+	a.DisconnectedAt = &at
 	m.agents[k] = a
 	return nil
 }
