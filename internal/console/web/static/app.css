@@ -62,7 +62,7 @@ form.search input { min-width:280px; }
 /* A vivid green with a halo: the online dot must stand out from the offline grey in both themes. */
 .dot.online { background:#22c55e; box-shadow:0 0 0 2px rgba(34,197,94,.25), 0 0 6px rgba(34,197,94,.7); }
 /* Status dot, and below it, only when relevant, the remote-control icon. */
-.dotcol { display:inline-flex; flex-direction:column; align-items:center; gap:3px; vertical-align:middle; width:14px; }
+.dotcol { display:inline-flex; flex-direction:column; align-items:center; gap:8px; vertical-align:middle; width:14px; }
 .dotcol a { font-size:12px; line-height:1; text-decoration:none; }
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .grid2 dl.facts { grid-template-columns:160px 1fr; }
