@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -82,6 +83,14 @@ func (e *Executor) runScreen(job *openrmmv1.Job, send func(*openrmmv1.JobUpdate)
 	started := time.Now()
 	send(&openrmmv1.JobUpdate{JobId: job.GetJobId(), State: openrmmv1.JobUpdate_STATE_RUNNING, Message: "remote control session open"})
 	log.Info("remote control open", "limit", limit)
+
+	// The helper's own diagnostics, kept off the stdout protocol stream.
+	go func() {
+		sc := bufio.NewScanner(proc.Stderr())
+		for sc.Scan() {
+			log.Warn("screenhelper", "msg", sc.Text())
+		}
+	}()
 
 	var bytesIn, bytesOut atomic.Int64
 	ended := "timeout"

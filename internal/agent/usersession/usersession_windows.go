@@ -4,6 +4,7 @@ package usersession
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -16,12 +17,15 @@ import (
 )
 
 // Process is a program running inside the logged-on user's desktop
-// session, with its stdin/stdout wired to plain pipes.
+// session, with its stdin/stdout/stderr wired to plain pipes. stderr is
+// its own pipe, never merged into stdout: a caller may speak a binary
+// protocol on stdout, which a stray log line on a shared fd would
+// corrupt beyond resynchronization.
 type Process struct {
-	in, out *os.File
-	process windows.Handle
-	job     windows.Handle
-	once    sync.Once
+	in, out, errOut *os.File
+	process         windows.Handle
+	job             windows.Handle
+	once            sync.Once
 }
 
 // Start runs argv inside the desktop session of the user logged on at the
@@ -46,7 +50,7 @@ func Start(argv, env []string, dir string) (*Process, error) {
 	// Both ends start inheritable; the ends this process keeps are cleared
 	// right after, so only the child's ends are inherited.
 	sa := &windows.SecurityAttributes{InheritHandle: 1}
-	var inR, inW, outR, outW windows.Handle
+	var inR, inW, outR, outW, errR, errW windows.Handle
 	if err := windows.CreatePipe(&inR, &inW, sa, 0); err != nil {
 		return nil, err
 	}
@@ -55,25 +59,37 @@ func Start(argv, env []string, dir string) (*Process, error) {
 		windows.CloseHandle(inW)
 		return nil, err
 	}
-	if err := windows.SetHandleInformation(inW, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
+	if err := windows.CreatePipe(&errR, &errW, sa, 0); err != nil {
 		closeAll(inR, inW, outR, outW)
+		return nil, err
+	}
+	if err := windows.SetHandleInformation(inW, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
+		closeAll(inR, inW, outR, outW, errR, errW)
 		return nil, err
 	}
 	if err := windows.SetHandleInformation(outR, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
-		closeAll(inR, inW, outR, outW)
+		closeAll(inR, inW, outR, outW, errR, errW)
+		return nil, err
+	}
+	if err := windows.SetHandleInformation(errR, windows.HANDLE_FLAG_INHERIT, 0); err != nil {
+		closeAll(inR, inW, outR, outW, errR, errW)
 		return nil, err
 	}
 
-	p := &Process{in: os.NewFile(uintptr(inW), "usersession-in"), out: os.NewFile(uintptr(outR), "usersession-out")}
-	if err := p.start(token, argv, env, dir, inR, outW); err != nil {
+	p := &Process{in: os.NewFile(uintptr(inW), "usersession-in"), out: os.NewFile(uintptr(outR), "usersession-out"),
+		errOut: os.NewFile(uintptr(errR), "usersession-err")}
+	if err := p.start(token, argv, env, dir, inR, outW, errW); err != nil {
 		windows.CloseHandle(inR)
 		windows.CloseHandle(outW)
+		windows.CloseHandle(errW)
 		p.in.Close()
 		p.out.Close()
+		p.errOut.Close()
 		return nil, err
 	}
 	windows.CloseHandle(inR)
 	windows.CloseHandle(outW)
+	windows.CloseHandle(errW)
 	return p, nil
 }
 
@@ -83,7 +99,7 @@ func closeAll(h ...windows.Handle) {
 	}
 }
 
-func (p *Process) start(token windows.Token, argv, env []string, dir string, stdin, stdout windows.Handle) error {
+func (p *Process) start(token windows.Token, argv, env []string, dir string, stdin, stdout, stderr windows.Handle) error {
 	desktop, err := windows.UTF16PtrFromString(`winsta0\default`)
 	if err != nil {
 		return err
@@ -93,7 +109,7 @@ func (p *Process) start(token windows.Token, argv, env []string, dir string, std
 		Flags:     windows.STARTF_USESTDHANDLES,
 		StdInput:  stdin,
 		StdOutput: stdout,
-		StdErr:    stdout,
+		StdErr:    stderr,
 	}
 	si.Cb = uint32(unsafe.Sizeof(*si)) // #nosec G103 -- Win32 API call
 	quoted := make([]string, len(argv))
@@ -154,6 +170,10 @@ func newJob() (windows.Handle, error) {
 func (p *Process) Read(b []byte) (int, error)  { return p.out.Read(b) }
 func (p *Process) Write(b []byte) (int, error) { return p.in.Write(b) }
 
+// Stderr returns the process's standard error, kept separate from the
+// protocol carried on stdout.
+func (p *Process) Stderr() io.Reader { return p.errOut }
+
 // Wait waits for the process to exit.
 func (p *Process) Wait() error {
 	_, err := windows.WaitForSingleObject(p.process, windows.INFINITE)
@@ -172,5 +192,6 @@ func (p *Process) Close() {
 		}
 		p.in.Close()
 		p.out.Close()
+		p.errOut.Close()
 	})
 }

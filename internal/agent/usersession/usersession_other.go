@@ -2,7 +2,11 @@
 
 package usersession
 
-import "errors"
+import (
+	"errors"
+	"io"
+	"strings"
+)
 
 // ErrUnsupported is returned where running in the logged-on user's
 // session is not available (today: everywhere but Windows).
@@ -19,3 +23,4 @@ func (p *Process) Read(b []byte) (int, error)  { return 0, ErrUnsupported }
 func (p *Process) Write(b []byte) (int, error) { return 0, ErrUnsupported }
 func (p *Process) Wait() error                 { return ErrUnsupported }
 func (p *Process) Close()                      {}
+func (p *Process) Stderr() io.Reader           { return strings.NewReader("") }
