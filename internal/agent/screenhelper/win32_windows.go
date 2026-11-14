@@ -2,8 +2,10 @@
 
 package screenhelper
 
-// Raw GDI/user32 bindings golang.org/x/sys/windows does not wrap: screen
-// capture (GetDC/BitBlt/GetDIBits) and input injection (SendInput). The
+// Raw GDI/user32 bindings golang.org/x/sys/windows does not wrap: the
+// fallback screen capture (GetDC/BitBlt/GetDIBits, used when DXGI desktop
+// duplication is unavailable, see dxgi_windows.go) and input injection
+// (SendInput). The
 // struct layouts below are the stable Win32 ABI (unchanged since XP); the
 // padding Go inserts for 8-byte-aligned fields on amd64 matches the
 // padding the Win32 headers themselves use, which is why INPUT below ends
@@ -82,8 +84,9 @@ func virtualScreen() (x, y, w, h int) {
 		getSystemMetrics(smCXVirtualScreen), getSystemMetrics(smCYVirtualScreen)
 }
 
-// captureScreen returns one frame of the whole virtual desktop.
-func captureScreen() (*image.RGBA, error) {
+// captureScreenGDI returns one frame of the whole virtual desktop via
+// BitBlt, which on many Windows 10/11 machines yields only black.
+func captureScreenGDI() (*image.RGBA, error) {
 	x, y, w, h := virtualScreen()
 	if w <= 0 || h <= 0 {
 		return nil, fmt.Errorf("invalid virtual screen size %dx%d", w, h)
@@ -183,14 +186,16 @@ func sendInput(in *input) error {
 	return nil
 }
 
-// moveMouse moves the pointer to (x, y) in virtual-desktop pixels.
+// moveMouse moves the pointer to (x, y) in frame pixels, i.e. relative to
+// the virtual desktop's top-left corner, which is also the origin of
+// MOUSEEVENTF_VIRTUALDESK's normalized coordinates.
 func moveMouse(x, y int32) error {
-	vx, vy, vw, vh := virtualScreen()
+	_, _, vw, vh := virtualScreen()
 	if vw <= 0 || vh <= 0 {
 		return fmt.Errorf("invalid virtual screen")
 	}
-	nx := uint32((int64(x-int32(vx))*65536 + int64(vw)/2) / int64(vw)) // #nosec G115 -- clamped below
-	ny := uint32((int64(y-int32(vy))*65536 + int64(vh)/2) / int64(vh)) // #nosec G115 -- clamped below
+	nx := uint32((int64(x)*65536 + int64(vw)/2) / int64(vw)) // #nosec G115 -- normalized mouse coordinate
+	ny := uint32((int64(y)*65536 + int64(vh)/2) / int64(vh)) // #nosec G115 -- normalized mouse coordinate
 	in := &input{typ: inputMouse, mi: mouseInput{
 		dx: int32(nx), dy: int32(ny), // #nosec G115 -- normalized mouse coordinate, fits int32
 		dwFlags: mouseMove | mouseAbsolute | mouseVirtualDesk,

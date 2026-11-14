@@ -72,6 +72,7 @@ func applyInput(f screensession.Frame) {
 
 func captureLoop(ctx context.Context, stdout io.Writer) {
 	var lastW, lastH int
+	var lastErr string // logged once until capture recovers or fails differently
 	ticker := time.NewTicker(frameInterval)
 	defer ticker.Stop()
 	for {
@@ -82,9 +83,13 @@ func captureLoop(ctx context.Context, stdout io.Writer) {
 		}
 		img, err := captureScreen()
 		if err != nil {
-			log.Printf("screenhelper: capture: %v", err)
+			if msg := err.Error(); msg != lastErr {
+				lastErr = msg
+				log.Printf("screenhelper: capture: %v", err)
+			}
 			continue
 		}
+		lastErr = ""
 		b := img.Bounds()
 		if b.Dx() != lastW || b.Dy() != lastH {
 			lastW, lastH = b.Dx(), b.Dy()
