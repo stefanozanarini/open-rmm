@@ -30,7 +30,10 @@ type Process struct {
 
 // Start runs argv inside the desktop session of the user logged on at the
 // console (the active session's shell, "winsta0\default"), in a job
-// object so the whole process tree is killed when the session ends.
+// object so the whole process tree is killed when the session ends. A nil
+// env gives the process the user's own environment, as Explorer would:
+// without SystemRoot, windir and the like, system DLLs and display
+// drivers loaded in the process can misbehave.
 func Start(argv, env []string, dir string) (*Process, error) {
 	sessionID := windows.WTSGetActiveConsoleSessionId()
 	if sessionID == 0xFFFFFFFF {
@@ -46,6 +49,12 @@ func Start(argv, env []string, dir string) (*Process, error) {
 		return nil, fmt.Errorf("duplicate user token: %w", err)
 	}
 	defer token.Close()
+	if env == nil {
+		var err error
+		if env, err = userEnvironment(token); err != nil {
+			return nil, fmt.Errorf("user environment: %w", err)
+		}
+	}
 
 	// Both ends start inheritable; the ends this process keeps are cleared
 	// right after, so only the child's ends are inherited.
@@ -91,6 +100,30 @@ func Start(argv, env []string, dir string) (*Process, error) {
 	windows.CloseHandle(outW)
 	windows.CloseHandle(errW)
 	return p, nil
+}
+
+// userEnvironment returns the environment Windows builds for the token's
+// user (CreateEnvironmentBlock), not inheriting this service's own.
+func userEnvironment(token windows.Token) ([]string, error) {
+	var block *uint16
+	if err := windows.CreateEnvironmentBlock(&block, token, false); err != nil {
+		return nil, err
+	}
+	defer windows.DestroyEnvironmentBlock(block)
+	// The block is NUL-separated "name=value" strings ending with an
+	// empty one.
+	var env []string
+	for p := block; ; { // #nosec G103 -- walks the block Windows returned
+		n := 0
+		for *(*uint16)(unsafe.Add(unsafe.Pointer(p), n*2)) != 0 {
+			n++
+		}
+		if n == 0 {
+			return env, nil
+		}
+		env = append(env, windows.UTF16ToString(unsafe.Slice(p, n)))
+		p = (*uint16)(unsafe.Add(unsafe.Pointer(p), (n+1)*2))
+	}
 }
 
 func closeAll(h ...windows.Handle) {
