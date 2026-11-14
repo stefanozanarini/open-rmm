@@ -17,6 +17,7 @@ func TestTrMessage(t *testing.T) {
 		"Trend Vision One Zero Trust Secure Access 2.39.0.1011: installato, nessun servizio noto in esecuzione (verificare i nomi dei servizi)": "Trend Vision One Zero Trust Secure Access 2.39.0.1011: installed, no known service running (check the service names)",
 		"Apex One 14: servizio ntrtscan assente, servizio tmlisten Stopped":                                                                     "Apex One 14: service ntrtscan missing, service tmlisten Stopped",
 		"Apex One 14: non attivo secondo il Centro sicurezza di Windows":                                                                        "Apex One 14: not active according to the Windows Security Center",
+		"Trend Vision One Zero Trust Secure Access non installato (non richiesto)":                                                              "Trend Vision One Zero Trust Secure Access not installed (not required)",
 		"Controllo winupdate/updates non superato: 3 aggiornamenti di sicurezza da installare":                                                  "Check winupdate/updates failed: 3 security updates to install",
 		"Vision One: Endpoint non presente nell'inventario di Vision One":                                                                       "Vision One: Endpoint not in the Vision One inventory",
 		"5 accessi falliti da 10.0.0.9":                                         "5 failed logons from 10.0.0.9",

@@ -151,6 +151,13 @@ Invoke-RmmModule @{
                 if ($expect -contains $id) {
                     $checks += @{ id = $id; status = 'failing'; summary = "$($def.name) non installato" }
                 }
+                else {
+                    # Always report something, even "fine, not expected": a
+                    # product once installed and later removed (or never
+                    # required here) would otherwise leave its last check
+                    # stuck on whatever it said before, forever.
+                    $checks += @{ id = $id; status = 'ok'; summary = "$($def.name) non installato (non richiesto)" }
+                }
                 continue
             }
             $problems = @()

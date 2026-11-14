@@ -97,6 +97,7 @@ var messages = []message{
 	msg("winget non disponibile su questo endpoint: aggiornamenti delle applicazioni solo dal catalogo della console", "winget not available on this endpoint: application updates only from the console catalog"),
 	// trendmicro
 	msg("{} non installato", "${1} not installed"),
+	msg("{} non installato (non richiesto)", "${1} not installed (not required)"),
 	msg("{}: installato, nessun servizio noto in esecuzione (verificare i nomi dei servizi)", "${1}: installed, no known service running (check the service names)"),
 	msg("{} attivo", "${1} active"),
 	// Vision One
