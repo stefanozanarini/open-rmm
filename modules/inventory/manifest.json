@@ -1,6 +1,6 @@
 {
   "id": "inventory",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Hardware and software inventory, including remote-access tool ids (Supremo, AnyDesk, TeamViewer) and battery wear; on domain controllers, the members of the privileged built-in groups.",
   "protocol_version": 1,
   "entrypoints": {

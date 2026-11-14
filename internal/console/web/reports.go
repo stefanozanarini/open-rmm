@@ -38,8 +38,12 @@ type reportsData struct {
 	// Computers.
 	Software, Version, OSFilter, User, Model, Site string
 	Sites                                          []store.Site
-	Searched                                       bool
-	Rows                                           []reportRow
+	// Group: the dashboard can also be narrowed to one group (computer or
+	// user); Groups lists the ones the operator can see.
+	Group    string
+	Groups   []store.Group
+	Searched bool
+	Rows     []reportRow
 	// Columns: the inventory columns chosen (?col=), Choices all of them.
 	Columns []invColumn
 	Choices []columnChoice
@@ -125,7 +129,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	d := reportsData{Tab: q.Get("tab"), Software: strings.TrimSpace(q.Get("software")), Version: strings.TrimSpace(q.Get("version")),
 		OSFilter: strings.TrimSpace(q.Get("os")), User: strings.TrimSpace(q.Get("user")), Model: strings.TrimSpace(q.Get("model")),
-		Site: q.Get("site"), LogonUser: strings.TrimSpace(q.Get("logon_user")), Days: reportLogonDays}
+		Site: q.Get("site"), Group: q.Get("group"), LogonUser: strings.TrimSpace(q.Get("logon_user")), Days: reportLogonDays}
 	if n, err := strconv.Atoi(q.Get("days")); err == nil && n > 0 && n <= 365 {
 		d.Days = n
 	}
@@ -142,7 +146,19 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if d.Tab == "dashboard" {
-		dash, err := s.dashboard(ctx, s.lang(r), t)
+		sites, err := s.store.ListSites(ctx, t)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		d.Sites = sites
+		groups, err := s.visibleGroups(r, t)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		d.Groups = groups
+		dash, err := s.dashboard(r, s.lang(r), t, d.Site, d.Group)
 		if err != nil {
 			s.fail(w, r, err)
 			return

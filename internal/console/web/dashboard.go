@@ -1,10 +1,10 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
@@ -82,6 +82,61 @@ type part struct {
 type checkBucket struct {
 	n   [4]int
 	ids [4][]string
+}
+
+// dashboardFilter returns the set of agent ids to keep, or nil for no
+// filter (every agent). site is a site id, "none" for agents with no site,
+// or "" for every site; group is a group id or "".
+func (s *Server) dashboardFilter(r *http.Request, t string, agents []store.Agent, site, group string) (map[string]bool, error) {
+	if site == "" && group == "" {
+		return nil, nil
+	}
+	ctx := r.Context()
+	var siteM *siteMatcher
+	var sums map[string]store.InventorySummary
+	if site != "" {
+		sites, err := s.store.ListSites(ctx, t)
+		if err != nil {
+			return nil, err
+		}
+		manual, err := s.store.AgentSites(ctx, t)
+		if err != nil {
+			return nil, err
+		}
+		m := newSiteMatcher(sites, manual)
+		siteM = &m
+		if sums, err = s.store.InventorySummaries(ctx, t); err != nil {
+			return nil, err
+		}
+	}
+	var inGroup *groupMatcher
+	if group != "" {
+		groups, err := s.visibleGroups(r, t)
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range groups {
+			if g.ID == group {
+				m := newGroupMatcher(g)
+				inGroup = &m
+				break
+			}
+		}
+	}
+	allow := map[string]bool{}
+	for _, a := range agents {
+		if siteM != nil {
+			id, _, _ := siteM.match(a, sums[a.ID])
+			if !(id == site || (site == "none" && id == "")) {
+				continue
+			}
+		}
+		if inGroup != nil && !inGroup.has(a.ID, sums[a.ID].LoggedOnUser) {
+			continue
+		}
+		allow[a.ID] = true
+	}
+	return allow, nil
 }
 
 func (b *checkBucket) add(state int, agentID string) {
@@ -241,10 +296,27 @@ func osFamily(a store.Agent, inv *inventory.Inventory) string {
 	return n
 }
 
-func (s *Server) dashboard(ctx context.Context, lang, t string) (*dashData, error) {
+// dashboard builds the dashboard's charts, over every agent of the tenant
+// unless site or group (ids, as the agents page uses them) narrow it down;
+// both empty means every agent.
+func (s *Server) dashboard(r *http.Request, lang, t, site, group string) (*dashData, error) {
+	ctx := r.Context()
 	agents, err := s.store.ListAgents(ctx, t)
 	if err != nil {
 		return nil, err
+	}
+	allow, err := s.dashboardFilter(r, t, agents, site, group)
+	if err != nil {
+		return nil, err
+	}
+	if allow != nil {
+		kept := agents[:0]
+		for _, a := range agents {
+			if allow[a.ID] {
+				kept = append(kept, a)
+			}
+		}
+		agents = kept
 	}
 	worst, err := s.store.WorstChecks(ctx, t)
 	if err != nil {

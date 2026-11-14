@@ -130,7 +130,17 @@
 <p class="muted small">{{t "Utenti: utenti diversi collegati, o visti per ultimi, sui computer che hanno l'applicazione."}}</p>
 {{end}}{{end}}
 
-{{if eq .Tab "dashboard"}}{{with .Dash}}
+{{if eq .Tab "dashboard"}}
+<form method="get" action="/reports" class="inline">
+  <input type="hidden" name="tab" value="dashboard">
+  <label>{{t "Sede"}} <select name="site" onchange="this.form.submit()"><option value="">{{t "Tutti gli agenti"}}</option>
+    {{range .Sites}}<option value="{{.ID}}"{{if eq $.Data.Site .ID}} selected{{end}}>{{.Name}}</option>{{end}}
+    <option value="none"{{if eq .Site "none"}} selected{{end}}>{{t "Senza sede"}}</option></select></label>
+  <label>{{t "Gruppo"}} <select name="group" onchange="this.form.submit()"><option value="">{{t "Tutti gli agenti"}}</option>
+    {{range .Groups}}<option value="{{.ID}}"{{if eq $.Data.Group .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <noscript><button class="primary">{{t "Applica"}}</button></noscript>
+</form>
+{{with .Dash}}
 <div class="cards">
   <a class="card" href="/agents"><span class="num">{{.Total}}</span>{{t "agenti approvati"}}</a>
   <a class="card" href="/agents"><span class="num">{{.Online}}</span>{{t "online ora"}}</a>

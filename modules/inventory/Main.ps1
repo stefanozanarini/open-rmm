@@ -229,29 +229,36 @@ function Get-TpmInfo {
 }
 
 function Get-BatteryInfo {
+    # root\wmi (BatteryStaticData and friends) gives wear (design vs full
+    # charge capacity) but its WMI provider is known to fail outright on
+    # some systems ("generic failure", seen in the field even as SYSTEM on
+    # otherwise healthy laptops): Win32_Battery (root\cimv2) is far more
+    # reliably available, so it is always queried and used as the base
+    # list of batteries, enriched with wear data when root\wmi works.
+    $charge = @(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue)
+    if ($charge.Count -eq 0) { return }
     $static = @(Get-CimInstance -Namespace 'root\wmi' -ClassName BatteryStaticData -ErrorAction SilentlyContinue)
-    if ($static.Count -eq 0) { return }
     $full = @{}
     foreach ($f in @(Get-CimInstance -Namespace 'root\wmi' -ClassName BatteryFullChargedCapacity -ErrorAction SilentlyContinue)) { $full[$f.InstanceName] = [int64]$f.FullChargedCapacity }
     $cycles = @{}
     foreach ($c in @(Get-CimInstance -Namespace 'root\wmi' -ClassName BatteryCycleCount -ErrorAction SilentlyContinue)) { $cycles[$c.InstanceName] = [int]$c.CycleCount }
-    $charge = @(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue)
-    $i = 0
-    foreach ($s in $static) {
-        $design = [int64]$s.DesignedCapacity
-        $fc = [int64]$full[$s.InstanceName]
-        $health = 0
-        if ($design -gt 0 -and $fc -gt 0) { $health = [int][math]::Round(100 * $fc / $design) }
-        $pct = 0
-        if ($i -lt $charge.Count) { $pct = [int]$charge[$i].EstimatedChargeRemaining }
-        $i++
+    for ($i = 0; $i -lt $charge.Count; $i++) {
+        $s = if ($i -lt $static.Count) { $static[$i] } else { $null }
+        $design = 0; $fc = 0; $health = 0; $cycleCount = 0; $name = Get-Str $charge[$i].Name
+        if ($s) {
+            $design = [int64]$s.DesignedCapacity
+            $fc = [int64]$full[$s.InstanceName]
+            if ($design -gt 0 -and $fc -gt 0) { $health = [int][math]::Round(100 * $fc / $design) }
+            $cycleCount = [int]$cycles[$s.InstanceName]
+            if (Get-Str $s.DeviceName) { $name = Get-Str $s.DeviceName }
+        }
         @{
-            name                 = Get-Str $s.DeviceName
+            name                 = $name
             design_capacity      = $design
             full_charge_capacity = $fc
             health_percent       = $health
-            charge_percent       = $pct
-            cycle_count          = [int]$cycles[$s.InstanceName]
+            charge_percent       = [int]$charge[$i].EstimatedChargeRemaining
+            cycle_count          = $cycleCount
         }
     }
 }

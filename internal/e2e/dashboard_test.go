@@ -109,4 +109,34 @@ func TestConsoleDashboard(t *testing.T) {
 	if !strings.Contains(body, `href="`+batGoodLink+`"`) {
 		t.Fatalf("battery segment not linked to PC-01: %s", body)
 	}
+
+	// Filtering the dashboard by site keeps only that site's agents: PC-03
+	// (failing antivirus) moves into a site of its own, so the filtered
+	// dashboard counts 1 agent and still shows its failing check, while
+	// the unfiltered one (PC-01, PC-02 healthy) does not.
+	if err := e.store.PutSite(ctx, store.Site{TenantID: e.tenant, ID: "22222222-2222-2222-2222-222222222222", Name: "Site-3"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.store.SetAgentSite(ctx, e.tenant, ids[2], "22222222-2222-2222-2222-222222222222", "test"); err != nil {
+		t.Fatal(err)
+	}
+	_, siteBody := get(t, c, e.console.URL+"/reports?tab=dashboard&site=22222222-2222-2222-2222-222222222222")
+	if !strings.Contains(siteBody, `<span class="num">1</span>`) {
+		t.Fatalf("site-filtered dashboard did not count 1 agent: %s", siteBody)
+	}
+	if strings.Contains(siteBody, `aria-label="Batteria:`) {
+		t.Fatalf("site-filtered dashboard still shows a battery donut (PC-03 has none): %s", siteBody)
+	}
+
+	// Filtering by a computer group behaves the same way.
+	if err := e.store.PutGroup(ctx, store.Group{TenantID: e.tenant, ID: "33333333-3333-3333-3333-333333333333", Name: "Just PC-01", Kind: "computer", CreatedBy: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.store.AddGroupMembers(ctx, e.tenant, "33333333-3333-3333-3333-333333333333", []string{ids[0]}); err != nil {
+		t.Fatal(err)
+	}
+	_, groupBody := get(t, c, e.console.URL+"/reports?tab=dashboard&group=33333333-3333-3333-3333-333333333333")
+	if !strings.Contains(groupBody, `<span class="num">1</span>`) || !strings.Contains(groupBody, "Batteria") {
+		t.Fatalf("group-filtered dashboard did not keep just PC-01: %s", groupBody)
+	}
 }
